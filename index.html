@@ -26,6 +26,7 @@
          COOKIE CONSENT MODULE
          GDPR-compliant: Analytics only loads after explicit consent.
          Storage: localStorage (consent persists 180 days, dismiss = 7 days)
+         Design: Minimal corner toast (non-intrusive, no page darkening)
          ============================================ -->
     <script>
         /**
@@ -33,6 +34,7 @@
          * - Manages user consent for analytics tracking
          * - Complies with EU cookie law (no tracking before consent)
          * - Stores preference in localStorage
+         * - Non-intrusive UI: small corner toast, no overlay
          */
         const CookieConsent = (function() {
             const STORAGE_KEY = 'cue_analytics_consent';
@@ -787,7 +789,7 @@
         .hero-subtitle {
             font-size: 1rem;
             color: var(--text-secondary);
-            max-width: 680px;
+            max-width: 820px;
             width: 100%;
             margin: 0 0 12px 0;
             line-height: 1.5;
@@ -809,6 +811,41 @@
             margin-top: 0;
             font-weight: 400;
             animation: fadeInUp 0.8s ease 0.7s both;
+        }
+        
+        /* Hero microcopy - subtle supporting text */
+        .hero-microcopy {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.75rem;
+            font-weight: 400;
+            opacity: 0.85;
+            animation: fadeInUp 0.8s ease 0.6s both;
+        }
+        
+        /* Hero download button - largest, most prominent on page */
+        .btn-download-hero {
+            font-size: 1.1rem;
+            height: 54px;
+            padding: 0 32px;
+            box-shadow: 0 6px 28px rgba(255, 107, 53, 0.4);
+        }
+        
+        .btn-download-hero:hover {
+            box-shadow: 0 10px 40px rgba(255, 107, 53, 0.5);
+        }
+        
+        /* Disabled button state for unsupported platforms */
+        .btn-unavailable {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: var(--text-muted);
+            box-shadow: none;
+        }
+        
+        .btn-unavailable:hover {
+            transform: none;
+            box-shadow: none;
         }
         
         .btn {
@@ -1651,14 +1688,57 @@
             transform: translateY(-4px);
         }
         
-        .pricing-card.featured {
-            border: 2px solid var(--peach-orange);
-            box-shadow: 0 8px 32px rgba(255, 107, 53, 0.2);
-            transform: scale(1.05);
+        /* Primary card (Free) - the dominant action */
+        .pricing-card--primary {
+            padding: 2rem;
         }
         
-        .pricing-card.featured:hover {
-            transform: scale(1.05) translateY(-4px);
+        .pricing-card--primary:hover {
+            box-shadow: 0 12px 40px rgba(255, 107, 53, 0.15);
+        }
+        
+        /* Download Free button - largest, most prominent */
+        .btn-download-free {
+            font-size: 1.05rem;
+            height: 52px;
+            box-shadow: 0 6px 24px rgba(255, 107, 53, 0.35);
+        }
+        
+        .btn-download-free:hover {
+            box-shadow: 0 10px 35px rgba(255, 107, 53, 0.45);
+        }
+        
+        /* Pro button - attractive but calm */
+        .btn-pro {
+            background: var(--peach-orange);
+            color: white;
+            border: none;
+        }
+        
+        .btn-pro:hover {
+            background: var(--peach-orange-dark);
+            transform: translateY(-2px);
+        }
+        
+        /* Trust microcopy under Free button */
+        .plan-note--trust {
+            color: var(--text-on-card-secondary);
+            font-size: 0.8rem;
+            margin-top: 0.75rem;
+            opacity: 0.85;
+        }
+        
+        /* Platform info - subtle */
+        .plan-note--platforms {
+            color: var(--text-on-card-secondary);
+            font-size: 0.7rem;
+            margin-top: 0.35rem;
+            opacity: 0.6;
+        }
+        
+        /* Disabled feature styling */
+        .feature-disabled {
+            opacity: 0.6;
         }
         
         .plan-badge {
@@ -1941,6 +2021,15 @@
         }
         
         .mac-panel .plan-note {
+            margin-top: 0.6rem;
+        }
+        
+        /* Windows download panel */
+        .windows-panel .btn {
+            width: 100%;
+        }
+        
+        .windows-panel .plan-note {
             margin-top: 0.6rem;
         }
         
@@ -2918,12 +3007,8 @@
                 gap: 1.5rem;
             }
             
-            .pricing-card.featured {
-                transform: scale(1.02);
-            }
-            
-            .pricing-card.featured:hover {
-                transform: scale(1.02) translateY(-4px);
+            .pricing-card--primary {
+                padding: 1.75rem;
             }
         }
         
@@ -2999,6 +3084,18 @@
             
             .hero-note {
                 font-size: 0.7rem;
+            }
+            
+            .hero-microcopy {
+                font-size: 0.7rem;
+                margin-top: 0.5rem;
+                padding: 0 1rem;
+            }
+            
+            .btn-download-hero {
+                font-size: 0.95rem;
+                height: 50px;
+                padding: 0 24px;
             }
             
             .video-sound-toggle {
@@ -3078,18 +3175,13 @@
                 padding: 1.5rem;
             }
             
-            .pricing-card.featured {
-                transform: none;
+            .pricing-card--primary {
+                padding: 1.75rem;
             }
             
-            .pricing-card.featured:hover {
-                transform: translateY(-4px);
-            }
-            
-            .plan-badge {
-                font-size: 0.65rem;
-                padding: 0.3rem 1rem;
-                top: -12px;
+            .btn-download-free {
+                font-size: 1rem;
+                height: 50px;
             }
             
             .plan-name {
@@ -3317,112 +3409,103 @@
         /* Mobile nav toggle */
         
         /* ============================================
-           COOKIE CONSENT BANNER
-           Prominent design - hard to ignore
+           COOKIE CONSENT TOAST
+           Minimal, non-intrusive corner toast
            ============================================ */
         
-        /* Overlay to dim page and force attention */
+        /* Overlay - hidden/disabled for non-intrusive design */
         .cookie-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.6);
-            z-index: 9999;
-            opacity: 1;
-            transition: opacity 0.3s ease;
+            display: none;
         }
         .cookie-overlay--hidden {
-            opacity: 0;
-            pointer-events: none;
+            display: none;
         }
         
         .cookie-banner {
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            bottom: 16px;
+            left: 16px;
+            right: auto;
             z-index: 10000;
+            max-width: 320px;
             
-            background: rgba(15, 15, 22, 0.99);
-            border-top: 1px solid rgba(255, 255, 255, 0.12);
-            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
+            background: rgba(28, 32, 40, 0.95);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
             
-            padding: 2rem 2rem;
+            padding: 14px 16px;
             
             display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1.5rem;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 10px;
             
             opacity: 1;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            transition: opacity 0.25s ease, transform 0.25s ease;
         }
         
         .cookie-banner--hidden {
             opacity: 0;
             pointer-events: none;
-            transform: translateY(100%);
+            transform: translateY(10px) scale(0.98);
         }
         
         @media (prefers-reduced-motion: reduce) {
             .cookie-banner { transition: opacity 0.1s ease; }
-            .cookie-overlay { transition: opacity 0.1s ease; }
-            .cookie-banner--hidden { transform: translateY(100%); }
+            .cookie-banner--hidden { transform: translateY(10px); }
         }
         
         .cookie-banner__text {
-            font-size: 0.9375rem;
-            line-height: 1.5;
-            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.8125rem;
+            line-height: 1.45;
+            color: rgba(255, 255, 255, 0.75);
             margin: 0;
         }
         
         .cookie-banner__link {
-            color: rgba(255, 255, 255, 0.6);
+            color: rgba(255, 255, 255, 0.5);
             text-decoration: underline;
-            margin-left: 0.25rem;
+            font-size: 0.75rem;
         }
         
         .cookie-banner__link:hover {
-            color: rgba(255, 255, 255, 0.9);
+            color: rgba(255, 255, 255, 0.8);
         }
         
         .cookie-banner__actions {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            flex-shrink: 0;
+            gap: 8px;
         }
         
         .cookie-banner__btn--accept {
-            background: #3b82f6;
-            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
             border: none;
-            padding: 0.7rem 1.75rem;
-            border-radius: 6px;
-            font-size: 0.9375rem;
-            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 5px;
+            font-size: 0.8125rem;
+            font-weight: 500;
             cursor: pointer;
             font-family: inherit;
-            transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+            transition: background 0.15s;
         }
         
         .cookie-banner__btn--accept:hover {
-            background: #2563eb;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            background: rgba(255, 255, 255, 0.15);
         }
         
         .cookie-banner__manage-link {
             color: rgba(255, 255, 255, 0.4);
-            font-size: 0.8125rem;
+            font-size: 0.75rem;
             cursor: pointer;
             transition: color 0.15s;
         }
         
         .cookie-banner__manage-link:hover {
-            color: rgba(255, 255, 255, 0.65);
+            color: rgba(255, 255, 255, 0.6);
             text-decoration: underline;
         }
         
@@ -3430,11 +3513,11 @@
         .cookie-banner__preferences {
             display: none;
             width: 100%;
-            padding-top: 1rem;
-            margin-top: 1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 10px;
+            margin-top: 4px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 8px;
         }
         
         .cookie-banner__preferences.cookie-banner__preferences--visible {
@@ -3445,26 +3528,26 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.5rem 0;
+            padding: 4px 0;
         }
         
         .cookie-banner__pref-label {
-            font-size: 0.875rem;
-            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
         }
         
         .cookie-banner__pref-desc {
-            font-size: 0.75rem;
-            color: rgba(255, 255, 255, 0.5);
-            margin-top: 2px;
+            font-size: 0.6875rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 1px;
         }
         
         .cookie-banner__toggle {
             position: relative;
-            width: 44px;
-            height: 24px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
+            width: 36px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
             cursor: pointer;
             transition: background 0.2s;
             flex-shrink: 0;
@@ -3475,19 +3558,19 @@
             position: absolute;
             top: 2px;
             left: 2px;
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             background: white;
             border-radius: 50%;
             transition: transform 0.2s;
         }
         
         .cookie-banner__toggle--on {
-            background: #3b82f6;
+            background: rgba(59, 130, 246, 0.8);
         }
         
         .cookie-banner__toggle--on::after {
-            transform: translateX(20px);
+            transform: translateX(16px);
         }
         
         .cookie-banner__toggle--disabled {
@@ -3497,53 +3580,48 @@
         
         .cookie-banner__pref-actions {
             display: flex;
-            gap: 0.75rem;
-            margin-top: 0.5rem;
+            gap: 8px;
+            margin-top: 4px;
         }
         
         .cookie-banner__btn--save {
-            background: #3b82f6;
-            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
             border: none;
-            padding: 0.6rem 1.25rem;
-            border-radius: 6px;
-            font-size: 0.875rem;
-            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 5px;
+            font-size: 0.75rem;
+            font-weight: 500;
             cursor: pointer;
             transition: background 0.15s;
         }
         
         .cookie-banner__btn--save:hover {
-            background: #2563eb;
+            background: rgba(255, 255, 255, 0.15);
         }
         
         .cookie-banner__btn--reject-all {
             background: transparent;
-            color: rgba(255, 255, 255, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 0.6rem 1.25rem;
-            border-radius: 6px;
-            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.4);
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.75rem;
             cursor: pointer;
-            transition: all 0.15s;
+            transition: color 0.15s;
         }
         
         .cookie-banner__btn--reject-all:hover {
-            color: rgba(255, 255, 255, 0.8);
-            border-color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.6);
         }
         
-        /* Mobile */
+        /* Mobile - full width with margins */
         @media (max-width: 640px) {
             .cookie-banner {
-                padding: 1.25rem 1.25rem;
-                flex-direction: column;
-                gap: 0.875rem;
-                text-align: center;
-            }
-            .cookie-banner__actions {
-                width: 100%;
-                justify-content: center;
+                bottom: 12px;
+                left: 12px;
+                right: 12px;
+                max-width: none;
             }
         }
     </style>
@@ -3551,10 +3629,7 @@
     <script src="https://assets.lemonsqueezy.com/lemon.js" defer></script>
 </head>
 <body>
-    <!-- ============================================
-         COOKIE CONSENT BANNER
-         Accessible, keyboard navigable, GDPR-compliant
-         ============================================ -->
+    <!-- Cookie Consent Toast (non-intrusive) -->
     <div id="cookieOverlay" class="cookie-overlay cookie-overlay--hidden"></div>
     <div 
         id="cookieConsentBanner" 
@@ -3565,39 +3640,32 @@
         aria-describedby="cookieConsentText"
     >
         <p id="cookieConsentText" class="cookie-banner__text">
-            We use cookies for anonymous usage statistics.
-            <a href="/privacy.html" class="cookie-banner__link">Learn more</a>
+            We use cookies for analytics. <a href="/privacy.html" class="cookie-banner__link">Privacy</a>
         </p>
         <div class="cookie-banner__actions">
-            <button 
-                class="cookie-banner__btn cookie-banner__btn--accept" 
-                onclick="CookieConsent.accept()"
-            >Accept</button>
-            <span 
-                class="cookie-banner__manage-link" 
-                onclick="CookieConsent.togglePreferences()"
-            >Manage preferences</span>
+            <button class="cookie-banner__btn--accept" onclick="CookieConsent.accept()">OK</button>
+            <span class="cookie-banner__manage-link" onclick="CookieConsent.togglePreferences()">Settings</span>
         </div>
         
-        <!-- Expanded preferences panel (hidden by default) -->
+        <!-- Expanded preferences panel -->
         <div id="cookiePreferences" class="cookie-banner__preferences">
             <div class="cookie-banner__pref-row">
                 <div>
-                    <div class="cookie-banner__pref-label">Essential cookies</div>
-                    <div class="cookie-banner__pref-desc">Required for the website to function</div>
+                    <div class="cookie-banner__pref-label">Essential</div>
+                    <div class="cookie-banner__pref-desc">Required</div>
                 </div>
                 <div class="cookie-banner__toggle cookie-banner__toggle--on cookie-banner__toggle--disabled"></div>
             </div>
             <div class="cookie-banner__pref-row">
                 <div>
-                    <div class="cookie-banner__pref-label">Analytics cookies</div>
-                    <div class="cookie-banner__pref-desc">Help us improve our website</div>
+                    <div class="cookie-banner__pref-label">Analytics</div>
+                    <div class="cookie-banner__pref-desc">Usage stats</div>
                 </div>
                 <div id="analyticsToggle" class="cookie-banner__toggle cookie-banner__toggle--on" onclick="CookieConsent.toggleAnalytics()"></div>
             </div>
             <div class="cookie-banner__pref-actions">
-                <button class="cookie-banner__btn--save" onclick="CookieConsent.savePreferences()">Save preferences</button>
-                <button class="cookie-banner__btn--reject-all" onclick="CookieConsent.reject()">Reject all</button>
+                <button class="cookie-banner__btn--save" onclick="CookieConsent.savePreferences()">Save</button>
+                <button class="cookie-banner__btn--reject-all" onclick="CookieConsent.reject()">Reject</button>
             </div>
         </div>
     </div>
@@ -3611,7 +3679,7 @@
             </a>
             <div class="nav-links">
                 <a href="#how-it-works">How It Works</a>
-                <a href="#pricing" class="nav-cta">Get Cue</a>
+                <a href="download-trial.html" class="nav-cta" onclick="trackTrialDownloadClick(event)">Download Cue</a>
                 <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
                     <span class="theme-icon light">☀️</span>
                     <span class="theme-icon dark">🌙</span>
@@ -3619,18 +3687,6 @@
             </div>
         </div>
     </nav>
-
-    <!-- Windows Detection Banner (hidden by default, shown via JS for Windows users) -->
-    <div class="windows-banner" id="windowsBanner" style="display: none;">
-        <div class="windows-banner__content">
-            <svg class="windows-banner__icon" viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M3 5.5L10.5 4.5V11.5H3V5.5Z"/><path d="M11.5 4.35L21 3V11.5H11.5V4.35Z"/><path d="M3 12.5H10.5V19.5L3 18.5V12.5Z"/><path d="M11.5 12.5H21V21L11.5 19.65V12.5Z"/></svg>
-            <span class="windows-banner__text">
-                <strong>Cue for Windows</strong> is now available!
-            </span>
-            <a href="#pricing" class="windows-banner__cta" onclick="switchPlatformTab('windows');">Download now →</a>
-        </div>
-        <button class="windows-banner__close" id="windowsBannerClose" aria-label="Dismiss banner">✕</button>
-    </div>
 
     <!-- Hero Section -->
     <section class="hero">
@@ -3659,27 +3715,15 @@
                 </div>
             </div>
             <div class="hero-ctas">
-                <a href="#pricing" class="btn btn-primary">
-                    <span>Get Cue</span>
+                <a href="download-trial.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn" onclick="trackTrialDownloadClick(event)">
+                    <span>Download Cue</span>
                     <span>→</span>
                 </a>
                 <a href="#how-it-works" class="btn btn-secondary">
                     <span>See How It Works</span>
                 </a>
             </div>
-            
-            <!-- Social Proof -->
-            <div class="social-proof-inline">
-                <p class="social-proof-text">Perfect for any story telling workflow</p>
-                <div class="daw-logos">
-                    <span class="daw-logo">Commercials</span>
-                    <span class="daw-logo">Trailers</span>
-                    <span class="daw-logo">Social Media</span>
-                    <span class="daw-logo">YouTube</span>
-                    <span class="daw-logo">Film & TV</span>
-                    <span class="daw-logo">Podcasts</span>
-                </div>
-            </div>
+            <p class="hero-microcopy">Download free · Export requires activation</p>
         </div>
     </section>
 
@@ -3729,90 +3773,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <!-- Pricing Section -->
-    <section class="pricing-section" id="pricing">
-        <div class="pricing-container">
-            <div class="section-header">
-                <h2>Choose Your Plan</h2>
-                <p class="section-subtitle">
-                    Start shaping your music
-                </p>
-            </div>
-            
-            <div class="pricing-cards">
-                <!-- Free Trial -->
-                <div class="pricing-card">
-                    <h3 class="plan-name">Free Trial</h3>
-                    <div class="plan-price">
-                        <span class="price">$0</span>
-                        <span class="period">forever</span>
-                    </div>
-                    <p class="plan-description">Try all features risk-free</p>
-                    <ul class="plan-features">
-                        <li>✓ Unlimited projects</li>
-                        <li>✓ All editing features</li>
-                        <li>✓ Real-time preview</li>
-                        <li>✗ Export disabled</li>
-                        <li>&nbsp;</li>
-                    </ul>
-                    
-                    <!-- Platform CTA area -->
-                    <div class="platform-cta-area">
-                        <div class="platform-tabs">
-                            <button class="platform-tab active" data-platform="mac" onclick="switchPlatformTab('mac')">
-                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-                                macOS
-                            </button>
-                            <button class="platform-tab" data-platform="windows" onclick="switchPlatformTab('windows')">
-                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10.5 4.5V11.5H3V5.5Z"/><path d="M11.5 4.35L21 3V11.5H11.5V4.35Z"/><path d="M3 12.5H10.5V19.5L3 18.5V12.5Z"/><path d="M11.5 12.5H21V21L11.5 19.65V12.5Z"/></svg>
-                                Windows
-                            </button>
-                        </div>
-                        
-                        <!-- macOS Download -->
-                        <div class="platform-panel mac-panel active" id="macPanel">
-                            <a href="download-trial.html" class="btn btn-secondary btn-large" onclick="trackTrialDownloadClick(event)">
-                                Download Free Trial
-                            </a>
-                            <p class="plan-note">macOS 11+ • Intel & Apple Silicon • 25MB</p>
-                        </div>
-                        
-                        <!-- Windows Download -->
-                        <div class="platform-panel windows-panel" id="windowsPanel">
-                            <a href="download-trial-windows.html" class="btn btn-secondary btn-large" onclick="trackTrialDownloadClick(event, 'windows')">
-                                Download Free Trial
-                            </a>
-                            <p class="plan-note">Windows 10+ • 64-bit • 25MB</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Pro Plan (Featured) -->
-                <div class="pricing-card featured">
-                    <div class="plan-badge">⭐ RECOMMENDED</div>
-                    <h3 class="plan-name">Cue Pro</h3>
-                    <div class="plan-price">
-                        <span class="price">$3.99</span>
-                        <span class="period">/month</span>
-                    </div>
-                    <p class="plan-description">Full access with flexible monthly billing.</p>
-                    <ul class="plan-features">
-                        <li>✓ Unlimited projects</li>
-                        <li>✓ Unlimited exports</li>
-                        <li>✓ All future updates</li>
-                        <li>✓ Premium support</li>
-                        <li>✓ Commercial license</li>
-                    </ul>
-                    <a href="https://peachsounds.lemonsqueezy.com/checkout/buy/5585ea8e-18e3-4608-ab13-fb9bac5f36c4?embed=1" class="lemonsqueezy-button btn btn-primary btn-large">
-                        Start Subscription
-                    </a>
-                    <p class="plan-note">Cancel anytime</p>
-                </div>
-            </div>
-            
         </div>
     </section>
 
@@ -4095,16 +4055,28 @@
         
         // Track trial download click (fires before navigation to download page)
         // This ensures the event uses the same anonymous ID as page_viewed
+        // Now with auto OS detection
         function trackTrialDownloadClick(event, platform) {
-            platform = platform || 'mac';
+            // Auto-detect platform if not specified
+            if (!platform) {
+                const ua = navigator.userAgent || navigator.platform || '';
+                platform = /Win/i.test(ua) ? 'windows' : 'mac';
+            }
+            
             // Guard: PostHog must be available
             if (typeof posthog === 'undefined' || !posthog.capture) {
                 console.log('PostHog: Skipping trial_download_clicked (not available)');
-                return; // Let the link navigate normally
+                // Still redirect to correct download page
+                event.preventDefault();
+                const targetUrl = platform === 'windows' ? 'download-trial-windows.html' : 'download-trial.html';
+                window.location.href = targetUrl;
+                return;
             }
             
             event.preventDefault();
-            const targetUrl = event.currentTarget.href;
+            
+            // Determine correct download URL based on platform
+            const targetUrl = platform === 'windows' ? 'download-trial-windows.html' : 'download-trial.html';
             
             if (posthogFullyInitialized) {
                 posthog.capture('trial_download_clicked', {
@@ -4120,7 +4092,7 @@
                     platform: platform
                 });
             }
-            console.log('📊 PostHog: trial_download_clicked tracked');
+            console.log('📊 PostHog: trial_download_clicked tracked for platform:', platform);
             
             // Navigate after a short delay to ensure event is sent
             setTimeout(() => {
@@ -4414,68 +4386,62 @@
         });
         
         // ============================================
-        // PLATFORM TAB SWITCHING
+        // PLATFORM DETECTION
         // ============================================
-        function switchPlatformTab(platform) {
-            // Update tabs
-            document.querySelectorAll('.platform-tab').forEach(tab => {
-                tab.classList.toggle('active', tab.dataset.platform === platform);
-            });
-            
-            // Update panels
-            document.getElementById('macPanel').classList.toggle('active', platform === 'mac');
-            document.getElementById('windowsPanel').classList.toggle('active', platform === 'windows');
-            
-            // Track tab switch
-            if (typeof posthog !== 'undefined' && posthog.capture) {
-                posthog.capture('platform_tab_switched', {
-                    ...getBaseEventProps(),
-                    platform: platform,
-                    source: 'pricing_card'
-                });
-            }
-        }
         
-        // Auto-detect Windows users: show banner + switch to Windows tab
+        // Auto-detect Windows users and show banner
         (function detectPlatform() {
             const ua = navigator.userAgent || navigator.platform || '';
             const isWindows = /Win/i.test(ua);
+            const isIOS = /iPhone|iPad|iPod/i.test(ua);
+            const isAndroid = /Android/i.test(ua);
+            const isMac = /Mac/i.test(ua) && !isIOS; // Exclude iOS (which contains "Mac" in UA)
             
-            // Also allow forcing via URL param for testing: ?platform=windows
+            // Also allow forcing via URL param for testing: ?platform=windows or ?platform=unsupported
             const urlParams = new URLSearchParams(window.location.search);
             const forcePlatform = urlParams.get('platform');
             
+            // Update buttons based on platform
+            const heroMicrocopy = document.querySelector('.hero-microcopy');
+            const heroDownloadBtn = document.getElementById('heroDownloadBtn');
+            const navDownloadBtn = document.querySelector('.nav-cta');
+            
             if (isWindows || forcePlatform === 'windows') {
-                setTimeout(() => {
-                    switchPlatformTab('windows');
-                    showWindowsBanner();
-                }, 100);
+                // Windows user
+                if (heroDownloadBtn) {
+                    heroDownloadBtn.querySelector('span:first-child').textContent = 'Download for Windows';
+                }
+                if (navDownloadBtn) {
+                    navDownloadBtn.textContent = 'Download for Windows';
+                }
+            } else if (isMac || forcePlatform === 'mac') {
+                // macOS user
+                if (heroDownloadBtn) {
+                    heroDownloadBtn.querySelector('span:first-child').textContent = 'Download for macOS';
+                }
+                if (navDownloadBtn) {
+                    navDownloadBtn.textContent = 'Download for macOS';
+                }
+            } else if (forcePlatform === 'unsupported' || (!isMac && !isWindows)) {
+                // Unsupported platform (Linux, iOS, Android, etc.)
+                if (heroMicrocopy) {
+                    heroMicrocopy.textContent = 'Available for macOS and Windows';
+                }
+                if (heroDownloadBtn) {
+                    heroDownloadBtn.classList.add('btn-unavailable');
+                    heroDownloadBtn.classList.remove('btn-primary');
+                    heroDownloadBtn.removeAttribute('href');
+                    heroDownloadBtn.removeAttribute('onclick');
+                    heroDownloadBtn.innerHTML = '<span>Available for macOS and Windows</span>';
+                }
+                if (navDownloadBtn) {
+                    navDownloadBtn.classList.add('btn-unavailable');
+                    navDownloadBtn.removeAttribute('href');
+                    navDownloadBtn.removeAttribute('onclick');
+                    navDownloadBtn.textContent = 'macOS & Windows';
+                }
             }
         })();
-        
-        // Windows banner show/dismiss
-        function showWindowsBanner() {
-            const banner = document.getElementById('windowsBanner');
-            const dismissed = sessionStorage.getItem('cue_windows_banner_dismissed');
-            if (banner && !dismissed) {
-                banner.style.display = 'flex';
-                document.body.classList.add('windows-banner-visible');
-            }
-        }
-        
-        const windowsBannerClose = document.getElementById('windowsBannerClose');
-        if (windowsBannerClose) {
-            windowsBannerClose.addEventListener('click', function() {
-                const banner = document.getElementById('windowsBanner');
-                if (banner) {
-                    banner.style.display = 'none';
-                    document.body.classList.remove('windows-banner-visible');
-                    sessionStorage.setItem('cue_windows_banner_dismissed', 'true');
-                }
-            });
-        }
-        
-        // (Windows waitlist form removed — Windows download is now live)
     </script>
 </body>
 </html>
