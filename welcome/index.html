@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cue – Activated</title>
+    <meta name="description" content="Your Cue license is ready. Open Cue and paste your license key to unlock export.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="../icon.png">
+
+    <style>
+        :root {
+            --peach-orange: #FF6B35;
+            --wave-blue: #4A90D9;
+            --early-access-green: #10B981;
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F5F5F7;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555555;
+            --text-muted: #888888;
+            --border-light: rgba(0, 0, 0, 0.08);
+            --gradient-hero: linear-gradient(135deg, var(--peach-orange) 0%, var(--wave-blue) 100%);
+            --gradient-early-access: linear-gradient(135deg, var(--early-access-green) 0%, var(--wave-blue) 100%);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0A0A0F;
+            --bg-secondary: #12121A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A0A0B0;
+            --text-muted: #6B6B7B;
+            --border-light: rgba(255, 255, 255, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 520px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .badge {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: popIn 0.5s ease both;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: var(--gradient-early-access);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: fadeInUp 0.6s ease 0.1s both;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-bottom: 2.5rem;
+            animation: fadeInUp 0.6s ease 0.2s both;
+        }
+
+        .steps-section {
+            text-align: left;
+            margin-bottom: 2.5rem;
+            animation: fadeInUp 0.6s ease 0.3s both;
+        }
+
+        .steps-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .steps {
+            list-style: none;
+            counter-reset: step;
+        }
+
+        .steps li {
+            counter-increment: step;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .steps li:last-child {
+            border-bottom: none;
+        }
+
+        .steps li::before {
+            content: counter(step);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--gradient-early-access);
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border-light);
+            margin: 0.5rem 0 2rem;
+            animation: fadeInUp 0.6s ease 0.4s both;
+        }
+
+        .community-section {
+            text-align: left;
+            animation: fadeInUp 0.6s ease 0.5s both;
+        }
+
+        .community-section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .community-intro {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .community-cta {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .community-list {
+            list-style: none;
+            margin-bottom: 1.5rem;
+        }
+
+        .community-list li {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            padding: 0.2rem 0;
+        }
+
+        .community-list li::before {
+            content: '·';
+            color: var(--text-muted);
+            font-weight: 700;
+            margin-right: 0.6rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            height: 44px;
+            padding: 0 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            background: #5865F2;
+            color: white;
+            box-shadow: 0 4px 16px rgba(88, 101, 242, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(88, 101, 242, 0.4);
+        }
+
+        .discord-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        .license-key-section {
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.6s ease 0.25s both;
+        }
+
+        .key-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .key-box {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+        }
+
+        .key-value {
+            flex: 1;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            word-break: break-all;
+            user-select: all;
+        }
+
+        .copy-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: none;
+            border: 1px solid var(--border-light);
+            border-radius: 6px;
+            padding: 0.35rem 0.6rem;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .copy-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-muted);
+        }
+
+        .copy-btn.copied {
+            color: var(--early-access-green);
+            border-color: var(--early-access-green);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            60% { transform: scale(1.15); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 480px) {
+            h1 { font-size: 1.4rem; }
+            .subtitle { font-size: 0.9rem; }
+        }
+    </style>
+    <script>
+        const saved = localStorage.getItem('theme');
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
+        else if (window.matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-theme', 'dark');
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="badge">🎉</div>
+        <h1>Cue Activated</h1>
+        <p class="subtitle">We sent the key to your email.<br>Open Cue and paste your license key to unlock export.</p>
+
+        <div class="license-key-section" id="licenseKeySection" style="display:none;">
+            <p class="key-label">Your license key</p>
+            <div class="key-box">
+                <code class="key-value" id="licenseKeyValue"></code>
+                <button class="copy-btn" id="copyBtn" title="Copy to clipboard">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span class="copy-label">Copy</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="steps-section">
+            <p class="steps-title">Next steps</p>
+            <ol class="steps">
+                <li>Open Cue</li>
+                <li>Click <strong>Help -> Manage License</strong></li>
+                <li>Paste your license key</li>
+            </ol>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="community-section">
+            <h2>Help shape Cue</h2>
+            <p class="community-intro">Cue is in early access and improving quickly with editor feedback.</p>
+            <p class="community-cta">👉 Join the Discord to:</p>
+            <ul class="community-list">
+                <li>Suggest features</li>
+                <li>Share edits made with Cue</li>
+                <li>Get help from other editors</li>
+            </ul>
+            <a href="https://discord.gg/DsFEEkSV" class="btn" target="_blank" rel="noopener">
+                <svg class="discord-icon" viewBox="0 -28.5 256 256" xmlns="http://www.w3.org/2000/svg"><path d="M216.856 16.597A208.502 208.502 0 0 0 164.042 0c-2.275 4.113-4.933 9.645-6.766 14.046-19.692-2.961-39.203-2.961-58.533 0-1.832-4.4-4.55-9.933-6.846-14.046a207.809 207.809 0 0 0-52.855 16.638C5.618 67.147-3.443 116.4 1.087 164.956c22.169 16.555 43.653 26.612 64.775 33.193a161.094 161.094 0 0 0 13.915-22.861 136.426 136.426 0 0 1-21.911-10.632c1.838-1.351 3.63-2.772 5.362-4.254 42.122 19.702 87.89 19.702 129.51 0a131.66 131.66 0 0 0 5.402 4.254 136.201 136.201 0 0 1-21.95 10.653 160.976 160.976 0 0 0 13.914 22.861c21.142-6.58 42.646-16.637 64.815-33.213 5.316-56.288-9.08-105.09-38.056-148.36ZM85.474 135.095c-12.645 0-23.015-11.805-23.015-26.18s10.149-26.2 23.015-26.2c12.867 0 23.236 11.824 23.015 26.2.02 14.375-10.148 26.18-23.015 26.18Zm85.051 0c-12.645 0-23.014-11.805-23.014-26.18s10.148-26.2 23.014-26.2c12.867 0 23.236 11.824 23.015 26.2 0 14.375-10.148 26.18-23.015 26.18Z" fill="currentColor"/></svg>
+                <span>Join the Discord</span>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const licenseKey = params.get('license_key');
+
+        if (licenseKey) {
+            document.getElementById('licenseKeySection').style.display = 'block';
+            document.getElementById('licenseKeyValue').textContent = licenseKey;
+
+            document.getElementById('copyBtn').addEventListener('click', () => {
+                navigator.clipboard.writeText(licenseKey).then(() => {
+                    const btn = document.getElementById('copyBtn');
+                    const label = btn.querySelector('.copy-label');
+                    btn.classList.add('copied');
+                    label.textContent = 'Copied!';
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        label.textContent = 'Copy';
+                    }, 2000);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
