@@ -1723,7 +1723,7 @@
         }
         
         .pricing-card--primary:hover {
-            box-shadow: 0 12px 40px rgba(255, 107, 53, 0.15);
+            box-shadow: 0 12px 40px rgba(76, 175, 80, 0.15);
         }
         
         /* Download Free button - largest, most prominent */
@@ -1775,14 +1775,14 @@
             top: -15px;
             left: 50%;
             transform: translateX(-50%);
-            background: var(--gradient-hero);
+            background: var(--gradient-early-access);
             color: white;
             padding: 0.35rem 1.25rem;
             border-radius: 50px;
             font-size: 0.75rem;
             font-weight: 700;
             letter-spacing: 0.05em;
-            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
             white-space: nowrap;
             z-index: 10;
         }
@@ -1797,10 +1797,19 @@
             margin-bottom: 0.75rem;
         }
         
+        .plan-price .price-original {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: var(--text-on-card-secondary);
+            text-decoration: line-through;
+            opacity: 0.5;
+            margin-right: 0.5rem;
+        }
+
         .plan-price .price {
             font-size: 2.5rem;
             font-weight: 700;
-            background: var(--gradient-hero);
+            background: var(--gradient-early-access);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -1871,6 +1880,63 @@
         
         .faq-note strong {
             color: var(--text-primary);
+        }
+
+        .plan-community-note {
+            margin-top: 1.25rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-card);
+            font-size: 0.8rem;
+            color: var(--text-on-card-secondary);
+            line-height: 1.5;
+            opacity: 0.85;
+        }
+
+        .plan-community-note a {
+            color: var(--early-access-green);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .plan-community-note a:hover {
+            text-decoration: underline;
+        }
+
+        .pricing-discord-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 2.5rem;
+            gap: 0;
+        }
+
+        .connector-line {
+            width: 1px;
+            height: 40px;
+            background: linear-gradient(to bottom, var(--border-card), var(--text-secondary));
+            opacity: 0.3;
+        }
+
+        .connector-link {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-decoration: none;
+            letter-spacing: 0.02em;
+            transition: color 0.2s ease;
+            margin-top: 0.5rem;
+        }
+
+        .connector-link:hover {
+            color: var(--text-primary);
+        }
+
+        .connector-link span {
+            display: inline-block;
+            transition: transform 0.2s ease;
+        }
+
+        .connector-link:hover span {
+            transform: translateY(2px);
         }
         
         /* ============================================
@@ -3789,7 +3855,7 @@
             </a>
             <div class="nav-links">
                 <a href="#how-it-works">How It Works</a>
-                <a href="download-trial.html" class="nav-cta" onclick="trackTrialDownloadClick(event)">Download Cue</a>
+                <a href="#pricing" class="nav-cta">Get Cue</a>
                 <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
                     <span class="theme-icon light">☀️</span>
                     <span class="theme-icon dark">🌙</span>
@@ -3805,9 +3871,9 @@
             <div class="grid-pattern"></div>
         </div>
         <div class="hero-content">
-            <p class="hero-tagline">Control when the <span class="blue">music</span> lands in your <span class="orange">edit.</span></p>
+            <p class="hero-tagline">Control <span class="blue">music</span> timing in your <span class="orange">edit.</span></p>
             <p class="hero-subtitle">
-                Place key musical moments exactly where your edit needs them.<br>Cue rebuilds the rest of the track automatically.
+                Move the musical moments you care about — the rest of the soundtrack rebuilds around them.
             </p>
             
             <div class="hero-visual">
@@ -3825,15 +3891,15 @@
                 </div>
             </div>
             <div class="hero-ctas">
-                <a href="download-trial.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn" onclick="trackTrialDownloadClick(event)">
-                    <span>Download Cue</span>
+                <a href="#pricing" class="btn btn-primary btn-download-hero" id="heroDownloadBtn">
+                    <span>Get Cue</span>
                     <span>↓</span>
                 </a>
                 <a href="#how-it-works" class="btn btn-secondary">
                     <span>See How It Works</span>
                 </a>
             </div>
-            <p class="hero-microcopy">Free during early access · <a href="#community" class="microcopy-link">Feedback is welcomed</a></p>
+            <p class="hero-microcopy">Available during early access</p>
         </div>
     </section>
 
@@ -3882,6 +3948,38 @@
                         </video>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section class="pricing-section" id="pricing">
+        <div class="pricing-container">
+            <div class="section-header">
+                <h2>Get Cue</h2>
+            </div>
+            <div class="pricing-cards">
+                <div class="pricing-card pricing-card--primary">
+                    <div class="plan-badge">Early Access</div>
+                    <h3 class="plan-name">Cue</h3>
+                    <div class="plan-price">
+                        <span class="price-original">$79</span>
+                        <span class="price">$0</span>
+                    </div>
+                    <p class="plan-description">All features included during early access.</p>
+                    <a href="download-trial.html" class="btn btn-primary btn-download-hero" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
+                        Download Cue
+                    </a>
+                    <p class="plan-note plan-note--trust">Make the music land with your edit.</p>
+                    <p class="plan-note plan-note--platforms">No credit card required · macOS &amp; Windows</p>
+                    <div class="plan-community-note">
+                        <p>Your feedback helps shape Cue. <a href="#community">Join the community</a>.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="pricing-discord-connector">
+                <span class="connector-line"></span>
+                <a href="#community" class="connector-link">Join the community <span>&darr;</span></a>
             </div>
         </div>
     </section>
@@ -4214,7 +4312,7 @@
                 posthog.capture('trial_download_clicked', {
                     ...getBaseEventProps(),
                     page: 'early_access',
-                    source: 'hero_section',
+                    source: 'pricing_section',
                     platform: platform
                 });
             } else {
@@ -4231,6 +4329,46 @@
                 window.location.href = targetUrl;
             }, 150);
         }
+
+        function trackClick(eventName, props) {
+            if (typeof posthog === 'undefined' || !posthog.capture) return;
+            const allProps = posthogFullyInitialized
+                ? { ...getBaseEventProps(), page: 'early_access', ...props }
+                : { page: 'early_access', url: window.location.href, ...props };
+            posthog.capture(eventName, allProps);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var navCta = document.querySelector('.nav-cta');
+            if (navCta) navCta.addEventListener('click', function () {
+                trackClick('cta_clicked', { source: 'nav', label: 'Get Cue' });
+            });
+
+            var heroBtn = document.getElementById('heroDownloadBtn');
+            if (heroBtn) heroBtn.addEventListener('click', function () {
+                trackClick('cta_clicked', { source: 'hero', label: 'Get Cue' });
+            });
+
+            var howItWorksBtn = document.querySelector('.hero-ctas .btn-secondary');
+            if (howItWorksBtn) howItWorksBtn.addEventListener('click', function () {
+                trackClick('cta_clicked', { source: 'hero', label: 'See How It Works' });
+            });
+
+            var connectorLink = document.querySelector('.connector-link');
+            if (connectorLink) connectorLink.addEventListener('click', function () {
+                trackClick('cta_clicked', { source: 'pricing', label: 'Join the community' });
+            });
+
+            var feedbackLink = document.querySelector('.plan-note--trust .microcopy-link');
+            if (feedbackLink) feedbackLink.addEventListener('click', function () {
+                trackClick('cta_clicked', { source: 'pricing', label: 'Feedback link' });
+            });
+
+            var discordBtn = document.querySelector('.community-btn');
+            if (discordBtn) discordBtn.addEventListener('click', function () {
+                trackClick('discord_clicked', { source: 'community_section' });
+            });
+        });
         
         // Track application submission
         // NOTE: User merging is handled by the webhook, not client-side
@@ -4537,20 +4675,15 @@
             const heroMicrocopy = document.querySelector('.hero-microcopy');
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
             const navDownloadBtn = document.querySelector('.nav-cta');
+            const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
             
             if (isWindows || forcePlatform === 'windows') {
-                if (heroDownloadBtn) {
-                    heroDownloadBtn.querySelector('span:first-child').textContent = 'Download Cue for Windows';
-                }
-                if (navDownloadBtn) {
-                    navDownloadBtn.textContent = 'Download Cue for Windows';
+                if (pricingDownloadBtn) {
+                    pricingDownloadBtn.textContent = 'Download for Windows';
                 }
             } else if (isMac || forcePlatform === 'mac') {
-                if (heroDownloadBtn) {
-                    heroDownloadBtn.querySelector('span:first-child').textContent = 'Download Cue for macOS';
-                }
-                if (navDownloadBtn) {
-                    navDownloadBtn.textContent = 'Download Cue for macOS';
+                if (pricingDownloadBtn) {
+                    pricingDownloadBtn.textContent = 'Download for macOS';
                 }
             } else if (forcePlatform === 'unsupported' || (!isMac && !isWindows && !isIOS && !isAndroid)) {
                 if (heroMicrocopy) {
@@ -4562,6 +4695,13 @@
                     heroDownloadBtn.removeAttribute('href');
                     heroDownloadBtn.removeAttribute('onclick');
                     heroDownloadBtn.innerHTML = '<span>Available for macOS and Windows</span>';
+                }
+                if (pricingDownloadBtn) {
+                    pricingDownloadBtn.classList.add('btn-unavailable');
+                    pricingDownloadBtn.classList.remove('btn-primary');
+                    pricingDownloadBtn.removeAttribute('href');
+                    pricingDownloadBtn.removeAttribute('onclick');
+                    pricingDownloadBtn.textContent = 'Available for macOS and Windows';
                 }
                 if (navDownloadBtn) {
                     navDownloadBtn.classList.add('btn-unavailable');
