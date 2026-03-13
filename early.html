@@ -1906,15 +1906,22 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin-top: 2.5rem;
+            margin-top: 1.5rem;
             gap: 0;
         }
 
         .connector-line {
             width: 1px;
-            height: 40px;
+            height: 32px;
             background: linear-gradient(to bottom, var(--border-card), var(--text-secondary));
             opacity: 0.3;
+        }
+
+        .connector-tagline {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 0.75rem;
+            letter-spacing: 0.01em;
         }
 
         .connector-link {
@@ -1923,7 +1930,7 @@
             text-decoration: none;
             letter-spacing: 0.02em;
             transition: color 0.2s ease;
-            margin-top: 0.5rem;
+            margin-top: 0.25rem;
         }
 
         .connector-link:hover {
@@ -3899,7 +3906,7 @@
                     <span>See How It Works</span>
                 </a>
             </div>
-            <p class="hero-microcopy">Free during early access</p>
+            <p class="hero-microcopy">Free while we build this with early adopters.</p>
         </div>
     </section>
 
@@ -3966,11 +3973,11 @@
                         <span class="price-original">$79</span>
                         <span class="price">$0</span>
                     </div>
-                    <p class="plan-description">All features included during early access.</p>
+                    <p class="plan-description">Everything included. You're getting in early.</p>
                     <a href="download-trial.html" class="btn btn-primary btn-download-hero" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
                         Download Cue
                     </a>
-                    <p class="plan-note plan-note--trust">Make the music land with your edit.</p>
+                    <p class="plan-note plan-note--trust">Be the first to edit this way.</p>
                     <p class="plan-note plan-note--platforms">No credit card required · macOS &amp; Windows</p>
                     <div class="plan-community-note">
                         <p>Your feedback helps shape Cue. <a href="#community">Join the community</a>.</p>
@@ -3979,6 +3986,7 @@
             </div>
             <div class="pricing-discord-connector">
                 <span class="connector-line"></span>
+                <span class="connector-tagline">Cue is built alongside the editors who discover it.</span>
                 <a href="#community" class="connector-link">Join the community <span>&darr;</span></a>
             </div>
         </div>
@@ -3988,13 +3996,12 @@
     <section class="community-section" id="community">
         <div class="community-container">
             <h2>Join the Cue community</h2>
-            <p class="community-intro">Cue is in early development and improving quickly with feedback from editors.</p>
+            <p class="community-intro">Help shape what comes next.</p>
             <p class="community-label">Join the Discord to:</p>
             <ul class="community-list">
-                <li>Get help using Cue</li>
-                <li>Suggest features</li>
+                <li>Influence what gets built next</li>
                 <li>Share edits made with Cue</li>
-                <li>Talk directly with the developer</li>
+                <li>Talk directly with the developers</li>
             </ul>
             <br>
             <a href="https://discord.gg/DsFEEkSV" class="btn btn-primary community-btn" target="_blank" rel="noopener">
@@ -4003,8 +4010,6 @@
             </a>
         </div>
     </section>
-
-    <p class="closing-line">Built for editors who care about timing.</p>
 
     <!-- Footer -->
     <footer>
