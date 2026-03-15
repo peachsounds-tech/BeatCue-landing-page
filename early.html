@@ -11,6 +11,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
+    <!-- Meta Pixel Code -->
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '976481065244121');
+    fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=976481065244121&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Meta Pixel Code -->
+
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="icon.png">
     
@@ -837,6 +855,20 @@
             color: var(--text-muted);
             margin-top: 0.75rem;
             font-weight: 400;
+            opacity: 0.85;
+            animation: fadeInUp 0.8s ease 0.6s both;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.35rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: var(--early-access-green);
+            border: 1px solid var(--early-access-green);
+            border-radius: 50px;
             opacity: 0.85;
             animation: fadeInUp 0.8s ease 0.6s both;
         }
@@ -3906,7 +3938,7 @@
                     <span>See How It Works</span>
                 </a>
             </div>
-            <p class="hero-microcopy">Free while we build this with early adopters.</p>
+            <span class="hero-badge">Free pre-launch access</span>
         </div>
     </section>
 
@@ -3967,17 +3999,17 @@
             </div>
             <div class="pricing-cards">
                 <div class="pricing-card pricing-card--primary">
-                    <div class="plan-badge">Early Access</div>
+                    <div class="plan-badge">Free Pre-Launch</div>
                     <h3 class="plan-name">Cue</h3>
                     <div class="plan-price">
                         <span class="price-original">$79</span>
                         <span class="price">$0</span>
                     </div>
-                    <p class="plan-description">The full version. 🎉 Free before launch.</p>
+                    <p class="plan-description"> ✨ Free pre-launch access. ✨</p>
                     <a href="download-trial.html" class="btn btn-primary btn-download-hero" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
                         Download Cue
                     </a>
-                    <p class="plan-note plan-note--trust">Be the first to cue your music.</p>
+                    <p class="plan-note plan-note--trust">Join the first editors to cue their music.</p>
                     <p class="plan-note plan-note--platforms">No credit card required · macOS &amp; Windows</p>
                     <div class="plan-community-note">
                         <p>Your feedback helps shape Cue. <a href="#community">Join the community</a>.</p>
@@ -4294,6 +4326,8 @@
         // This ensures the event uses the same anonymous ID as page_viewed
         // Now with auto OS detection
         function trackTrialDownloadClick(event, platform) {
+            if (typeof fbq === 'function') fbq('trackCustom', 'InstallIntent');
+
             // Auto-detect platform if not specified
             if (!platform) {
                 const ua = navigator.userAgent || navigator.platform || '';
@@ -4679,7 +4713,7 @@
             const forcePlatform = urlParams.get('platform');
             
             // Update buttons based on platform
-            const heroMicrocopy = document.querySelector('.hero-microcopy');
+            const heroMicrocopy = document.querySelector('.hero-microcopy') || document.querySelector('.hero-badge');
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
             const navDownloadBtn = document.querySelector('.nav-cta');
             const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
