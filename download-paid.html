@@ -90,9 +90,13 @@
         .status-item {
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 0.75rem;
+            margin-bottom: 0.75rem;
             font-size: 1rem;
+        }
+        
+        .status-item:last-child {
+            margin-bottom: 0;
         }
         
         .status-icon {
@@ -145,24 +149,6 @@
             margin-left: 1.25rem;
             line-height: 1.8;
             font-size: 0.95rem;
-        }
-        
-        .trial-note {
-            margin-top: 2rem;
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }
-        
-        .trial-note a {
-            color: #f8b500;
-            text-decoration: none;
-        }
-        
-        .trial-note a:hover {
-            text-decoration: underline;
         }
     </style>
     
@@ -226,14 +212,14 @@
             if (userConsented) {
                 posthog.capture('page_viewed', {
                     ...getBaseEventProps(),
-                    page: 'download_trial',
+                    page: 'download',
                     url: window.location.href,
                     referrer: document.referrer || 'direct'
                 });
                 console.log('📊 PostHog: page_viewed tracked (consented)');
             } else {
                 posthog.capture('page_viewed', {
-                    page: 'download_trial',
+                    page: 'download',
                     url: window.location.href,
                     referrer: document.referrer || 'direct',
                     screen_width: window.screen.width,
@@ -249,8 +235,8 @@
         <div class="icon">
             <img src="icon1.png" alt="Cue Logo">
         </div>
-        <h1>Download Cue</h1>
-        <p class="subtitle">Your download should start automatically.<br>Try all features with no time limit.</p>
+        <h1>Thank You!</h1>
+        <p class="subtitle">Your download should start automatically.<br>Your license key is on its way to your email.</p>
         
         <div class="download-status">
             <div class="status-item">
@@ -259,6 +245,10 @@
                 </span>
                 <span id="download-text">Starting download...</span>
             </div>
+            <div class="status-item">
+                <span class="status-icon">📧</span>
+                <span>License key sent to your email</span>
+            </div>
         </div>
         
         <div class="next-steps">
@@ -266,38 +256,61 @@
             <ol>
                 <li>Open the downloaded DMG file</li>
                 <li>Drag Cue to Applications</li>
-                <li>Launch and start creating!</li>
+                <li>Check your email for the license key</li>
+                <li>Enter the key when prompted</li>
             </ol>
         </div>
         
         <p class="manual-download">
             Download not starting? <a href="#" id="manual-download-link">Click here to download manually</a>
         </p>
-        
-        <div class="trial-note">
-            Ready to export your creations? <a href="index.html#pricing">Upgrade to Pro</a> anytime from within the app.
-        </div>
     </div>
     
     <script>
         // Configuration - Public releases repo (latest release)
         const DOWNLOAD_URL = 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue.dmg';
         
+        // SHA-256 hash function
+        async function hashEmail(email) {
+            const normalized = email.toLowerCase().trim();
+            const encoder = new TextEncoder();
+            const data = encoder.encode(normalized);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        
+        // Get email from URL params
+        function getEmailFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            // Lemon Squeezy passes email as checkout_email or email
+            return params.get('checkout_email') || params.get('email') || null;
+        }
+        
         // Track download event
-        function trackDownload() {
+        async function trackDownload(email) {
             if (userConsented) {
-                posthog.capture('trial_download_started', {
+                const eventProps = {
                     ...getBaseEventProps(),
-                    page: 'download_trial',
-                    source: 'free_trial_page'
-                });
+                    page: 'download',
+                    source: 'post_checkout'
+                };
+                
+                // Include hashed_email for consented users
+                if (email) {
+                    const hashedEmail = await hashEmail(email);
+                    eventProps.hashed_email = hashedEmail;
+                    console.log('Download tracked with identity:', hashedEmail);
+                }
+                
+                posthog.capture('download_started', eventProps);
             } else {
-                posthog.capture('trial_download_started', {
-                    page: 'download_trial',
+                posthog.capture('download_started', {
+                    page: 'download',
                     url: window.location.href
                 });
+                console.log('Download tracked (anonymous, no geo)');
             }
-            console.log('Trial download tracked');
         }
         
         // Start download
@@ -317,9 +330,11 @@
         }
         
         // Initialize
-        function init() {
+        async function init() {
+            const email = getEmailFromURL();
+            
             // Track the download
-            trackDownload();
+            await trackDownload(email);
             
             // Start download after a short delay
             setTimeout(startDownload, 500);
@@ -333,3 +348,4 @@
     </script>
 </body>
 </html>
+

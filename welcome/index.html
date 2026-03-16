@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cue – Activated</title>
-    <meta name="description" content="Your Cue license is ready. Open Cue and paste your license key to unlock export.">
+    <title>Cue – Welcome to Early Access</title>
+    <meta name="description" content="Your Cue access key is ready. Click to open Cue and activate your license automatically.">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,7 +40,6 @@
             --text-secondary: #555555;
             --text-muted: #888888;
             --border-light: rgba(0, 0, 0, 0.08);
-            --gradient-hero: linear-gradient(135deg, var(--peach-orange) 0%, var(--wave-blue) 100%);
             --gradient-early-access: linear-gradient(135deg, var(--early-access-green) 0%, var(--wave-blue) 100%);
         }
 
@@ -94,141 +93,72 @@
         .subtitle {
             color: var(--text-secondary);
             font-size: 1rem;
-            margin-bottom: 2.5rem;
+            margin-bottom: 2rem;
             animation: fadeInUp 0.6s ease 0.2s both;
         }
 
-        .steps-section {
-            text-align: left;
-            margin-bottom: 2.5rem;
+        /* Opening status shown while waiting for deep link */
+        .opening-status {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
             animation: fadeInUp 0.6s ease 0.3s both;
         }
 
-        .steps-title {
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--text-muted);
-            margin-bottom: 1rem;
-        }
-
-        .steps {
-            list-style: none;
-            counter-reset: step;
-        }
-
-        .steps li {
-            counter-increment: step;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.6rem 0;
-            color: var(--text-primary);
-            font-size: 0.95rem;
-            border-bottom: 1px solid var(--border-light);
-        }
-
-        .steps li:last-child {
-            border-bottom: none;
-        }
-
-        .steps li::before {
-            content: counter(step);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 28px;
-            height: 28px;
+        .opening-status .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--border-light);
+            border-top-color: var(--early-access-green);
             border-radius: 50%;
-            background: var(--gradient-early-access);
-            color: white;
-            font-size: 0.8rem;
-            font-weight: 700;
-            flex-shrink: 0;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
         }
 
-        .divider {
-            height: 1px;
-            background: var(--border-light);
-            margin: 0.5rem 0 2rem;
-            animation: fadeInUp 0.6s ease 0.4s both;
-        }
-
-        .community-section {
-            text-align: left;
-            animation: fadeInUp 0.6s ease 0.5s both;
-        }
-
-        .community-section h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .community-intro {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-        }
-
-        .community-cta {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .community-list {
-            list-style: none;
-            margin-bottom: 1.5rem;
-        }
-
-        .community-list li {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            padding: 0.2rem 0;
-        }
-
-        .community-list li::before {
-            content: '·';
-            color: var(--text-muted);
-            font-weight: 700;
-            margin-right: 0.6rem;
-        }
-
-        .btn {
+        /* Primary CTA */
+        .btn-open {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            height: 44px;
-            padding: 0 20px;
+            height: 48px;
+            padding: 0 28px;
             border-radius: 10px;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 1rem;
             text-decoration: none;
-            transition: all 0.3s ease;
             cursor: pointer;
             border: none;
-            background: #5865F2;
+            background: var(--gradient-early-access);
             color: white;
-            box-shadow: 0 4px 16px rgba(88, 101, 242, 0.3);
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.6s ease 0.3s both;
+            margin-bottom: 2rem;
         }
 
-        .btn:hover {
+        .btn-open:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 24px rgba(88, 101, 242, 0.4);
+            box-shadow: 0 6px 24px rgba(16, 185, 129, 0.4);
         }
 
-        .discord-icon {
-            width: 18px;
-            height: 18px;
-            flex-shrink: 0;
+        /* Fallback section (hidden initially) */
+        .fallback {
+            display: none;
+            animation: fadeInUp 0.4s ease both;
+        }
+
+        .fallback-hint {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
         }
 
         .license-key-section {
-            margin-bottom: 2rem;
-            animation: fadeInUp 0.6s ease 0.25s both;
+            margin-bottom: 1.5rem;
+            text-align: left;
         }
 
         .key-label {
@@ -286,6 +216,156 @@
             border-color: var(--early-access-green);
         }
 
+        .steps-section {
+            text-align: left;
+            margin-bottom: 1.5rem;
+        }
+
+        .steps-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .steps {
+            list-style: none;
+            counter-reset: step;
+        }
+
+        .steps li {
+            counter-increment: step;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .steps li:last-child { border-bottom: none; }
+
+        .steps li::before {
+            content: counter(step);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--gradient-early-access);
+            color: white;
+            font-size: 0.8rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .download-link {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        .download-link a {
+            color: var(--early-access-green);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .download-link a:hover {
+            text-decoration: underline;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border-light);
+            margin: 0.5rem 0 2rem;
+        }
+
+        .community-section {
+            text-align: left;
+            animation: fadeInUp 0.6s ease 0.5s both;
+        }
+
+        .community-section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .community-intro {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .community-cta {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .community-list {
+            list-style: none;
+            margin-bottom: 1.5rem;
+        }
+
+        .community-list li {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            padding: 0.2rem 0;
+        }
+
+        .community-list li::before {
+            content: '\00b7';
+            color: var(--text-muted);
+            font-weight: 700;
+            margin-right: 0.6rem;
+        }
+
+        .btn-discord {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            height: 44px;
+            padding: 0 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            background: #5865F2;
+            color: white;
+            box-shadow: 0 4px 16px rgba(88, 101, 242, 0.3);
+        }
+
+        .btn-discord:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(88, 101, 242, 0.4);
+        }
+
+        .discord-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        /* No-key state */
+        .no-key-message {
+            display: none;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.6s ease 0.3s both;
+        }
+
         @keyframes popIn {
             0% { transform: scale(0.5); opacity: 0; }
             60% { transform: scale(1.15); }
@@ -295,6 +375,10 @@
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(16px); }
             to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         @media (max-width: 480px) {
@@ -310,28 +394,53 @@
 </head>
 <body>
     <div class="container">
-        <div class="badge">🎉</div>
-        <h1>Cue Activated</h1>
-        <p class="subtitle">We sent the key to your email.<br>Open Cue and paste your license key to unlock export.</p>
+        <div class="badge">&#127881;</div>
+        <h1>Welcome to Cue Early Access</h1>
+        <p class="subtitle">Your access key is ready.</p>
 
-        <div class="license-key-section" id="licenseKeySection" style="display:none;">
-            <p class="key-label">Your license key</p>
-            <div class="key-box">
-                <code class="key-value" id="licenseKeyValue"></code>
-                <button class="copy-btn" id="copyBtn" title="Copy to clipboard">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    <span class="copy-label">Copy</span>
-                </button>
+        <!-- Shown while attempting deep link -->
+        <p class="opening-status" id="openingStatus" style="display:none;">
+            <span class="spinner"></span> Opening Cue...
+        </p>
+
+        <!-- Primary action: open the app via deep link -->
+        <button class="btn-open" id="openCueBtn" style="display:none;" onclick="openCue()">
+            Open Cue
+        </button>
+
+        <!-- Shown when no license key in URL -->
+        <p class="no-key-message" id="noKeyMessage">
+            We sent the key to your email.<br>
+            Open Cue and go to <strong>Help &rarr; Manage License</strong> to activate.
+        </p>
+
+        <!-- Fallback: shown after timeout if deep link didn't work -->
+        <div class="fallback" id="fallback">
+            <p class="fallback-hint">If Cue didn't open automatically:</p>
+
+            <div class="license-key-section" id="licenseKeySection">
+                <p class="key-label">Your license key</p>
+                <div class="key-box">
+                    <code class="key-value" id="licenseKeyValue"></code>
+                    <button class="copy-btn" id="copyBtn" title="Copy to clipboard">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <span class="copy-label">Copy</span>
+                    </button>
+                </div>
             </div>
-        </div>
 
-        <div class="steps-section">
-            <p class="steps-title">Next steps</p>
-            <ol class="steps">
-                <li>Open Cue</li>
-                <li>Click <strong>Help -> Manage License</strong></li>
-                <li>Paste your license key</li>
-            </ol>
+            <div class="steps-section">
+                <p class="steps-title">Activate manually</p>
+                <ol class="steps">
+                    <li>Open Cue</li>
+                    <li>Click <strong>Help &rarr; Manage License</strong></li>
+                    <li>Paste your license key and click Activate</li>
+                </ol>
+            </div>
+
+            <p class="download-link">
+                Don't have Cue yet? <a href="https://gocue.app/download.html">Download Cue</a>
+            </p>
         </div>
 
         <div class="divider"></div>
@@ -339,13 +448,13 @@
         <div class="community-section">
             <h2>Help shape Cue</h2>
             <p class="community-intro">Cue is in early access and improving quickly with editor feedback.</p>
-            <p class="community-cta">👉 Join the Discord to:</p>
+            <p class="community-cta">&#128073; Join the Discord to:</p>
             <ul class="community-list">
                 <li>Suggest features</li>
                 <li>Share edits made with Cue</li>
                 <li>Get help from other editors</li>
             </ul>
-            <a href="https://discord.gg/DsFEEkSV" class="btn" target="_blank" rel="noopener">
+            <a href="https://discord.gg/DsFEEkSV" class="btn-discord" target="_blank" rel="noopener">
                 <svg class="discord-icon" viewBox="0 -28.5 256 256" xmlns="http://www.w3.org/2000/svg"><path d="M216.856 16.597A208.502 208.502 0 0 0 164.042 0c-2.275 4.113-4.933 9.645-6.766 14.046-19.692-2.961-39.203-2.961-58.533 0-1.832-4.4-4.55-9.933-6.846-14.046a207.809 207.809 0 0 0-52.855 16.638C5.618 67.147-3.443 116.4 1.087 164.956c22.169 16.555 43.653 26.612 64.775 33.193a161.094 161.094 0 0 0 13.915-22.861 136.426 136.426 0 0 1-21.911-10.632c1.838-1.351 3.63-2.772 5.362-4.254 42.122 19.702 87.89 19.702 129.51 0a131.66 131.66 0 0 0 5.402 4.254 136.201 136.201 0 0 1-21.95 10.653 160.976 160.976 0 0 0 13.914 22.861c21.142-6.58 42.646-16.637 64.815-33.213 5.316-56.288-9.08-105.09-38.056-148.36ZM85.474 135.095c-12.645 0-23.015-11.805-23.015-26.18s10.149-26.2 23.015-26.2c12.867 0 23.236 11.824 23.015 26.2.02 14.375-10.148 26.18-23.015 26.18Zm85.051 0c-12.645 0-23.014-11.805-23.014-26.18s10.148-26.2 23.014-26.2c12.867 0 23.236 11.824 23.015 26.2 0 14.375-10.148 26.18-23.015 26.18Z" fill="currentColor"/></svg>
                 <span>Join the Discord</span>
             </a>
@@ -356,22 +465,43 @@
         const params = new URLSearchParams(window.location.search);
         const licenseKey = params.get('license_key');
 
+        function openCue() {
+            if (licenseKey) {
+                window.location.href = 'cue://activate?key=' + encodeURIComponent(licenseKey);
+            }
+        }
+
         if (licenseKey) {
-            document.getElementById('licenseKeySection').style.display = 'block';
+            // Show the "Open Cue" button and opening status
+            document.getElementById('openCueBtn').style.display = 'inline-flex';
+            document.getElementById('openingStatus').style.display = 'block';
             document.getElementById('licenseKeyValue').textContent = licenseKey;
 
-            document.getElementById('copyBtn').addEventListener('click', () => {
-                navigator.clipboard.writeText(licenseKey).then(() => {
-                    const btn = document.getElementById('copyBtn');
-                    const label = btn.querySelector('.copy-label');
+            // Attempt deep link immediately
+            openCue();
+
+            // After 2.5s show fallback UI (deep link may have been blocked or app not installed)
+            setTimeout(function() {
+                document.getElementById('openingStatus').style.display = 'none';
+                document.getElementById('fallback').style.display = 'block';
+            }, 2500);
+
+            // Copy button handler
+            document.getElementById('copyBtn').addEventListener('click', function() {
+                navigator.clipboard.writeText(licenseKey).then(function() {
+                    var btn = document.getElementById('copyBtn');
+                    var label = btn.querySelector('.copy-label');
                     btn.classList.add('copied');
                     label.textContent = 'Copied!';
-                    setTimeout(() => {
+                    setTimeout(function() {
                         btn.classList.remove('copied');
                         label.textContent = 'Copy';
                     }, 2000);
                 });
             });
+        } else {
+            // No key in URL - show generic message
+            document.getElementById('noKeyMessage').style.display = 'block';
         }
     </script>
 </body>

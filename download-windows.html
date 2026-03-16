@@ -223,14 +223,14 @@
             if (userConsented) {
                 posthog.capture('page_viewed', {
                     ...getBaseEventProps(),
-                    page: 'download_trial_windows',
+                    page: 'download_windows',
                     url: window.location.href,
                     referrer: document.referrer || 'direct'
                 });
                 console.log('📊 PostHog: page_viewed tracked (consented)');
             } else {
                 posthog.capture('page_viewed', {
-                    page: 'download_trial_windows',
+                    page: 'download_windows',
                     url: window.location.href,
                     referrer: document.referrer || 'direct',
                     screen_width: window.screen.width,
@@ -247,7 +247,7 @@
             <img src="icon1.png" alt="Cue Logo">
         </div>
         <h1>Download Cue</h1>
-        <p class="subtitle">Your download should start automatically.<br>Try all features with no time limit.</p>
+        <p class="subtitle">Your download should start automatically.</p>
         
         <div class="download-status">
             <div class="status-item">
@@ -272,7 +272,7 @@
         </p>
         
         <div class="trial-note">
-            Ready to export your creations? <a href="index.html#pricing">Upgrade to Pro</a> anytime from within the app.
+            <a href="https://discord.gg/DsFEEkSV" target="_blank" style="color: #5865F2; text-decoration: none;">Join the Discord</a> — share feedback, get help, and shape what comes next.
         </div>
     </div>
     
@@ -285,13 +285,13 @@
             if (userConsented) {
                 posthog.capture('trial_download_started', {
                     ...getBaseEventProps(),
-                    page: 'download_trial_windows',
+                    page: 'download_windows',
                     platform: 'windows',
                     source: 'free_trial_page'
                 });
             } else {
                 posthog.capture('trial_download_started', {
-                    page: 'download_trial_windows',
+                    page: 'download_windows',
                     platform: 'windows',
                     url: window.location.href
                 });

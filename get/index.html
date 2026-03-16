@@ -12,12 +12,18 @@
         // During early access: points to LemonSqueezy free checkout
         // After launch: point to the paid checkout URL
         // ============================================
-        const PRODUCT_URL = 'https://peachsounds.lemonsqueezy.com/checkout/buy/8dfc09d0-cfd1-4a5c-83b0-55ebc6efcbfc';
+        const PRODUCT_URL = 'https://cue-app.lemonsqueezy.com/checkout/buy/8dfc09d0-cfd1-4a5c-83b0-55ebc6efcbfc';
 
-        window.location.replace(PRODUCT_URL);
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get('email');
+        const redirectUrl = email
+            ? PRODUCT_URL + '?checkout[email]=' + encodeURIComponent(email)
+            : PRODUCT_URL;
+
+        window.location.replace(redirectUrl);
     </script>
     <noscript>
-        <meta http-equiv="refresh" content="0;url=https://peachsounds.lemonsqueezy.com/checkout/buy/8dfc09d0-cfd1-4a5c-83b0-55ebc6efcbfc">
+        <meta http-equiv="refresh" content="0;url=https://cue-app.lemonsqueezy.com/checkout/buy/8dfc09d0-cfd1-4a5c-83b0-55ebc6efcbfc">
     </noscript>
 </head>
 <body>

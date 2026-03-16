@@ -4006,7 +4006,7 @@
                         <span class="price">$0</span>
                     </div>
                     <p class="plan-description"> ✨ Free pre-launch access. ✨</p>
-                    <a href="download-trial.html" class="btn btn-primary btn-download-hero" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
+                    <a href="download.html" class="btn btn-primary btn-download-hero" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
                         Download Cue
                     </a>
                     <p class="plan-note plan-note--trust">Join the first editors to cue their music.</p>
@@ -4339,7 +4339,7 @@
                 console.log('PostHog: Skipping trial_download_clicked (not available)');
                 // Still redirect to correct download page
                 event.preventDefault();
-                const targetUrl = platform === 'windows' ? 'download-trial-windows.html' : 'download-trial.html';
+                const targetUrl = platform === 'windows' ? 'download-windows.html' : 'download.html';
                 window.location.href = targetUrl;
                 return;
             }
@@ -4347,7 +4347,7 @@
             event.preventDefault();
             
             // Determine correct download URL based on platform
-            const targetUrl = platform === 'windows' ? 'download-trial-windows.html' : 'download-trial.html';
+            const targetUrl = platform === 'windows' ? 'download-windows.html' : 'download.html';
             
             if (posthogFullyInitialized) {
                 posthog.capture('trial_download_clicked', {
@@ -4547,7 +4547,7 @@
             console.log(`Using ${isLocalhost ? 'TEST' : 'LIVE'} checkout:`, checkoutId);
             
             // Set initial href immediately (without PostHog ID)
-            const baseHref = `https://peachsounds.lemonsqueezy.com/checkout/buy/${checkoutId}?embed=1`;
+            const baseHref = `https://cue-app.lemonsqueezy.com/checkout/buy/${checkoutId}?embed=1`;
             checkoutBtn.setAttribute('href', baseHref);
             
             // Function to append PostHog ID to checkout URL
