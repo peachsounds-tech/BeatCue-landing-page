@@ -90,22 +90,6 @@
             line-height: 1.6;
         }
         
-        .platform-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: rgba(248, 181, 0, 0.2);
-            border: 1px solid rgba(248, 181, 0, 0.4);
-            border-radius: 20px;
-            padding: 0.4rem 1rem;
-            font-size: 0.85rem;
-            margin-bottom: 1.5rem;
-        }
-        
-        .platform-badge .os-icon {
-            font-size: 1.1rem;
-        }
-        
         .download-status {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 12px;
@@ -171,24 +155,6 @@
             margin-left: 1.25rem;
             line-height: 1.8;
             font-size: 0.95rem;
-        }
-        
-        .trial-note {
-            margin-top: 2rem;
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }
-        
-        .trial-note a {
-            color: #f8b500;
-            text-decoration: none;
-        }
-        
-        .trial-note a:hover {
-            text-decoration: underline;
         }
         
         .other-platform {
@@ -376,12 +342,6 @@
             <img src="icon1.png" alt="Cue Logo">
         </div>
         <h1>Download Cue</h1>
-        
-        <div class="platform-badge" id="platformBadge">
-            <span class="os-icon" id="osIcon"></span>
-            <span id="osName">Detecting...</span>
-        </div>
-        
         <p class="subtitle" id="subtitle">Your download should start automatically.</p>
         
         <!-- Supported platform content -->
@@ -428,9 +388,6 @@
             </div>
         </div>
         
-        <div class="trial-note">
-            <a href="https://discord.gg/DsFEEkSV" target="_blank" style="color: #5865F2; text-decoration: none;">Join the Discord</a> — share feedback, get help, and shape what comes next.
-        </div>
     </div>
     
     <script>
@@ -514,23 +471,7 @@
         function setupUI(platform) {
             const isSupported = platform === 'macos' || platform === 'windows';
             const info = PLATFORM_INFO[platform];
-            
-            // Update platform badge
-            if (info) {
-                document.getElementById('osIcon').textContent = info.icon;
-                document.getElementById('osName').textContent = info.name;
-            } else {
-                const badges = {
-                    linux: { icon: '🐧', name: 'Linux' },
-                    ios: { icon: '📱', name: 'iOS' },
-                    android: { icon: '📱', name: 'Android' },
-                    unknown: { icon: '💻', name: 'Unknown OS' }
-                };
-                const badge = badges[platform] || badges.unknown;
-                document.getElementById('osIcon').textContent = badge.icon;
-                document.getElementById('osName').textContent = badge.name;
-            }
-            
+
             if (isSupported) {
                 // Show supported content
                 document.getElementById('supportedContent').style.display = 'block';
