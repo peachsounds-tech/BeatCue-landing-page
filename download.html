@@ -16,7 +16,18 @@
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
     fbq('init', '976481065244121');
+    
+    // Track PageView on initial load
     fbq('track', 'PageView');
+    
+    // Handle page restored from bfcache (back-forward cache)
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            // Page was restored from cache, re-track PageView
+            fbq('track', 'PageView');
+            console.log('📊 Meta Pixel: PageView re-tracked (from cache)');
+        }
+    });
     </script>
     <noscript><img height="1" width="1" style="display:none"
     src="https://www.facebook.com/tr?id=976481065244121&ev=PageView&noscript=1"
@@ -221,27 +232,40 @@
             return props;
         }
         
-        // Track page view
-        setTimeout(() => {
+        // Track page view function
+        function trackPostHogPageView(fromCache = false) {
+            const baseProps = {
+                page: 'download',
+                url: window.location.href,
+                referrer: document.referrer || 'direct',
+                from_cache: fromCache
+            };
+            
             if (userConsented) {
                 posthog.capture('page_viewed', {
                     ...getBaseEventProps(),
-                    page: 'download',
-                    url: window.location.href,
-                    referrer: document.referrer || 'direct'
+                    ...baseProps
                 });
-                console.log('📊 PostHog: page_viewed tracked (consented)');
+                console.log('📊 PostHog: page_viewed tracked (consented)' + (fromCache ? ' [from cache]' : ''));
             } else {
                 posthog.capture('page_viewed', {
-                    page: 'download',
-                    url: window.location.href,
-                    referrer: document.referrer || 'direct',
+                    ...baseProps,
                     screen_width: window.screen.width,
                     screen_height: window.screen.height
                 });
-                console.log('📊 PostHog: page_viewed tracked (anonymous, no geo)');
+                console.log('📊 PostHog: page_viewed tracked (anonymous)' + (fromCache ? ' [from cache]' : ''));
             }
-        }, 200);
+        }
+        
+        // Track on initial load
+        setTimeout(() => trackPostHogPageView(false), 200);
+        
+        // Handle page restored from bfcache
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                setTimeout(() => trackPostHogPageView(true), 200);
+            }
+        });
     </script>
 </head>
 <body>
@@ -285,6 +309,15 @@
         
         // Track download event
         function trackDownload() {
+            // Track Meta Pixel Lead conversion
+            if (typeof fbq !== 'undefined') {
+                fbq('track', 'Lead', {
+                    content_name: 'Cue Trial Download',
+                    content_category: 'Software Download'
+                });
+                console.log('📊 Meta Pixel: Lead event tracked');
+            }
+            
             if (userConsented) {
                 posthog.capture('trial_download_started', {
                     ...getBaseEventProps(),
