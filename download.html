@@ -306,19 +306,27 @@
         
         // Detect platform
         function detectPlatform() {
-            const ua = navigator.userAgent.toLowerCase();
-            const platform = navigator.platform?.toLowerCase() || '';
+            const ua = navigator.userAgent;
+            const platform = navigator.platform || '';
             
-            if (ua.includes('mac') || platform.includes('mac')) {
-                return 'macos';
-            } else if (ua.includes('win') || platform.includes('win')) {
+            // Check Windows first (most specific)
+            if (/Windows|Win32|Win64|WOW64/i.test(ua) || /Win/i.test(platform)) {
                 return 'windows';
-            } else if (ua.includes('linux')) {
-                return 'linux';
-            } else if (ua.includes('iphone') || ua.includes('ipad')) {
+            }
+            // Check macOS
+            if (/Macintosh|MacIntel|MacPPC|Mac68K/i.test(ua) || /Mac/i.test(platform)) {
+                return 'macos';
+            }
+            // Check mobile platforms
+            if (/iPhone|iPad|iPod/i.test(ua)) {
                 return 'ios';
-            } else if (ua.includes('android')) {
+            }
+            if (/Android/i.test(ua)) {
                 return 'android';
+            }
+            // Check Linux
+            if (/Linux/i.test(ua) || /Linux/i.test(platform)) {
+                return 'linux';
             }
             return 'unknown';
         }
