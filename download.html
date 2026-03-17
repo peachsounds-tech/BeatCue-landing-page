@@ -23,7 +23,6 @@
     // Handle page restored from bfcache (back-forward cache)
     window.addEventListener('pageshow', function(event) {
         if (event.persisted) {
-            // Page was restored from cache, re-track PageView
             fbq('track', 'PageView');
             console.log('📊 Meta Pixel: PageView re-tracked (from cache)');
         }
@@ -89,6 +88,22 @@
             opacity: 0.9;
             margin-bottom: 2rem;
             line-height: 1.6;
+        }
+        
+        .platform-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(248, 181, 0, 0.2);
+            border: 1px solid rgba(248, 181, 0, 0.4);
+            border-radius: 20px;
+            padding: 0.4rem 1rem;
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .platform-badge .os-icon {
+            font-size: 1.1rem;
         }
         
         .download-status {
@@ -175,6 +190,66 @@
         .trial-note a:hover {
             text-decoration: underline;
         }
+        
+        .other-platform {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            opacity: 0.6;
+        }
+        
+        .other-platform a {
+            color: #f8b500;
+            text-decoration: none;
+        }
+        
+        .other-platform a:hover {
+            text-decoration: underline;
+        }
+        
+        .unsupported-message {
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .unsupported-message h3 {
+            color: #ff6b6b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .download-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, #f8b500, #ff6b6b);
+            color: #1a1a2e;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(248, 181, 0, 0.3);
+        }
+        
+        .download-btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
     </style>
     
     <!-- PostHog - Consent-aware initialization -->
@@ -206,17 +281,15 @@
             autocapture: false,
             capture_pageview: false,
             person_profiles: userConsented ? 'always' : 'identified_only',
-            ip: userConsented  // Don't capture IP for anonymous tracking
+            ip: userConsented
         };
         
-        // Disable geo lookup for non-consented users
         if (!userConsented) {
             initConfig.disable_geoip = true;
         }
         
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         
-        // Register internal tester flag
         if (isInternalTester) {
             posthog.register({ is_internal: true });
             if (userConsented) {
@@ -225,17 +298,38 @@
             console.log('🔧 Internal tester flag detected');
         }
         
-        // Helper for base props
         function getBaseEventProps() {
             const props = {};
             if (isInternalTester) props.is_internal = true;
             return props;
         }
         
+        // Detect platform
+        function detectPlatform() {
+            const ua = navigator.userAgent.toLowerCase();
+            const platform = navigator.platform?.toLowerCase() || '';
+            
+            if (ua.includes('mac') || platform.includes('mac')) {
+                return 'macos';
+            } else if (ua.includes('win') || platform.includes('win')) {
+                return 'windows';
+            } else if (ua.includes('linux')) {
+                return 'linux';
+            } else if (ua.includes('iphone') || ua.includes('ipad')) {
+                return 'ios';
+            } else if (ua.includes('android')) {
+                return 'android';
+            }
+            return 'unknown';
+        }
+        
+        const detectedPlatform = detectPlatform();
+        
         // Track page view function
         function trackPostHogPageView(fromCache = false) {
             const baseProps = {
                 page: 'download',
+                platform: detectedPlatform,
                 url: window.location.href,
                 referrer: document.referrer || 'direct',
                 from_cache: fromCache
@@ -274,29 +368,57 @@
             <img src="icon1.png" alt="Cue Logo">
         </div>
         <h1>Download Cue</h1>
-        <p class="subtitle">Your download should start automatically.</p>
         
-        <div class="download-status">
-            <div class="status-item">
-                <span class="status-icon" id="download-icon">
-                    <div class="spinner"></div>
-                </span>
-                <span id="download-text">Starting download...</span>
+        <div class="platform-badge" id="platformBadge">
+            <span class="os-icon" id="osIcon"></span>
+            <span id="osName">Detecting...</span>
+        </div>
+        
+        <p class="subtitle" id="subtitle">Your download should start automatically.</p>
+        
+        <!-- Supported platform content -->
+        <div id="supportedContent">
+            <div class="download-status">
+                <div class="status-item">
+                    <span class="status-icon" id="download-icon">
+                        <div class="spinner"></div>
+                    </span>
+                    <span id="download-text">Starting download...</span>
+                </div>
+            </div>
+            
+            <div class="next-steps" id="nextSteps">
+                <h3>Next Steps</h3>
+                <ol id="stepsList">
+                    <!-- Populated by JS -->
+                </ol>
+            </div>
+            
+            <p class="manual-download">
+                Download not starting? <a href="#" id="manual-download-link">Click here to download manually</a>
+            </p>
+            
+            <p class="other-platform" id="otherPlatform"></p>
+        </div>
+        
+        <!-- Unsupported platform content -->
+        <div id="unsupportedContent" style="display: none;">
+            <div class="unsupported-message">
+                <h3>Desktop Only</h3>
+                <p>Cue is currently available for macOS and Windows desktop computers.</p>
+            </div>
+            
+            <p style="opacity: 0.8; margin-bottom: 1rem;">Download on your computer:</p>
+            
+            <div class="download-buttons">
+                <a href="#" class="download-btn" id="macDownloadBtn">
+                    <span>🍎</span> Download for macOS
+                </a>
+                <a href="#" class="download-btn secondary" id="winDownloadBtn">
+                    <span>🪟</span> Download for Windows
+                </a>
             </div>
         </div>
-        
-        <div class="next-steps">
-            <h3>Next Steps</h3>
-            <ol>
-                <li>Open the downloaded DMG file</li>
-                <li>Drag Cue to Applications</li>
-                <li>Launch and start creating!</li>
-            </ol>
-        </div>
-        
-        <p class="manual-download">
-            Download not starting? <a href="#" id="manual-download-link">Click here to download manually</a>
-        </p>
         
         <div class="trial-note">
             <a href="https://discord.gg/DsFEEkSV" target="_blank" style="color: #5865F2; text-decoration: none;">Join the Discord</a> — share feedback, get help, and shape what comes next.
@@ -304,16 +426,42 @@
     </div>
     
     <script>
-        // Configuration - Public releases repo (latest release)
-        const DOWNLOAD_URL = 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue.dmg';
+        // Download URLs
+        const DOWNLOAD_URLS = {
+            macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue.dmg',
+            windows: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue-Windows.zip'
+        };
+        
+        // Platform display info
+        const PLATFORM_INFO = {
+            macos: {
+                icon: '🍎',
+                name: 'macOS',
+                steps: [
+                    'Open the downloaded DMG file',
+                    'Drag Cue to Applications',
+                    'Launch and start creating!'
+                ]
+            },
+            windows: {
+                icon: '🪟',
+                name: 'Windows',
+                steps: [
+                    'Extract the downloaded ZIP file',
+                    'Run <strong>Cue.exe</strong> (Standalone) or copy <strong>Cue.vst3</strong> to your VST3 folder',
+                    'Launch and start creating!'
+                ]
+            }
+        };
         
         // Track download event
-        function trackDownload() {
+        function trackDownload(platform) {
             // Track Meta Pixel Lead conversion
             if (typeof fbq !== 'undefined') {
                 fbq('track', 'Lead', {
                     content_name: 'Cue Trial Download',
-                    content_category: 'Software Download'
+                    content_category: 'Software Download',
+                    platform: platform
                 });
                 console.log('📊 Meta Pixel: Lead event tracked');
             }
@@ -322,21 +470,26 @@
                 posthog.capture('trial_download_started', {
                     ...getBaseEventProps(),
                     page: 'download',
+                    platform: platform,
                     source: 'free_trial_page'
                 });
             } else {
                 posthog.capture('trial_download_started', {
                     page: 'download',
+                    platform: platform,
                     url: window.location.href
                 });
             }
-            console.log('Trial download tracked');
+            console.log(`${platform} trial download tracked`);
         }
         
         // Start download
-        function startDownload() {
+        function startDownload(platform) {
+            const url = DOWNLOAD_URLS[platform];
+            if (!url) return;
+            
             const link = document.createElement('a');
-            link.href = DOWNLOAD_URL;
+            link.href = url;
             link.download = '';
             document.body.appendChild(link);
             link.click();
@@ -349,16 +502,73 @@
             }, 1000);
         }
         
+        // Setup UI for platform
+        function setupUI(platform) {
+            const isSupported = platform === 'macos' || platform === 'windows';
+            const info = PLATFORM_INFO[platform];
+            
+            // Update platform badge
+            if (info) {
+                document.getElementById('osIcon').textContent = info.icon;
+                document.getElementById('osName').textContent = info.name;
+            } else {
+                const badges = {
+                    linux: { icon: '🐧', name: 'Linux' },
+                    ios: { icon: '📱', name: 'iOS' },
+                    android: { icon: '📱', name: 'Android' },
+                    unknown: { icon: '💻', name: 'Unknown OS' }
+                };
+                const badge = badges[platform] || badges.unknown;
+                document.getElementById('osIcon').textContent = badge.icon;
+                document.getElementById('osName').textContent = badge.name;
+            }
+            
+            if (isSupported) {
+                // Show supported content
+                document.getElementById('supportedContent').style.display = 'block';
+                document.getElementById('unsupportedContent').style.display = 'none';
+                
+                // Populate steps
+                const stepsList = document.getElementById('stepsList');
+                stepsList.innerHTML = info.steps.map(step => `<li>${step}</li>`).join('');
+                
+                // Set manual download link
+                document.getElementById('manual-download-link').href = DOWNLOAD_URLS[platform];
+                
+                // Show other platform option
+                const otherPlatform = platform === 'macos' ? 'windows' : 'macos';
+                const otherInfo = PLATFORM_INFO[otherPlatform];
+                document.getElementById('otherPlatform').innerHTML = 
+                    `Looking for <a href="${DOWNLOAD_URLS[otherPlatform]}">${otherInfo.name} version</a>?`;
+                
+            } else {
+                // Show unsupported content
+                document.getElementById('supportedContent').style.display = 'none';
+                document.getElementById('unsupportedContent').style.display = 'block';
+                document.getElementById('subtitle').textContent = 'Cue is a desktop application for music producers.';
+                
+                // Set download buttons
+                document.getElementById('macDownloadBtn').href = DOWNLOAD_URLS.macos;
+                document.getElementById('winDownloadBtn').href = DOWNLOAD_URLS.windows;
+                
+                // Track clicks on manual download buttons
+                document.getElementById('macDownloadBtn').addEventListener('click', () => trackDownload('macos'));
+                document.getElementById('winDownloadBtn').addEventListener('click', () => trackDownload('windows'));
+            }
+        }
+        
         // Initialize
         function init() {
-            // Track the download
-            trackDownload();
+            const platform = detectedPlatform;
+            console.log('Detected platform:', platform);
             
-            // Start download after a short delay
-            setTimeout(startDownload, 500);
+            setupUI(platform);
             
-            // Set up manual download link
-            document.getElementById('manual-download-link').href = DOWNLOAD_URL;
+            // Auto-start download for supported platforms
+            if (platform === 'macos' || platform === 'windows') {
+                trackDownload(platform);
+                setTimeout(() => startDownload(platform), 500);
+            }
         }
         
         // Run on page load

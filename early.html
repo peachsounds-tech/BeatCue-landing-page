@@ -4323,31 +4323,21 @@
         }
         
         // Track trial download click (fires before navigation to download page)
-        // This ensures the event uses the same anonymous ID as page_viewed
-        // Now with auto OS detection
-        function trackTrialDownloadClick(event, platform) {
+        // Download page auto-detects OS, so we always link to download.html
+        function trackTrialDownloadClick(event) {
             if (typeof fbq === 'function') fbq('trackCustom', 'InstallIntent');
 
-            // Auto-detect platform if not specified
-            if (!platform) {
-                const ua = navigator.userAgent || navigator.platform || '';
-                platform = /Win/i.test(ua) ? 'windows' : 'mac';
-            }
+            // Auto-detect platform for tracking purposes
+            const ua = navigator.userAgent || navigator.platform || '';
+            const platform = /Win/i.test(ua) ? 'windows' : 'mac';
             
             // Guard: PostHog must be available
             if (typeof posthog === 'undefined' || !posthog.capture) {
                 console.log('PostHog: Skipping trial_download_clicked (not available)');
-                // Still redirect to correct download page
-                event.preventDefault();
-                const targetUrl = platform === 'windows' ? 'download-windows.html' : 'download.html';
-                window.location.href = targetUrl;
-                return;
+                return; // Let the link navigate naturally
             }
             
             event.preventDefault();
-            
-            // Determine correct download URL based on platform
-            const targetUrl = platform === 'windows' ? 'download-windows.html' : 'download.html';
             
             if (posthogFullyInitialized) {
                 posthog.capture('trial_download_clicked', {
@@ -4367,7 +4357,7 @@
             
             // Navigate after a short delay to ensure event is sent
             setTimeout(() => {
-                window.location.href = targetUrl;
+                window.location.href = 'download.html';
             }, 150);
         }
 
