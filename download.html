@@ -421,16 +421,6 @@
         
         // Track download event
         function trackDownload(platform) {
-            // Track Meta Pixel Lead conversion
-            if (typeof fbq !== 'undefined') {
-                fbq('track', 'Lead', {
-                    content_name: 'Cue Trial Download',
-                    content_category: 'Software Download',
-                    platform: platform
-                });
-                console.log('📊 Meta Pixel: Lead event tracked');
-            }
-            
             if (userConsented) {
                 posthog.capture('trial_download_started', {
                     ...getBaseEventProps(),
