@@ -4079,7 +4079,12 @@
         // Track trial download click (fires before navigation to download page)
         // Download page auto-detects OS, so we always link to download.html
         function trackTrialDownloadClick(event) {
-            if (typeof fbq === 'function') fbq('trackCustom', 'InstallIntent');
+            if (typeof fbq === 'function') {
+                fbq('track', 'Lead', {
+                    content_name: 'Cue Trial Download',
+                    content_category: 'Software Download'
+                });
+            }
 
             // Auto-detect platform for tracking purposes
             const ua = navigator.userAgent || navigator.platform || '';
