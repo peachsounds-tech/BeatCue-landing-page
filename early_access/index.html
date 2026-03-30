@@ -2147,9 +2147,26 @@
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
         
-        // Get UTM parameters from URL
+        // Get UTM parameters from URL or referrer (for redirected traffic)
         function getUTMParams() {
-            const params = new URLSearchParams(window.location.search);
+            // First try current URL
+            let params = new URLSearchParams(window.location.search);
+            
+            // If no UTMs in current URL, try to get from referrer (handles redirects)
+            if (!params.get('utm_source') && document.referrer) {
+                try {
+                    const referrerUrl = new URL(document.referrer);
+                    // Only use referrer UTMs if it's from the same domain (internal redirect)
+                    if (referrerUrl.hostname === window.location.hostname || 
+                        referrerUrl.hostname.endsWith('.gocue.app') ||
+                        referrerUrl.hostname === 'gocue.app') {
+                        params = new URLSearchParams(referrerUrl.search);
+                    }
+                } catch (e) {
+                    // Invalid referrer URL, ignore
+                }
+            }
+            
             return {
                 utm_source: params.get('utm_source'),
                 utm_medium: params.get('utm_medium'),

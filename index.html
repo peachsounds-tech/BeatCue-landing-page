@@ -40,9 +40,9 @@
         window.scrollTo(0, 0);
     </script>
     
-    <!-- Redirect main index to early access -->
+    <!-- Redirect main index to early access (preserving UTM parameters) -->
     <script>
-        window.location.replace('early.html');
+        window.location.replace('early.html' + window.location.search);
     </script>
     
     <!-- ============================================
