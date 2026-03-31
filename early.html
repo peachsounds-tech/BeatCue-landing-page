@@ -2803,6 +2803,143 @@
             opacity: 0.35;
         }
 
+        /* Mobile "desktop only" CTA */
+        .mobile-cta {
+            display: none;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .mobile-cta.show {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .mobile-cta-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--peach-orange);
+            background: rgba(255, 107, 53, 0.08);
+            border: 1px solid rgba(255, 107, 53, 0.2);
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            margin-bottom: 1rem;
+        }
+
+        .mobile-cta-heading {
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+            line-height: 1.45;
+        }
+
+        .mobile-cta-sub {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.25rem;
+            opacity: 0.8;
+        }
+
+        .mobile-email-form {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .mobile-email-form input[type="email"] {
+            flex: 1;
+            min-width: 0;
+            padding: 0.75rem 0.9rem;
+            border: 1px solid var(--border-card, rgba(255, 255, 255, 0.15));
+            border-radius: 10px;
+            background: var(--bg-card, rgba(255, 255, 255, 0.06));
+            color: var(--text-primary);
+            font-size: 0.88rem;
+            font-family: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .mobile-email-form input[type="email"]:focus {
+            outline: none;
+            border-color: var(--peach-orange);
+            box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.12);
+        }
+
+        .mobile-email-form input[type="email"]::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+
+        .mobile-email-form button {
+            white-space: nowrap;
+            padding: 0.75rem 1.2rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            font-family: inherit;
+            border: none;
+            border-radius: 10px;
+            background: var(--gradient-hero);
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        .mobile-email-form button:hover {
+            transform: translateY(-1px);
+        }
+
+        .mobile-email-form button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .mobile-email-success {
+            display: none;
+            margin-top: 0.75rem;
+            padding: 0.65rem 0.85rem;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 10px;
+            color: #22c55e;
+            font-size: 0.82rem;
+            font-weight: 500;
+            width: 100%;
+        }
+
+        .mobile-email-success.show {
+            display: block;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .mobile-email-error {
+            display: none;
+            margin-top: 0.5rem;
+            font-size: 0.78rem;
+            color: #ef4444;
+        }
+
+        .mobile-email-error.show {
+            display: block;
+        }
+
+        @media (max-width: 480px) {
+            .mobile-email-form {
+                flex-direction: column;
+            }
+            .mobile-email-form button {
+                width: 100%;
+            }
+        }
+
         @media (max-width: 768px) {
             .cta-section {
                 padding: 3rem 1.5rem 2.5rem;
@@ -4281,10 +4418,23 @@
             <h2 class="cta-title">Get Cue</h2>
             <span class="cta-label">Free · Early Access</span>
             <p class="cta-message">Stop cutting music.<br>Move moments.</p>
-            <a href="download.html" class="cta-button" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
-                Download for macOS
-            </a>
-            <p class="cta-trust">Cue your next edit</p>
+            <div id="ctaDesktop">
+                <a href="download.html" class="cta-button" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
+                    Download for macOS
+                </a>
+                <p class="cta-trust">Cue your next edit</p>
+            </div>
+            <div class="mobile-cta" id="ctaMobile">
+                <span class="mobile-cta-badge">🖥 Desktop Only</span>
+                <p class="mobile-cta-heading">Cue is currently available on macOS and Windows</p>
+                <p class="mobile-cta-sub">Get notified when it comes to your device</p>
+                <form class="mobile-email-form" id="mobileEmailForm">
+                    <input type="email" id="mobileEmail" placeholder="your@email.com" required>
+                    <button type="submit">Notify Me</button>
+                </form>
+                <div class="mobile-email-success" id="mobileEmailSuccess">You're on the list! We'll let you know when Cue comes to your device.</div>
+                <div class="mobile-email-error" id="mobileEmailError"></div>
+            </div>
         </div>
     </section>
 
@@ -4934,56 +5084,98 @@
         // PLATFORM DETECTION
         // ============================================
         
-        // Auto-detect Windows users and show banner
         (function detectPlatform() {
-            const ua = navigator.userAgent || navigator.platform || '';
-            const isWindows = /Win/i.test(ua);
+            const ua = navigator.userAgent || '';
             const isIOS = /iPhone|iPad|iPod/i.test(ua);
             const isAndroid = /Android/i.test(ua);
-            const isMac = /Mac/i.test(ua) && !isIOS; // Exclude iOS (which contains "Mac" in UA)
+            const isMac = /Macintosh/i.test(ua) && !isIOS;
+            const isWindows = /Windows NT/i.test(ua);
+            const isDesktop = isMac || isWindows;
             
-            // Also allow forcing via URL param for testing: ?platform=windows or ?platform=unsupported
+            let detectedDevice = 'unknown';
+            if (isIOS) detectedDevice = 'iphone';
+            else if (isAndroid) detectedDevice = 'android';
+            else if (isMac) detectedDevice = 'mac';
+            else if (isWindows) detectedDevice = 'windows';
+            else if (/CrOS/i.test(ua)) detectedDevice = 'chromeos';
+            else if (/Linux/i.test(ua)) detectedDevice = 'linux';
+            
             const urlParams = new URLSearchParams(window.location.search);
             const forcePlatform = urlParams.get('platform');
+            const forceNonDesktop = forcePlatform && forcePlatform !== 'mac' && forcePlatform !== 'windows';
+            if (forcePlatform) detectedDevice = forcePlatform;
             
-            // Update buttons based on platform
-            const heroMicrocopy = document.querySelector('.hero-microcopy') || document.querySelector('.hero-badge');
+            console.log('Platform detection:', { ua: ua.substring(0, 80), isDesktop, detectedDevice, forcePlatform });
+            
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
             const navDownloadBtn = document.querySelector('.nav-cta');
             const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
+            const ctaDesktop = document.getElementById('ctaDesktop');
+            const ctaMobile = document.getElementById('ctaMobile');
             
-            if (isWindows || forcePlatform === 'windows') {
-                if (pricingDownloadBtn) {
-                    pricingDownloadBtn.textContent = 'Download for Windows';
-                }
-            } else if (isMac || forcePlatform === 'mac') {
-                if (pricingDownloadBtn) {
-                    pricingDownloadBtn.textContent = 'Download for macOS';
-                }
-            } else if (forcePlatform === 'unsupported' || (!isMac && !isWindows && !isIOS && !isAndroid)) {
-                if (heroMicrocopy) {
-                    heroMicrocopy.textContent = 'Available for macOS and Windows';
-                }
+            const showNotifyCta = (!isDesktop && !forcePlatform) || forceNonDesktop;
+            
+            if (showNotifyCta) {
+                if (ctaDesktop) ctaDesktop.style.display = 'none';
+                if (ctaMobile) ctaMobile.classList.add('show');
+                
                 if (heroDownloadBtn) {
-                    heroDownloadBtn.classList.add('btn-unavailable');
-                    heroDownloadBtn.classList.remove('btn-primary');
-                    heroDownloadBtn.removeAttribute('href');
+                    heroDownloadBtn.setAttribute('href', '#pricing');
                     heroDownloadBtn.removeAttribute('onclick');
-                    heroDownloadBtn.innerHTML = '<span>Available for macOS and Windows</span>';
                 }
-                if (pricingDownloadBtn) {
-                    pricingDownloadBtn.classList.add('btn-unavailable');
-                    pricingDownloadBtn.classList.remove('btn-primary');
-                    pricingDownloadBtn.removeAttribute('href');
-                    pricingDownloadBtn.removeAttribute('onclick');
-                    pricingDownloadBtn.textContent = 'Available for macOS and Windows';
-                }
-                if (navDownloadBtn) {
-                    navDownloadBtn.classList.add('btn-unavailable');
-                    navDownloadBtn.removeAttribute('href');
-                    navDownloadBtn.removeAttribute('onclick');
-                    navDownloadBtn.textContent = 'macOS & Windows';
-                }
+            } else if (isWindows || forcePlatform === 'windows') {
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download for Windows';
+            } else if (isMac || forcePlatform === 'mac') {
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download for macOS';
+            }
+            
+            // Mobile email form → Google Sheets
+            const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycby1A_off6gj_swVIj_nnip_WDduBE2Tfq5DxCkfN3xpj5TXuP_LGz0k-tPD3l81cTzdfQ/exec';
+            const mobileForm = document.getElementById('mobileEmailForm');
+            const mobileEmailInput = document.getElementById('mobileEmail');
+            const mobileSuccess = document.getElementById('mobileEmailSuccess');
+            const mobileError = document.getElementById('mobileEmailError');
+            
+            if (mobileForm) {
+                mobileForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const email = mobileEmailInput.value.trim().toLowerCase();
+                    if (!email || !email.includes('@')) return;
+                    
+                    const submitBtn = mobileForm.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.textContent;
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Sending...';
+                    mobileError.classList.remove('show');
+                    
+                    try {
+                        await fetch(GOOGLE_SHEET_URL, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                email: email,
+                                source: 'mobile_notify_' + detectedDevice
+                            })
+                        });
+                        
+                        mobileForm.style.display = 'none';
+                        mobileSuccess.classList.add('show');
+                        
+                        if (typeof posthog !== 'undefined' && posthog.capture) {
+                            posthog.capture('mobile_notify_signup', {
+                                ...getBaseEventProps(),
+                                device: detectedDevice,
+                                source: 'early_access_page'
+                            });
+                        }
+                    } catch (err) {
+                        mobileError.textContent = 'Something went wrong. Please try again.';
+                        mobileError.classList.add('show');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = originalText;
+                    }
+                });
             }
         })();
     </script>
