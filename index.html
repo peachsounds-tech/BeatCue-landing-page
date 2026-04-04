@@ -1655,6 +1655,74 @@
         }
         
         /* ============================================
+           QUOTES / USE CASES
+        ============================================ */
+        .quotes-section {
+            padding: 4rem 2rem;
+            text-align: center;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-light);
+        }
+
+        .quotes-section .section-label {
+            color: var(--peach-orange);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 1.5rem;
+        }
+
+        .audience-tags {
+            display: flex;
+            gap: 0.6rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 2.5rem;
+        }
+
+        .audience-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            padding: 0.4rem 0.9rem;
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            background: var(--bg-primary);
+        }
+
+        .use-cases {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.25rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .use-case {
+            text-align: left;
+            padding: 1.25rem 1.5rem;
+            background: var(--bg-primary);
+            border-radius: 10px;
+            border: 1px solid var(--border-light);
+        }
+
+        .use-case .scenario {
+            font-size: 0.92rem;
+            color: var(--text-primary);
+            line-height: 1.55;
+            font-style: italic;
+        }
+
+        .use-case .context {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        /* ============================================
            CTA SECTION
         ============================================ */
         .cta-section {
@@ -1719,6 +1787,22 @@
             margin-bottom: 0.85rem;
             color: var(--text-secondary);
             opacity: 0.6;
+        }
+
+        .mobile-desktop-icons {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .mobile-desktop-icon svg {
+            width: 26px;
+            height: 26px;
+            display: block;
+            opacity: 0.9;
         }
 
         .mobile-cta-heading {
@@ -3934,7 +4018,7 @@
                 </div>
             </div>
             <div class="hero-ctas">
-                <a href="download.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn" onclick="trackTrialDownloadClick(event)">
+                <a href="download.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn">
                     <span id="heroDownloadLabel">Download Cue</span>
                 </a>
                 <a href="#how-it-works" class="btn btn-secondary">
@@ -3994,6 +4078,33 @@
         </div>
     </section>
 
+    <!-- Social Proof -->
+    <section class="quotes-section">
+        <p class="section-label">Cue is built for</p>
+        <div class="audience-tags">
+            <span class="audience-tag">Film Editors</span>
+            <span class="audience-tag">Commercial Editors</span>
+            <span class="audience-tag">Trailer Editors</span>
+            <span class="audience-tag">Content Creators</span>
+            <span class="audience-tag">Podcasters</span>
+        </div>
+
+        <div class="use-cases">
+            <div class="use-case">
+                <p class="scenario">"The client moved the reveal up by 8 seconds. I dragged one handle in Cue and the build landed perfectly — no re-editing the whole track."</p>
+                <p class="context">Product launch video</p>
+            </div>
+            <div class="use-case">
+                <p class="scenario">"I had a 2-minute track for a 47-second scene. Cue shortened it and kept the drop exactly where I needed it."</p>
+                <p class="context">Short-form commercial</p>
+            </div>
+            <div class="use-case">
+                <p class="scenario">"The director wanted the emotional swell to hit right as the door opens. I just moved it there. Done."</p>
+                <p class="context">Narrative film</p>
+            </div>
+        </div>
+    </section>
+
     <!-- Get Cue Section -->
     <section class="cta-section" id="pricing">
         <div class="cta-container">
@@ -4011,10 +4122,10 @@
                         <ul class="plan-features">
                             <li>All editing features</li>
                             <li>Unlimited projects</li>
-                            <li class="feature-limited">Export limit</li>
+                            <li class="feature-limited">Limited exports</li>
                             <li>macOS & Windows</li>
                         </ul>
-                        <a href="download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
+                        <a href="download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
                             Download Cue
                         </a>
                         <p class="plan-note">Takes ~30 seconds to install</p>
@@ -4047,6 +4158,10 @@
                 </div>
                 <p class="mobile-cta-heading">Continue on your computer</p>
                 <p class="mobile-cta-sub">Start editing with Cue in seconds — no signup required.</p>
+                <div class="mobile-desktop-icons" aria-label="macOS and Windows">
+                    <span class="mobile-desktop-icon" title="macOS"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg></span>
+                    <span class="mobile-desktop-icon" title="Windows"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.39l9.5-1.64V12h-9.5V5.39zM11.5 12.5H21v7.75l-9.5-1.64V12.5z"/></svg></span>
+                </div>
                 <div class="mobile-send-actions">
                     <button class="mobile-action-btn mobile-action-primary" id="mobileCopyLink">
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10.5 1h-7A1.5 1.5 0 0 0 2 2.5v9h1.5v-9h7V1Zm2.25 3H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h7.25a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.75 4Zm0 10.5H5.5v-9h7.25v9Z" fill="currentColor"/></svg>
@@ -4347,45 +4462,16 @@
         // Track trial download click (fires before navigation to download page)
         // Download page auto-detects OS, so we always link to download.html
         function trackTrialDownloadClick(event) {
-            if (typeof fbq === 'function') {
-                fbq('track', 'Lead', {
-                    content_name: 'Cue Trial Download',
-                    content_category: 'Software Download'
-                });
-            }
-
-            // Auto-detect platform for tracking purposes
             const ua = navigator.userAgent || navigator.platform || '';
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
             
-            // Guard: PostHog must be available
-            if (typeof posthog === 'undefined' || !posthog.capture) {
-                console.log('PostHog: Skipping trial_download_clicked (not available)');
-                return; // Let the link navigate naturally
-            }
-            
-            event.preventDefault();
-            
-            if (posthogFullyInitialized) {
-                posthog.capture('trial_download_clicked', {
-                    ...getBaseEventProps(),
+            if (typeof posthog !== 'undefined' && posthog.capture) {
+                posthog.capture('download_clicked', {
+                    ...(posthogFullyInitialized ? getBaseEventProps() : {}),
                     page: 'landing',
-                    source: 'pricing_section',
-                    platform: platform
-                });
-            } else {
-                posthog.capture('trial_download_clicked', {
-                    page: 'landing',
-                    url: window.location.href,
                     platform: platform
                 });
             }
-            console.log('📊 PostHog: trial_download_clicked tracked for platform:', platform);
-            
-            // Navigate after a short delay to ensure event is sent
-            setTimeout(() => {
-                window.location.href = 'download.html';
-            }, 150);
         }
         
         // Track application submission
