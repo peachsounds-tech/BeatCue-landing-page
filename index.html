@@ -4814,7 +4814,7 @@
             const mobileWhatsApp = document.getElementById('mobileWhatsApp');
             const mobileEmailBtn = document.getElementById('mobileEmail');
 
-            function trackInitiateCheckout() {
+            window.trackInitiateCheckout = function() {
                 if (typeof fbq === 'function') {
                     fbq('track', 'InitiateCheckout', {
                         content_name: 'Cue Pro',
@@ -4829,7 +4829,7 @@
                         source: 'landing_page'
                     });
                 }
-            }
+            };
 
             function trackSendToComputer(method) {
                 if (typeof fbq === 'function') {
