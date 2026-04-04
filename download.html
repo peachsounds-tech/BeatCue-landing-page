@@ -128,194 +128,58 @@
             font-size: 2.2rem;
             font-weight: 700;
             margin-bottom: 0.75rem;
-            background: linear-gradient(135deg, var(--peach-orange) 0%, var(--wave-blue) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text-primary);
         }
 
         .subtitle {
             font-size: 1.05rem;
             color: var(--text-secondary);
-            margin-bottom: 2rem;
+            margin-bottom: 0.5rem;
             font-weight: 400;
         }
 
-        .quest-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-light);
-            border-radius: 16px;
-            padding: 1.75rem;
-            text-align: left;
+        .expectation-note {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-weight: 500;
+        }
+
+        .value-reinforcement {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
             margin-bottom: 1.75rem;
+            opacity: 0.7;
+            font-style: italic;
         }
 
-        .quest-header {
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: var(--peach-orange);
-            margin-bottom: 1.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .quest-header::before {
-            content: '';
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background: var(--peach-orange);
-            border-radius: 2px;
-            animation: pulse-dot 2s ease-in-out infinite;
-        }
-
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        .quest-list {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 0;
-        }
-
-        .quest-item {
-            display: flex;
-            align-items: center;
-            gap: 0.85rem;
-            padding: 0.7rem 0;
-            border-bottom: 1px solid var(--border-light);
-            transition: opacity 0.4s ease;
-        }
-
-        .quest-item:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .quest-item:first-child {
-            padding-top: 0;
-        }
-
-        .quest-checkbox {
-            width: 22px;
-            height: 22px;
-            min-width: 22px;
-            border-radius: 6px;
-            border: 2px solid var(--text-muted);
-            display: flex;
+        .download-btn-main {
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            position: relative;
-        }
-
-        .quest-checkbox svg {
-            width: 12px;
-            height: 12px;
-            opacity: 0;
-            transform: scale(0);
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        .quest-item.completed .quest-checkbox {
-            border-color: var(--early-access-green);
-            background: var(--early-access-green);
-        }
-
-        .quest-item.completed .quest-checkbox svg {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        .quest-item.active .quest-checkbox {
-            border-color: var(--peach-orange);
-        }
-
-        .quest-item.active .quest-checkbox::after {
-            content: '';
-            width: 8px;
-            height: 8px;
-            border-radius: 2px;
-            background: var(--peach-orange);
-            animation: pulse-dot 1.5s ease-in-out infinite;
-        }
-
-        .quest-item.active .quest-checkbox:has(.spinner)::after {
-            display: none;
-        }
-
-        .quest-label {
-            font-size: 0.95rem;
-            font-weight: 500;
-            color: var(--text-primary);
-            transition: all 0.4s ease;
-            position: relative;
-        }
-
-        .quest-item.completed .quest-label {
-            color: var(--text-muted);
-        }
-
-        .quest-item.completed .quest-label::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 50%;
-            width: 100%;
-            height: 1.5px;
-            background: var(--text-muted);
-            animation: strikethrough 0.4s ease forwards;
-        }
-
-        @keyframes strikethrough {
-            from { width: 0; }
-            to { width: 100%; }
-        }
-
-        .quest-item.upcoming {
-            opacity: 0.45;
-        }
-
-        .quest-item.active {
-            opacity: 1;
-        }
-
-
-        .spinner {
-            width: 14px;
-            height: 14px;
-            border: 2px solid var(--bg-tertiary);
-            border-top-color: var(--peach-orange);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .manual-download {
-            margin-top: 1.75rem;
-            font-size: 0.875rem;
-            color: var(--text-muted);
-        }
-
-        .manual-download a {
-            color: var(--peach-orange);
+            font-size: 1.1rem;
+            font-weight: 600;
+            height: 54px;
+            padding: 0 40px;
+            border-radius: 10px;
+            background: #3B82F6;
+            color: white;
             text-decoration: none;
-            font-weight: 500;
-            transition: color 0.2s;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(59, 130, 246, 0.25);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            margin-bottom: 1rem;
         }
 
-        .manual-download a:hover {
-            color: var(--peach-orange-light);
-            text-decoration: underline;
+        .download-btn-main:hover {
+            background: #4B8FF7;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 18px rgba(59, 130, 246, 0.35);
+        }
+
+        .download-btn-main:active {
+            transform: scale(0.98);
         }
 
         .other-platform {
@@ -325,7 +189,7 @@
         }
 
         .other-platform a {
-            color: var(--wave-blue);
+            color: #3B82F6;
             text-decoration: none;
             font-weight: 500;
         }
@@ -334,62 +198,98 @@
             text-decoration: underline;
         }
 
-        .unsupported-message {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-light);
-            border-radius: 14px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .unsupported-message h3 {
-            color: var(--peach-orange);
-            margin-bottom: 0.5rem;
-            font-size: 1rem;
-            font-weight: 600;
-        }
-
-        .unsupported-message p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-        }
-
-        .download-buttons {
+        .mobile-transfer-icon {
             display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            margin-top: 1.25rem;
-        }
-
-        .download-btn {
-            display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            background: var(--peach-orange);
-            color: #FFFFFF;
-            padding: 0.85rem 1.5rem;
-            border-radius: 10px;
-            text-decoration: none;
+            margin-bottom: 0.85rem;
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .mobile-cta-heading {
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+            line-height: 1.45;
+        }
+
+        .mobile-cta-sub {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.25rem;
+            opacity: 0.8;
+        }
+
+        .mobile-send-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .mobile-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.8rem 1rem;
+            font-size: 0.88rem;
             font-weight: 600;
-            font-size: 0.95rem;
-            transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+            font-family: inherit;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+            text-decoration: none;
         }
 
-        .download-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.25);
-            background: var(--peach-orange-light);
+        .mobile-action-primary {
+            background: #3B82F6;
+            color: white;
+            border: none;
         }
 
-        .download-btn.secondary {
-            background: var(--bg-tertiary);
+        .mobile-action-secondary {
+            background: transparent;
             color: var(--text-primary);
             border: 1px solid var(--border-light);
         }
 
-        .download-btn.secondary:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        .mobile-action-tertiary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-weight: 500;
+        }
+
+        .mobile-action-btn:active {
+            transform: scale(0.97);
+        }
+
+        .mobile-copy-toast {
+            display: none;
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.9rem;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 10px;
+            color: #22c55e;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .mobile-copy-toast.show {
+            display: block;
+        }
+
+        .mobile-cta-footer {
+            margin-top: 1.25rem;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            opacity: 0.65;
         }
 
         @media (max-width: 480px) {
@@ -454,30 +354,24 @@
             return props;
         }
         
-        // Detect platform
+        // Detect platform (mobile-first to catch iPads reporting as Macintosh)
         function detectPlatform() {
-            const ua = navigator.userAgent;
-            const platform = navigator.platform || '';
+            const ua = navigator.userAgent || '';
             
-            // Check Windows first (most specific)
-            if (/Windows|Win32|Win64|WOW64/i.test(ua) || /Win/i.test(platform)) {
-                return 'windows';
-            }
-            // Check macOS
-            if (/Macintosh|MacIntel|MacPPC|Mac68K/i.test(ua) || /Mac/i.test(platform)) {
-                return 'macos';
-            }
-            // Check mobile platforms
-            if (/iPhone|iPad|iPod/i.test(ua)) {
-                return 'ios';
-            }
-            if (/Android/i.test(ua)) {
-                return 'android';
-            }
-            // Check Linux
-            if (/Linux/i.test(ua) || /Linux/i.test(platform)) {
-                return 'linux';
-            }
+            const isIPhone = /iPhone/i.test(ua);
+            const isIPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+            const isIOS = isIPhone || isIPad;
+            const isAndroidPhone = /Android/i.test(ua) && /Mobile/i.test(ua);
+            const isAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+            
+            if (isIPhone) return 'iphone';
+            if (isIPad) return 'ipad';
+            if (isAndroidPhone) return 'android_phone';
+            if (isAndroidTablet) return 'android_tablet';
+            if (/Windows NT/i.test(ua)) return 'windows';
+            if (/Macintosh/i.test(ua)) return 'macos';
+            if (/CrOS/i.test(ua)) return 'chromeos';
+            if (/Linux/i.test(ua)) return 'linux';
             return 'unknown';
         }
         
@@ -526,64 +420,42 @@
             <img src="icon1.png" alt="Cue Logo">
         </div>
         <h1>Download Cue</h1>
-        <p class="subtitle" id="subtitle">Your download should start automatically.</p>
+        <p class="subtitle" id="subtitle">Move the drop. Cue fixes the rest.</p>
+        <p class="expectation-note">All features included — export requires an active plan.</p>
         
         <!-- Supported platform content -->
         <div id="supportedContent">
-            <div class="quest-card">
-                <div class="quest-header">Getting started</div>
-                <ul class="quest-list" id="questList">
-                    <li class="quest-item active" id="quest-download">
-                        <div class="quest-checkbox" id="quest-download-check">
-                            <div class="spinner" id="quest-download-spinner"></div>
-                            <svg viewBox="0 0 12 12" fill="none" style="display:none" id="quest-download-svg"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <span class="quest-label">Download Cue</span>
-                    </li>
-                    <li class="quest-item upcoming" id="quest-open">
-                        <div class="quest-checkbox">
-                            <svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <span class="quest-label" id="quest-open-label">Run Cue.pkg</span>
-                    </li>
-                    <li class="quest-item upcoming" id="quest-shape">
-                        <div class="quest-checkbox">
-                            <svg viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <span class="quest-label">Shape your music</span>
-                    </li>
-                </ul>
-            </div>
-
-            <p class="manual-download">
-                Download not starting? <a href="#" id="manual-download-link">Click here to download manually</a>
-            </p>
-            
-            <p class="manual-download" id="altInstallerLink" style="display: none;"></p>
-            
+            <a href="#" class="download-btn-main" id="downloadBtn">
+                <span id="downloadBtnLabel">Download for macOS</span>
+            </a>
             <p class="other-platform" id="otherPlatform"></p>
         </div>
         
-        <!-- Unsupported platform content -->
+        <!-- Mobile / unsupported platform content -->
         <div id="unsupportedContent" style="display: none;">
-            <div class="unsupported-message">
-                <h3>Desktop Only</h3>
-                <p>Cue is currently available for macOS and Windows desktop computers.</p>
+            <div class="mobile-transfer-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             </div>
-            
-            <p style="opacity: 0.8; margin-bottom: 1rem;">Download on your computer:</p>
-            
-            <div class="download-buttons">
-                <a href="#" class="download-btn" id="macDownloadBtn">
-                    <span>🍎</span> Download for macOS (PKG)
+            <p class="mobile-cta-heading">Continue on your computer</p>
+            <p class="mobile-cta-sub">Start editing with Cue in seconds — no signup required.</p>
+            <div class="mobile-send-actions">
+                <button class="mobile-action-btn mobile-action-primary" id="mobileCopyLink">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10.5 1h-7A1.5 1.5 0 0 0 2 2.5v9h1.5v-9h7V1Zm2.25 3H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h7.25a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.75 4Zm0 10.5H5.5v-9h7.25v9Z" fill="currentColor"/></svg>
+                    <span id="mobileCopyText">Open on your computer</span>
+                </button>
+                <a class="mobile-action-btn mobile-action-secondary" href="https://wa.me/?text=Continue%20editing%20with%20Cue%20on%20desktop:%20https://gocue.app/download" target="_blank" id="mobileWhatsApp">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.002 1C4.14 1 1 4.07 1 7.84c0 1.21.33 2.39.95 3.42L1 15l3.87-.98c1 .53 2.13.81 3.13.81C11.86 12.83 15 9.76 15 5.99 15 4.07 14.2 2.38 12.87 1.28A6.9 6.9 0 0 0 8.002 1Zm3.53 9.14c-.15.42-.87.8-1.2.85-.31.05-.7.07-1.13-.07a10.3 10.3 0 0 1-1.02-.38 7.04 7.04 0 0 1-3.05-2.69c-.26-.35-.66-.92-.66-1.78s.42-1.25.57-1.42c.15-.17.33-.21.44-.21h.32c.1 0 .24-.04.37.28.14.33.46 1.13.5 1.21.04.09.07.19.01.3-.05.11-.08.17-.16.27l-.24.28c-.08.09-.17.18-.07.35.1.17.42.7.9 1.13.62.55 1.15.72 1.31.8.16.09.26.07.35-.04.1-.11.42-.48.53-.65.11-.17.22-.14.37-.08.15.06.96.45 1.13.53.16.09.27.13.31.2.04.07.04.42-.11.83Z" fill="currentColor"/></svg>
+                    Send to WhatsApp
                 </a>
-                <a href="#" class="download-btn secondary" id="macDmgDownloadBtn">
-                    <span>🍎</span> Download for macOS (DMG)
-                </a>
-                <a href="#" class="download-btn secondary" id="winDownloadBtn">
-                    <span>🪟</span> Download for Windows
+                <a class="mobile-action-btn mobile-action-tertiary" href="mailto:?subject=Try%20Cue%20%E2%80%93%20music%20retiming%20for%20video%20editors&body=Continue%20editing%20with%20Cue%20on%20desktop%3A%20https%3A%2F%2Fgocue.app%2Fdownload" id="mobileEmail">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 3H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1Zm-.5 1.5L8 8.25 2.5 4.5h11ZM2.5 11.5v-6l5.5 4 5.5-4v6h-11Z" fill="currentColor"/></svg>
+                    Send to email
                 </a>
             </div>
+            <div class="mobile-copy-toast" id="mobileCopyToast">Link copied. Open it on your computer.</div>
+            <p class="mobile-cta-footer">Mac & Windows · Takes ~30 seconds to install</p>
         </div>
         
     </div>
@@ -592,38 +464,15 @@
         // Download URLs
         const DOWNLOAD_URLS = {
             macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue.pkg',
-            macos_dmg: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue.dmg',
-            windows: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue-Windows.exe'
+            windows: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/Cue.exe'
         };
         
         // Platform display info
         const PLATFORM_INFO = {
-            macos: {
-                icon: '🍎',
-                name: 'macOS',
-                openLabel: 'Run Cue.pkg'
-            },
-            windows: {
-                icon: '🪟',
-                name: 'Windows',
-                openLabel: 'Run Cue.exe'
-            }
+            macos: { name: 'macOS' },
+            windows: { name: 'Windows' }
         };
 
-        function completeQuest(stepId) {
-            const item = document.getElementById(stepId);
-            if (!item) return;
-            item.classList.remove('active', 'upcoming');
-            item.classList.add('completed');
-
-            const nextSibling = item.nextElementSibling;
-            if (nextSibling && nextSibling.classList.contains('upcoming')) {
-                nextSibling.classList.remove('upcoming');
-                nextSibling.classList.add('active');
-            }
-
-        }
-        
         // Track download event
         function trackDownload(platform) {
             if (userConsented) {
@@ -643,29 +492,6 @@
             console.log(`${platform} trial download tracked`);
         }
         
-        // Start download
-        function startDownload(platform) {
-            const url = DOWNLOAD_URLS[platform];
-            if (!url) return;
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = '';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            setTimeout(() => {
-                const spinner = document.getElementById('quest-download-spinner');
-                const svg = document.getElementById('quest-download-svg');
-                const check = document.getElementById('quest-download-check');
-                if (spinner) spinner.style.display = 'none';
-                if (svg) svg.style.display = 'block';
-                if (check) check.style.background = '';
-                completeQuest('quest-download');
-            }, 1500);
-        }
-        
         // Setup UI for platform
         function setupUI(platform) {
             const isSupported = platform === 'macos' || platform === 'windows';
@@ -674,37 +500,27 @@
             if (isSupported) {
                 document.getElementById('supportedContent').style.display = 'block';
                 document.getElementById('unsupportedContent').style.display = 'none';
-                
-                document.getElementById('quest-open-label').textContent = info.openLabel;
-                document.getElementById('manual-download-link').href = DOWNLOAD_URLS[platform];
-                
-                // Show DMG alternative for macOS users
-                if (platform === 'macos') {
-                    const altLink = document.getElementById('altInstallerLink');
-                    altLink.style.display = 'block';
-                    altLink.innerHTML = `Prefer drag & drop? <a href="${DOWNLOAD_URLS.macos_dmg}">Download DMG instead</a>`;
-                }
-                
+
+                const downloadBtn = document.getElementById('downloadBtn');
+                const downloadBtnLabel = document.getElementById('downloadBtnLabel');
+
+                downloadBtnLabel.textContent = `Download for ${info.name}`;
+                downloadBtn.href = DOWNLOAD_URLS[platform];
+
+                downloadBtn.addEventListener('click', function() {
+                    trackDownload(platform);
+                });
+
                 const otherPlatform = platform === 'macos' ? 'windows' : 'macos';
                 const otherInfo = PLATFORM_INFO[otherPlatform];
                 document.getElementById('otherPlatform').innerHTML = 
-                    `Looking for <a href="${DOWNLOAD_URLS[otherPlatform]}">${otherInfo.name} version</a>?`;
+                    `<a href="${DOWNLOAD_URLS[otherPlatform]}">Download for ${otherInfo.name}</a>`;
                 
             } else {
-                // Show unsupported content
                 document.getElementById('supportedContent').style.display = 'none';
                 document.getElementById('unsupportedContent').style.display = 'block';
-                document.getElementById('subtitle').textContent = 'Cue is a desktop application for music producers.';
-                
-                // Set download buttons
-                document.getElementById('macDownloadBtn').href = DOWNLOAD_URLS.macos;
-                document.getElementById('macDmgDownloadBtn').href = DOWNLOAD_URLS.macos_dmg;
-                document.getElementById('winDownloadBtn').href = DOWNLOAD_URLS.windows;
-                
-                // Track clicks on manual download buttons
-                document.getElementById('macDownloadBtn').addEventListener('click', () => trackDownload('macos'));
-                document.getElementById('macDmgDownloadBtn').addEventListener('click', () => trackDownload('macos'));
-                document.getElementById('winDownloadBtn').addEventListener('click', () => trackDownload('windows'));
+                document.getElementById('subtitle').textContent = 'Cue is a desktop app (Mac & Windows).';
+                document.querySelector('.expectation-note').style.display = 'none';
             }
         }
         
@@ -714,11 +530,49 @@
             console.log('Detected platform:', platform);
             
             setupUI(platform);
-            
-            // Auto-start download for supported platforms
-            if (platform === 'macos' || platform === 'windows') {
-                trackDownload(platform);
-                setTimeout(() => startDownload(platform), 500);
+
+            // Mobile send-to-computer actions
+            const mobileCopyBtn = document.getElementById('mobileCopyLink');
+            const mobileCopyToast = document.getElementById('mobileCopyToast');
+            const mobileWhatsApp = document.getElementById('mobileWhatsApp');
+            const mobileEmailBtn = document.getElementById('mobileEmail');
+
+            function trackSendToComputer(method) {
+                if (typeof posthog !== 'undefined' && posthog.capture) {
+                    posthog.capture('send_to_computer', {
+                        ...getBaseEventProps(),
+                        method: method,
+                        device: platform,
+                        source: 'download_page'
+                    });
+                }
+            }
+
+            if (mobileCopyBtn) {
+                mobileCopyBtn.addEventListener('click', function() {
+                    const copyText = document.getElementById('mobileCopyText');
+                    navigator.clipboard.writeText('https://gocue.app/download').then(function() {
+                        mobileCopyToast.classList.add('show');
+                        copyText.textContent = 'Copied!';
+                        setTimeout(function() {
+                            mobileCopyToast.classList.remove('show');
+                            copyText.textContent = 'Open on your computer';
+                        }, 3000);
+                        trackSendToComputer('copy');
+                    });
+                });
+            }
+
+            if (mobileWhatsApp) {
+                mobileWhatsApp.addEventListener('click', function() {
+                    trackSendToComputer('whatsapp');
+                });
+            }
+
+            if (mobileEmailBtn) {
+                mobileEmailBtn.addEventListener('click', function() {
+                    trackSendToComputer('email');
+                });
             }
         }
         

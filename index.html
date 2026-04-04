@@ -40,10 +40,6 @@
         window.scrollTo(0, 0);
     </script>
     
-    <!-- Redirect main index to early access (preserving UTM parameters) -->
-    <script>
-        window.location.replace('early.html' + window.location.search);
-    </script>
     
     <!-- ============================================
          COOKIE CONSENT MODULE
@@ -488,8 +484,13 @@
             --border-light: rgba(0, 0, 0, 0.1);
             --border-card: rgba(255, 255, 255, 0.05);
             
+            /* Early access */
+            --early-access-green: #10B981;
+            --early-access-green-light: #34D399;
+
             /* Gradients */
             --gradient-hero: linear-gradient(135deg, var(--peach-orange) 0%, var(--wave-blue) 100%);
+            --gradient-early-access: linear-gradient(135deg, var(--early-access-green) 0%, var(--wave-blue) 100%);
             --gradient-card: linear-gradient(145deg, rgba(255, 107, 53, 0.08) 0%, rgba(74, 144, 217, 0.08) 100%);
             --gradient-glow: radial-gradient(ellipse at center, rgba(255, 107, 53, 0.08) 0%, transparent 70%);
             
@@ -640,7 +641,7 @@
         }
         
         .nav-cta {
-            background: var(--gradient-hero);
+            background: #3B82F6;
             color: white !important;
             padding: 0.6rem 1.25rem;
             border-radius: 8px;
@@ -649,8 +650,9 @@
         }
         
         .nav-cta:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+            background: #4B8FF7;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
         }
         
         /* Theme Toggle */
@@ -818,7 +820,29 @@
             line-height: 1.5;
             animation: fadeInUp 0.8s ease 0.4s both;
         }
-        
+
+        .hero-badge {
+            display: inline-block;
+            margin-bottom: 1rem;
+            padding: 0.35rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: var(--early-access-green);
+            border: 1px solid var(--early-access-green);
+            border-radius: 50px;
+            opacity: 0.85;
+            animation: fadeInUp 0.8s ease 0.2s both;
+        }
+
+        .hero-install-note {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 0.6rem;
+            opacity: 0.5;
+            animation: fadeInUp 0.8s ease 0.6s both;
+        }
+
         .hero-ctas {
             display: flex;
             gap: 0.9rem;
@@ -846,16 +870,15 @@
             animation: fadeInUp 0.8s ease 0.6s both;
         }
         
-        /* Hero download button - largest, most prominent on page */
         .btn-download-hero {
             font-size: 1.1rem;
             height: 54px;
-            padding: 0 32px;
-            box-shadow: 0 6px 28px rgba(255, 107, 53, 0.4);
+            padding: 0 36px;
+            box-shadow: 0 2px 10px rgba(59, 130, 246, 0.25);
         }
         
         .btn-download-hero:hover {
-            box-shadow: 0 10px 40px rgba(255, 107, 53, 0.5);
+            box-shadow: 0 4px 18px rgba(59, 130, 246, 0.35);
         }
         
         /* Disabled button state for unsupported platforms */
@@ -888,14 +911,15 @@
         }
         
         .btn-primary {
-            background: var(--gradient-hero);
+            background: #3B82F6;
             color: white;
-            box-shadow: 0 4px 20px rgba(255, 107, 53, 0.3);
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
         }
         
         .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 35px rgba(255, 107, 53, 0.4);
+            background: #4B8FF7;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
         }
         
         .btn-secondary {
@@ -1634,37 +1658,184 @@
            CTA SECTION
         ============================================ */
         .cta-section {
-            padding: 8rem 2rem;
+            padding: 5rem 2rem;
             background: var(--bg-secondary);
             text-align: center;
             position: relative;
             overflow: hidden;
         }
-        
-        .cta-glow {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(ellipse at center, rgba(255, 107, 53, 0.1) 0%, transparent 60%);
-        }
-        
-        
-        .cta-content {
-            position: relative;
-            z-index: 1;
-            max-width: 700px;
+
+        .cta-container {
+            max-width: 800px;
             margin: 0 auto;
+            position: relative;
         }
-        
-        .cta-section h2 {
-            margin-bottom: 1.5rem;
+
+        .cta-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+            letter-spacing: -0.02em;
         }
-        
-        .cta-section .section-subtitle {
-            margin-bottom: 2.5rem;
+
+        .cta-label {
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-transform: none;
+            letter-spacing: 0.01em;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .cta-message {
+            font-size: 1.2rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 2.25rem;
+            line-height: 1.5;
+            opacity: 0.85;
+        }
+
+        /* Mobile "desktop only" CTA */
+        .mobile-cta {
+            display: none;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .mobile-cta.show {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .mobile-transfer-icon {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.85rem;
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .mobile-cta-heading {
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+            line-height: 1.45;
+        }
+
+        .mobile-cta-sub {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.25rem;
+            opacity: 0.8;
+        }
+
+        .mobile-send-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .mobile-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.8rem 1rem;
+            font-size: 0.88rem;
+            font-weight: 600;
+            font-family: inherit;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+            text-decoration: none;
+        }
+
+        .mobile-action-primary {
+            background: #3B82F6;
+            color: white;
+            border: none;
+        }
+
+        .mobile-action-secondary {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-card, rgba(255, 255, 255, 0.15));
+        }
+
+        .mobile-action-tertiary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-weight: 500;
+        }
+
+        .mobile-action-btn:active {
+            transform: scale(0.97);
+        }
+
+        .mobile-copy-toast {
+            display: none;
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.9rem;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 10px;
+            color: #22c55e;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .mobile-copy-toast.show {
+            display: block;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .mobile-cta-footer {
+            margin-top: 1.25rem;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            opacity: 0.65;
+            letter-spacing: 0.01em;
+        }
+
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.05rem;
+            font-weight: 600;
+            height: 50px;
+            padding: 0 38px;
+            border-radius: 10px;
+            background: #3B82F6;
+            color: white;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .cta-button:hover {
+            background: #4B8FF7;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .cta-trust {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            margin-top: 0.7rem;
+            opacity: 0.7;
         }
         
         /* ============================================
@@ -1720,15 +1891,14 @@
             box-shadow: 0 12px 40px rgba(255, 107, 53, 0.15);
         }
         
-        /* Download Free button - largest, most prominent */
         .btn-download-free {
             font-size: 1.05rem;
             height: 52px;
-            box-shadow: 0 6px 24px rgba(255, 107, 53, 0.35);
+            box-shadow: 0 2px 10px rgba(59, 130, 246, 0.25);
         }
-        
+
         .btn-download-free:hover {
-            box-shadow: 0 10px 35px rgba(255, 107, 53, 0.45);
+            box-shadow: 0 4px 18px rgba(59, 130, 246, 0.35);
         }
         
         /* Pro button - attractive but calm */
@@ -1769,16 +1939,27 @@
             top: -15px;
             left: 50%;
             transform: translateX(-50%);
-            background: var(--gradient-hero);
+            background: var(--gradient-early-access);
             color: white;
             padding: 0.35rem 1.25rem;
             border-radius: 50px;
             font-size: 0.75rem;
             font-weight: 700;
             letter-spacing: 0.05em;
-            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
             white-space: nowrap;
             z-index: 10;
+        }
+
+        .plan-badge--soon {
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: none;
+        }
+
+        .btn-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
         }
         
         .plan-name {
@@ -1824,6 +2005,12 @@
             color: var(--text-on-card-secondary);
             font-size: 0.9rem;
             border-bottom: 1px solid var(--border-card);
+        }
+
+        .plan-features li::before {
+            content: '✓ ';
+            color: var(--early-access-green);
+            font-weight: 600;
         }
         
         .plan-features li:last-child {
@@ -3702,7 +3889,7 @@
             </a>
             <div class="nav-links">
                 <a href="#how-it-works">How It Works</a>
-                <a href="download.html" class="nav-cta" onclick="trackTrialDownloadClick(event)">Download Cue</a>
+                <a href="#pricing" class="nav-cta">Get Cue</a>
                 <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
                     <span class="theme-icon light">☀️</span>
                     <span class="theme-icon dark">🌙</span>
@@ -3718,9 +3905,10 @@
             <div class="grid-pattern"></div>
         </div>
         <div class="hero-content">
-            <p class="hero-tagline">Control when the <span class="blue">music</span> lands in your <span class="orange">edit.</span></p>
+            <span class="hero-badge">For video editors</span>
+            <p class="hero-tagline">Perfect <span class="blue">music.</span> Wrong <span class="orange">moments.</span></p>
             <p class="hero-subtitle">
-                Place key musical moments exactly where your edit needs them.<br>Cue rebuilds the rest of the track automatically.
+                Move the drop. Cue fixes the rest. <br> For macOS & Windows.
             </p>
             
             <div class="hero-visual">
@@ -3739,14 +3927,13 @@
             </div>
             <div class="hero-ctas">
                 <a href="download.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn" onclick="trackTrialDownloadClick(event)">
-                    <span>Download Cue</span>
-                    <span>→</span>
+                    <span id="heroDownloadLabel">Get Cue</span>
                 </a>
                 <a href="#how-it-works" class="btn btn-secondary">
-                    <span>See How It Works</span>
+                    <span>See Why Editors Use Cue</span>
                 </a>
             </div>
-            <p class="hero-microcopy">Download free · Export requires activation</p>
+            <p class="hero-install-note" id="heroInstallNote">macOS & Windows · Takes ~30 seconds</p>
         </div>
     </section>
 
@@ -3795,6 +3982,46 @@
                         </video>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Get Cue Section -->
+    <section class="cta-section" id="pricing">
+        <div class="cta-container">
+            <h2 class="cta-title">Get Cue</h2>
+            <span class="cta-label">macOS & Windows</span>
+            <p class="cta-message">Stop cutting music.<br>Move moments.</p>
+            <div id="ctaDesktop">
+                <a href="download.html" class="cta-button" id="pricingDownloadBtn" onclick="trackTrialDownloadClick(event)">
+                    Get Cue
+                </a>
+                <p class="cta-trust">macOS & Windows · Takes ~30 seconds</p>
+            </div>
+            <div class="mobile-cta" id="ctaMobile">
+                <div class="mobile-transfer-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <p class="mobile-cta-heading">Continue on your computer</p>
+                <p class="mobile-cta-sub">Start editing with Cue in seconds — no signup required.</p>
+                <div class="mobile-send-actions">
+                    <button class="mobile-action-btn mobile-action-primary" id="mobileCopyLink">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10.5 1h-7A1.5 1.5 0 0 0 2 2.5v9h1.5v-9h7V1Zm2.25 3H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h7.25a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.75 4Zm0 10.5H5.5v-9h7.25v9Z" fill="currentColor"/></svg>
+                        <span id="mobileCopyText">Open on your computer</span>
+                    </button>
+                    <a class="mobile-action-btn mobile-action-secondary" href="https://wa.me/?text=Continue%20editing%20with%20Cue%20on%20desktop:%20https://gocue.app/download" target="_blank" id="mobileWhatsApp">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.002 1C4.14 1 1 4.07 1 7.84c0 1.21.33 2.39.95 3.42L1 15l3.87-.98c1 .53 2.13.81 3.13.81C11.86 12.83 15 9.76 15 5.99 15 4.07 14.2 2.38 12.87 1.28A6.9 6.9 0 0 0 8.002 1Zm3.53 9.14c-.15.42-.87.8-1.2.85-.31.05-.7.07-1.13-.07a10.3 10.3 0 0 1-1.02-.38 7.04 7.04 0 0 1-3.05-2.69c-.26-.35-.66-.92-.66-1.78s.42-1.25.57-1.42c.15-.17.33-.21.44-.21h.32c.1 0 .24-.04.37.28.14.33.46 1.13.5 1.21.04.09.07.19.01.3-.05.11-.08.17-.16.27l-.24.28c-.08.09-.17.18-.07.35.1.17.42.7.9 1.13.62.55 1.15.72 1.31.8.16.09.26.07.35-.04.1-.11.42-.48.53-.65.11-.17.22-.14.37-.08.15.06.96.45 1.13.53.16.09.27.13.31.2.04.07.04.42-.11.83Z" fill="currentColor"/></svg>
+                        Send to WhatsApp
+                    </a>
+                    <a class="mobile-action-btn mobile-action-tertiary" href="mailto:?subject=Try%20Cue%20%E2%80%93%20music%20retiming%20for%20video%20editors&body=Continue%20editing%20with%20Cue%20on%20desktop%3A%20https%3A%2F%2Fgocue.app%2Fdownload" id="mobileEmail">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 3H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1Zm-.5 1.5L8 8.25 2.5 4.5h11ZM2.5 11.5v-6l5.5 4 5.5-4v6h-11Z" fill="currentColor"/></svg>
+                        Send to email
+                    </a>
+                </div>
+                <div class="mobile-copy-toast" id="mobileCopyToast">Link copied. Open it on your computer.</div>
+                <p class="mobile-cta-footer">Mac & Windows · Takes ~30 seconds to install</p>
             </div>
         </div>
     </section>
@@ -4408,58 +4635,99 @@
         // ============================================
         // PLATFORM DETECTION
         // ============================================
-        
-        // Auto-detect Windows users and show banner
         (function detectPlatform() {
             const ua = navigator.userAgent || navigator.platform || '';
-            const isWindows = /Win/i.test(ua);
-            const isIOS = /iPhone|iPad|iPod/i.test(ua);
-            const isAndroid = /Android/i.test(ua);
-            const isMac = /Mac/i.test(ua) && !isIOS; // Exclude iOS (which contains "Mac" in UA)
-            
-            // Also allow forcing via URL param for testing: ?platform=windows or ?platform=unsupported
+            const isIPhone = /iPhone/i.test(ua);
+            const isIPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+            const isIOS = isIPhone || isIPad;
+            const isAndroidPhone = /Android/i.test(ua) && /Mobile/i.test(ua);
+            const isAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+            const isMac = /Macintosh/i.test(ua) && !isIOS;
+            const isWindows = /Windows NT/i.test(ua);
+            const isDesktop = isMac || isWindows;
+
+            let detectedDevice = 'unknown';
+            if (isIPhone) detectedDevice = 'iphone';
+            else if (isIPad) detectedDevice = 'ipad';
+            else if (isAndroidPhone) detectedDevice = 'android_phone';
+            else if (isAndroidTablet) detectedDevice = 'android_tablet';
+            else if (isMac) detectedDevice = 'mac';
+            else if (isWindows) detectedDevice = 'windows';
+            else if (/CrOS/i.test(ua)) detectedDevice = 'chromeos';
+            else if (/Linux/i.test(ua)) detectedDevice = 'linux';
+
             const urlParams = new URLSearchParams(window.location.search);
             const forcePlatform = urlParams.get('platform');
-            
-            // Update buttons based on platform
-            const heroMicrocopy = document.querySelector('.hero-microcopy');
+            const forceNonDesktop = forcePlatform && forcePlatform !== 'mac' && forcePlatform !== 'windows';
+            if (forcePlatform) detectedDevice = forcePlatform;
+
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
-            const navDownloadBtn = document.querySelector('.nav-cta');
-            
-            if (isWindows || forcePlatform === 'windows') {
-                // Windows user
+            const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
+            const ctaDesktop = document.getElementById('ctaDesktop');
+            const ctaMobile = document.getElementById('ctaMobile');
+
+            const showNotifyCta = (!isDesktop && !forcePlatform) || forceNonDesktop;
+
+            if (showNotifyCta) {
+                if (ctaDesktop) ctaDesktop.style.display = 'none';
+                if (ctaMobile) ctaMobile.classList.add('show');
+
                 if (heroDownloadBtn) {
-                    heroDownloadBtn.querySelector('span:first-child').textContent = 'Download for Windows';
-                }
-                if (navDownloadBtn) {
-                    navDownloadBtn.textContent = 'Download for Windows';
-                }
-            } else if (isMac || forcePlatform === 'mac') {
-                // macOS user
-                if (heroDownloadBtn) {
-                    heroDownloadBtn.querySelector('span:first-child').textContent = 'Download for macOS';
-                }
-                if (navDownloadBtn) {
-                    navDownloadBtn.textContent = 'Download for macOS';
-                }
-            } else if (forcePlatform === 'unsupported' || (!isMac && !isWindows)) {
-                // Unsupported platform (Linux, iOS, Android, etc.)
-                if (heroMicrocopy) {
-                    heroMicrocopy.textContent = 'Available for macOS and Windows';
-                }
-                if (heroDownloadBtn) {
-                    heroDownloadBtn.classList.add('btn-unavailable');
-                    heroDownloadBtn.classList.remove('btn-primary');
-                    heroDownloadBtn.removeAttribute('href');
+                    heroDownloadBtn.setAttribute('href', 'download.html');
                     heroDownloadBtn.removeAttribute('onclick');
-                    heroDownloadBtn.innerHTML = '<span>Available for macOS and Windows</span>';
+                    var heroLabel = document.getElementById('heroDownloadLabel');
+                    if (heroLabel) heroLabel.textContent = 'Get Cue';
                 }
-                if (navDownloadBtn) {
-                    navDownloadBtn.classList.add('btn-unavailable');
-                    navDownloadBtn.removeAttribute('href');
-                    navDownloadBtn.removeAttribute('onclick');
-                    navDownloadBtn.textContent = 'macOS & Windows';
+                var heroInstallNote = document.getElementById('heroInstallNote');
+                if (heroInstallNote) heroInstallNote.style.display = 'none';
+            } else if (isWindows || forcePlatform === 'windows') {
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Get Cue for Windows';
+            } else if (isMac || forcePlatform === 'mac') {
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Get Cue for macOS';
+            }
+
+            // Mobile send-to-computer actions
+            const mobileCopyBtn = document.getElementById('mobileCopyLink');
+            const mobileCopyToast = document.getElementById('mobileCopyToast');
+            const mobileWhatsApp = document.getElementById('mobileWhatsApp');
+            const mobileEmailBtn = document.getElementById('mobileEmail');
+
+            function trackSendToComputer(method) {
+                if (typeof posthog !== 'undefined' && posthog.capture) {
+                    posthog.capture('send_to_computer', {
+                        ...getBaseEventProps(),
+                        method: method,
+                        device: detectedDevice,
+                        source: 'landing_page'
+                    });
                 }
+            }
+
+            if (mobileCopyBtn) {
+                mobileCopyBtn.addEventListener('click', function() {
+                    const copyText = document.getElementById('mobileCopyText');
+                    navigator.clipboard.writeText('https://gocue.app/download').then(function() {
+                        mobileCopyToast.classList.add('show');
+                        copyText.textContent = 'Copied!';
+                        setTimeout(function() {
+                            mobileCopyToast.classList.remove('show');
+                            copyText.textContent = 'Open on your computer';
+                        }, 3000);
+                        trackSendToComputer('copy');
+                    });
+                });
+            }
+
+            if (mobileWhatsApp) {
+                mobileWhatsApp.addEventListener('click', function() {
+                    trackSendToComputer('whatsapp');
+                });
+            }
+
+            if (mobileEmailBtn) {
+                mobileEmailBtn.addEventListener('click', function() {
+                    trackSendToComputer('email');
+                });
             }
         })();
     </script>
