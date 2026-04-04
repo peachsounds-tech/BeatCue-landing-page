@@ -229,7 +229,7 @@
             font-size: 1.05rem;
             font-weight: 500;
             color: var(--text-primary);
-            margin-bottom: 0.4rem;
+            margin-bottom: 1.25rem;
             line-height: 1.45;
         }
 
@@ -238,6 +238,10 @@
             color: var(--text-secondary);
             margin-bottom: 1.25rem;
             opacity: 0.8;
+        }
+
+        .mobile-cta-sub.mobile-cta-platform {
+            margin-bottom: 0.45rem;
         }
 
         .mobile-send-actions {
@@ -436,7 +440,7 @@
         <div class="icon">
             <img src="icon1.png" alt="Cue Logo">
         </div>
-        <h1>Download Cue</h1>
+        <h1 id="downloadPageTitle">Download Cue</h1>
         <p class="expectation-note">Without an active plan you can use all features, with export limitations.</p>
         
         <!-- Supported platform content -->
@@ -455,8 +459,8 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             </div>
+            <p class="mobile-cta-sub mobile-cta-platform">Cue runs on macOS & Windows</p>
             <p class="mobile-cta-heading">Continue on your computer</p>
-            <p class="mobile-cta-sub">Start editing with Cue in seconds — no signup required.</p>
             <div class="mobile-send-actions">
                 <button class="mobile-action-btn mobile-action-primary" id="mobileCopyLink">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10.5 1h-7A1.5 1.5 0 0 0 2 2.5v9h1.5v-9h7V1Zm2.25 3H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h7.25a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.75 4Zm0 10.5H5.5v-9h7.25v9Z" fill="currentColor"/></svg>
@@ -523,9 +527,12 @@
             const isSupported = platform === 'macos' || platform === 'windows';
             const info = PLATFORM_INFO[platform];
 
+            const pageTitleEl = document.getElementById('downloadPageTitle');
+
             if (isSupported) {
                 document.getElementById('supportedContent').style.display = 'block';
                 document.getElementById('unsupportedContent').style.display = 'none';
+                if (pageTitleEl) pageTitleEl.textContent = 'Download Cue';
 
                 const downloadBtn = document.getElementById('downloadBtn');
                 const downloadBtnLabel = document.getElementById('downloadBtnLabel');
@@ -550,6 +557,7 @@
             } else {
                 document.getElementById('supportedContent').style.display = 'none';
                 document.getElementById('unsupportedContent').style.display = 'block';
+                if (pageTitleEl) pageTitleEl.textContent = 'Download on desktop';
                 var subtitleEl = document.getElementById('subtitle');
                 if (subtitleEl) subtitleEl.textContent = 'Cue is a desktop app (Mac & Windows).';
                 document.querySelector('.expectation-note').style.display = 'none';
@@ -595,7 +603,7 @@
                         setTimeout(function() {
                             mobileCopyToast.classList.remove('show');
                             copyText.textContent = 'Open on your computer';
-                        }, 3000);
+                        }, 6000);
                         trackSendToComputer('copy');
                     });
                 });

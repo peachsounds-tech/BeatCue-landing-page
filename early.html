@@ -3625,10 +3625,59 @@
             .nav-container {
                 width: 100%;
                 max-width: 100%;
+                gap: 0.5rem;
             }
             
             .nav-links {
+                display: flex;
+                align-items: center;
+                gap: 0.45rem;
+                flex-shrink: 1;
+                min-width: 0;
+                max-width: calc(100% - 5.5rem);
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            
+            .nav-links::-webkit-scrollbar {
                 display: none;
+            }
+            
+            .nav-links a:not(.nav-cta) {
+                font-size: 0.72rem;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+            
+            .nav-cta {
+                padding: 0.42rem 0.7rem;
+                font-size: 0.72rem;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+            
+            .theme-toggle {
+                width: 34px;
+                height: 34px;
+                margin-left: 0.15rem;
+                flex-shrink: 0;
+            }
+            
+            .theme-toggle .theme-icon {
+                font-size: 0.95rem;
+            }
+            
+            nav.scrolled .logo img,
+            .logo img {
+                width: 32px;
+                height: 32px;
+            }
+            
+            nav.scrolled .logo-text,
+            .logo-text {
+                font-size: 1rem;
             }
             
             .hero {
@@ -3653,8 +3702,28 @@
             }
             
             .hero-tagline {
-                font-size: clamp(1rem, 4vw, 1.25rem);
+                font-size: clamp(1.45rem, 5.8vw, 2.05rem);
+                line-height: 1.12;
                 margin: 0 0 12px 0;
+            }
+            
+            .hero-badge {
+                font-size: 0.65rem;
+                letter-spacing: 0.03em;
+                margin-bottom: 0.3rem;
+            }
+            
+            .hero-badge svg {
+                width: 20px;
+                height: 20px;
+            }
+            
+            .hero-badge .laurel-left {
+                margin-right: -4px;
+            }
+            
+            .hero-badge .laurel-right {
+                margin-left: -4px;
             }
             
             .hero-visual {
@@ -3873,7 +3942,17 @@
             }
             
             .hero-tagline {
-                font-size: clamp(0.9rem, 4.5vw, 1.1rem);
+                font-size: clamp(1.28rem, 6.2vw, 1.85rem);
+                line-height: 1.12;
+            }
+            
+            .hero-badge {
+                font-size: 0.6rem;
+            }
+            
+            .hero-badge svg {
+                width: 18px;
+                height: 18px;
             }
             
             .hero-visual {
@@ -3965,7 +4044,17 @@
             }
             
             .hero-tagline {
-                font-size: 0.85rem;
+                font-size: clamp(1.15rem, 7vw, 1.55rem);
+                line-height: 1.12;
+            }
+            
+            .hero-badge {
+                font-size: 0.58rem;
+            }
+            
+            .hero-badge svg {
+                width: 17px;
+                height: 17px;
             }
             
             .hero-visual {
