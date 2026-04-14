@@ -1746,6 +1746,148 @@
         }
 
         /* ============================================
+           ABOUT THE CREATOR
+        ============================================ */
+        .creator-section {
+            padding: 5rem 2rem;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .creator-container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        .creator-section .section-label {
+            color: var(--peach-orange);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 2.5rem;
+            text-align: center;
+        }
+
+        .creator-layout {
+            display: flex;
+            align-items: flex-start;
+            gap: 3.5rem;
+        }
+
+        .creator-photo {
+            flex-shrink: 0;
+            width: 280px;
+        }
+
+        .creator-photo img {
+            width: 100%;
+            height: auto;
+            border-radius: 16px;
+            object-fit: cover;
+            aspect-ratio: 3 / 4;
+        }
+
+        .creator-letter {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+        }
+
+        .creator-letter p {
+            color: var(--text-secondary);
+            font-size: 1.02rem;
+            line-height: 1.85;
+            margin-bottom: 1.5rem;
+        }
+
+        .creator-letter p:last-of-type {
+            margin-bottom: 0;
+        }
+
+        .creator-signature {
+            margin-top: 2.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .creator-signature .sig-dash {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            line-height: 1.6;
+        }
+
+        .creator-signature .sig-name {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .creator-signature .sig-role {
+            display: block;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            letter-spacing: 0.02em;
+            margin-top: 0.2rem;
+        }
+
+        @media (max-width: 768px) {
+            .creator-section {
+                padding: 3.5rem 1.25rem;
+            }
+
+            .creator-layout {
+                flex-direction: column;
+                align-items: center;
+                gap: 2rem;
+            }
+
+            .creator-photo {
+                width: 200px;
+            }
+
+            .creator-letter {
+                text-align: left;
+            }
+
+            .creator-letter p {
+                font-size: 0.94rem;
+                line-height: 1.75;
+            }
+        }
+
+        @media (max-width: 414px) {
+            .creator-section {
+                padding: 3rem 1rem;
+            }
+
+            .creator-section .section-label {
+                margin-bottom: 1.5rem;
+            }
+
+            .creator-layout {
+                gap: 1.5rem;
+            }
+
+            .creator-photo {
+                width: 160px;
+            }
+
+            .creator-letter p {
+                font-size: 0.88rem;
+                line-height: 1.7;
+                margin-bottom: 1.25rem;
+            }
+
+            .creator-signature {
+                margin-top: 2rem;
+                padding-top: 1.25rem;
+            }
+        }
+
+        /* ============================================
            CTA SECTION
         ============================================ */
         .cta-section {
@@ -4187,6 +4329,27 @@
         </div>
     </section>
 
+    <!-- About the Creator -->
+    <section class="creator-section">
+        <div class="creator-container">
+            <p class="section-label">About the creator</p>
+            <div class="creator-layout">
+                <div class="creator-photo">
+                    <img src="creator.png" alt="Sarel Duanis, creator of BeatCue" loading="lazy">
+                </div>
+                <div class="creator-letter">
+                    <p>I've spent seven years as an engineer with ears — building the technology behind video editors, thinking in waveforms as much as in code. Close enough to hear what editors were really asking for when they stretched a clip or trimmed a bar. They weren't adjusting timing. They were chasing a feeling.</p>
+                    <p>BeatCue is my first indie product, carrying one conviction I've held the whole time: that the moment a drop lands, a build releases, or a peak finally breaks — that moment belongs to the editor.</p>
+                    <p>I built BeatCue to give it back to them.</p>
+                    <div class="creator-signature">
+                        <span class="sig-dash">— <span class="sig-name">Sarel Duanis</span></span>
+                        <span class="sig-role">Creator of BeatCue</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Social Proof -->
     <section class="quotes-section">
         <p class="section-label">BeatCue is built for</p>
@@ -4551,6 +4714,17 @@
                     platform: platform
                 });
             }
+
+            // Pass anonymous ID to download page so PostHog can preserve identity
+            // even for non-consenting users (memory mode loses ID on navigation)
+            if (typeof posthog !== 'undefined' && posthog.get_distinct_id) {
+                const link = event.currentTarget;
+                if (link && link.href) {
+                    const url = new URL(link.href, window.location.origin);
+                    url.searchParams.set('ph_id', posthog.get_distinct_id());
+                    link.href = url.toString();
+                }
+            }
         }
         
         // Track application submission
@@ -4869,6 +5043,10 @@
 
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
             const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
+
+            // Attach identity-preserving click handler to both download buttons
+            if (heroDownloadBtn) heroDownloadBtn.addEventListener('click', trackTrialDownloadClick);
+            if (pricingDownloadBtn) pricingDownloadBtn.addEventListener('click', trackTrialDownloadClick);
 
             if (isWindows || forcePlatform === 'windows') {
                 if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download BeatCue for Windows';

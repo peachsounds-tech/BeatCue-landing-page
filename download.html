@@ -199,6 +199,30 @@
             text-decoration: underline;
         }
 
+        .trust-note {
+            margin-top: 1.5rem;
+            padding: 1rem 1.25rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 10px;
+            text-align: left;
+            max-width: 420px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .trust-note p {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        .trust-note strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
         .mobile-transfer-icon {
             display: flex;
             align-items: center;
@@ -462,6 +486,27 @@
         
         const userConsented = hasExistingConsent();
         const isInternalTester = localStorage.getItem('cue_internal_tester') === 'true';
+
+        // Read anonymous ID passed from the landing page via URL param.
+        // This preserves identity for non-consenting users whose PostHog ID
+        // lives only in memory and is lost on page navigation.
+        function getPassedDistinctId() {
+            try {
+                return new URLSearchParams(window.location.search).get('ph_id') || null;
+            } catch (e) {
+                return null;
+            }
+        }
+        const passedDistinctId = getPassedDistinctId();
+
+        // Clean ph_id from address bar immediately (cosmetic, doesn't affect tracking)
+        if (passedDistinctId) {
+            try {
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('ph_id');
+                history.replaceState(null, '', cleanUrl.toString());
+            } catch (e) { /* ignore */ }
+        }
         
         // Initialize with appropriate persistence based on consent
         const initConfig = {
@@ -476,6 +521,12 @@
         
         if (!userConsented) {
             initConfig.disable_geoip = true;
+        }
+
+        // Bootstrap with the same ID from the landing page so all events
+        // for this visit are linked, even without cookies/localStorage
+        if (passedDistinctId) {
+            initConfig.bootstrap = { distinctID: passedDistinctId };
         }
         
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
@@ -569,6 +620,9 @@
                 <span id="downloadBtnLabel">Download for macOS</span>
             </a>
             <p class="other-platform" id="otherPlatform"></p>
+            <div class="trust-note">
+                <p><strong>Heads up:</strong> BeatCue is a new indie app, so your OS may show a security warning on first launch. This is normal for apps that haven't yet built up reputation with platform trust systems - You can safely proceed.</p>
+            </div>
         </div>
         
         <!-- Mobile / unsupported platform content -->
