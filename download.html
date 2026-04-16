@@ -72,416 +72,106 @@
 
     <style>
         :root {
-            --peach-orange: #FF6B35;
-            --peach-orange-light: #FF8B5E;
             --wave-blue: #4A90D9;
-            --wave-blue-light: #6BA5E5;
-            --early-access-green: #10B981;
-
+            --green: #10B981;
+            --green-soft: rgba(16, 185, 129, 0.08);
+            --green-border: rgba(16, 185, 129, 0.18);
             --bg-primary: #FFFFFF;
             --bg-secondary: #F5F5F7;
-            --bg-tertiary: #EAEAEC;
-            --bg-card: #2D2D3A;
             --text-primary: #1a1a1a;
             --text-secondary: #555555;
             --text-muted: #888888;
-            --text-on-card: #FFFFFF;
-            --border-light: rgba(0, 0, 0, 0.1);
+            --border-light: rgba(0, 0, 0, 0.07);
         }
-
         [data-theme="dark"] {
             --bg-primary: #0A0A0F;
-            --bg-secondary: #12121A;
-            --bg-tertiary: #1A1A25;
-            --bg-card: #1E1E2A;
+            --bg-secondary: #13131D;
             --text-primary: #FFFFFF;
             --text-secondary: #A0A0B0;
             --text-muted: #6B6B7B;
-            --text-on-card: #FFFFFF;
-            --border-light: rgba(255, 255, 255, 0.08);
+            --border-light: rgba(255, 255, 255, 0.07);
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-primary);
             min-height: 100vh;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            padding-top: 8vh;
-            color: var(--text-primary);
-            line-height: 1.6;
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 6vh 1rem 3rem;
+            color: var(--text-primary); line-height: 1.6;
             transition: background 0.3s ease, color 0.3s ease;
         }
 
-        .container {
-            text-align: center;
-            padding: 1rem 2rem;
-            max-width: 520px;
-            width: 100%;
-        }
+        .container { text-align: center; width: 100%; max-width: 460px; }
 
-        .icon {
-            width: 150px;
-            height: 150px;
-            margin: 0 auto 0.5rem;
-        }
-
-        .icon img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
+        .dl-icon { width: 200px; height: 200px; margin: 0 auto 0.85rem; animation: float 3s ease-in-out infinite; }
+        .dl-icon img { width: 100%; height: 100%; object-fit: contain; }
 
         @keyframes float {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
+            50% { transform: translateY(-10px); }
         }
 
-        h1 {
-            font-size: 2.2rem;
-            font-weight: 700;
-            margin-bottom: 0.75rem;
-            color: var(--text-primary);
-        }
-
-        .subtitle {
-            font-size: 1.05rem;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
-            font-weight: 400;
-        }
-
-        .expectation-note {
-            font-size: 1.2rem;
-            color: var(--text-secondary);
-            margin-bottom: 2rem;
-            font-weight: 500;
-        }
-
-        .value-reinforcement {
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            margin-bottom: 1.75rem;
-            opacity: 0.7;
-            font-style: italic;
-        }
-
-        .download-btn-main {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            font-size: 1.1rem;
-            font-weight: 600;
-            height: 54px;
-            padding: 0 40px;
-            border-radius: 10px;
-            background: var(--wave-blue);
-            color: white;
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(74, 144, 217, 0.25);
-            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-            margin-bottom: 1rem;
-        }
-
-        .download-btn-main:hover {
-            background: var(--wave-blue-light);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 18px rgba(74, 144, 217, 0.35);
-        }
-
-        .download-btn-main:active {
-            transform: scale(0.98);
-        }
-
-        .other-platform {
-            margin-top: 1.25rem;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-
-        .other-platform a {
-            color: var(--wave-blue);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .other-platform a:hover {
-            text-decoration: underline;
-        }
-
-        .trust-note {
-            margin-top: 1.5rem;
-            padding: 1rem 1.25rem;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-light);
-            border-radius: 10px;
-            text-align: left;
-            max-width: 420px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .trust-note p {
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            margin: 0;
-        }
-
-        .trust-note strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-
-        .mobile-transfer-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
+        .dl-status-pill {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            font-size: 0.76rem; font-weight: 500; color: var(--green);
+            background: var(--green-soft); border: 1px solid var(--green-border);
+            border-radius: 100px; padding: 0.28rem 0.85rem;
             margin-bottom: 0.85rem;
-            color: var(--text-secondary);
-            opacity: 0.6;
+            opacity: 0; transform: translateY(5px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .dl-status-pill.visible { opacity: 1; transform: translateY(0); }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .dl-spinner {
+            width: 12px; height: 12px; flex-shrink: 0;
+            border: 2px solid var(--green-border); border-top-color: var(--green);
+            border-radius: 50%; animation: spin 0.7s linear infinite;
         }
 
-        .mobile-desktop-icons {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1.25rem;
-            margin-bottom: 1rem;
-            color: var(--text-secondary);
-        }
+        h1 { font-size: 1.45rem; font-weight: 700; margin-bottom: 0.15rem; }
+        .dl-subtitle { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.4rem; }
 
-        .mobile-desktop-icon svg {
-            width: 26px;
-            height: 26px;
-            display: block;
-            opacity: 0.9;
-        }
+        .dl-fallback { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 1.75rem; }
+        .dl-fallback a { color: var(--wave-blue); text-decoration: none; font-weight: 500; cursor: pointer; }
+        .dl-fallback a:hover { text-decoration: underline; }
 
-        .mobile-cta-heading {
-            font-size: 1.05rem;
-            font-weight: 500;
-            color: var(--text-primary);
-            margin-bottom: 1.25rem;
-            line-height: 1.45;
+        .security-tip {
+            text-align: left; padding: 0.7rem 0.85rem;
+            background: var(--bg-secondary); border: 1px solid var(--border-light);
+            border-radius: 10px; margin-bottom: 1.25rem;
         }
+        .security-tip-header { font-size: 0.72rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.15rem; }
+        .security-tip-body { font-size: 0.7rem; color: var(--text-muted); line-height: 1.5; }
+        .security-tip-body strong { color: var(--text-secondary); font-weight: 500; }
 
-        .mobile-cta-sub {
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            margin-bottom: 1.25rem;
-            opacity: 0.8;
-        }
+        .edge-video { display: none; margin: 0.5rem 0 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-light); }
+        .edge-video video { width: 100%; display: block; }
 
-        .mobile-cta-sub.mobile-cta-platform {
-            margin-bottom: 0.45rem;
-        }
+        .other-platform { font-size: 0.72rem; color: var(--text-muted); }
+        .other-platform a { color: var(--wave-blue); text-decoration: none; font-weight: 500; }
+        .other-platform a:hover { text-decoration: underline; }
 
-        .mobile-send-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            width: 100%;
-        }
-
-        .mobile-action-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            width: 100%;
-            padding: 0.8rem 1rem;
-            font-size: 0.88rem;
-            font-weight: 600;
-            font-family: inherit;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: transform 0.15s ease, opacity 0.15s ease;
-            text-decoration: none;
-        }
-
-        .mobile-action-primary {
-            background: var(--wave-blue);
-            color: white;
-            border: none;
-        }
-
-        .mobile-action-secondary {
-            background: transparent;
-            color: var(--text-primary);
-            border: 1px solid var(--border-light);
-        }
-
-        .mobile-action-tertiary {
-            background: transparent;
-            color: var(--text-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            font-weight: 500;
-        }
-
-        .mobile-action-btn:active {
-            transform: scale(0.97);
-        }
-
-        .mobile-copy-toast {
-            display: none;
-            margin-top: 0.75rem;
-            padding: 0.6rem 0.9rem;
-            background: rgba(34, 197, 94, 0.1);
-            border: 1px solid rgba(34, 197, 94, 0.2);
-            border-radius: 10px;
-            color: #22c55e;
-            font-size: 0.82rem;
-            font-weight: 500;
-        }
-
-        .mobile-copy-toast.show {
-            display: block;
-        }
-
-        .mobile-cta-footer {
-            margin-top: 1.25rem;
-            font-size: 0.72rem;
-            color: var(--text-secondary);
-            opacity: 0.65;
-        }
-
-        .open-cue-modal {
-            position: fixed;
-            inset: 0;
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 1.25rem;
-            box-sizing: border-box;
-        }
-
-        .open-cue-modal[hidden] {
-            display: none !important;
-        }
-
-        .open-cue-modal-backdrop {
-            position: absolute;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(4px);
-        }
-
-        [data-theme="dark"] .open-cue-modal-backdrop {
-            background: rgba(0, 0, 0, 0.65);
-        }
-
-        .open-cue-modal-panel {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            max-width: 380px;
-            padding: 1.5rem 1.35rem 1.35rem;
-            border-radius: 14px;
-            background: var(--bg-primary);
-            border: 1px solid var(--border-light);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
-            text-align: center;
-        }
-
-        [data-theme="dark"] .open-cue-modal-panel {
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-        }
-
-        .open-cue-modal-close {
-            position: absolute;
-            top: 0.65rem;
-            right: 0.65rem;
-            width: 2rem;
-            height: 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            border: none;
-            border-radius: 8px;
-            background: transparent;
-            color: var(--text-muted);
-            font-size: 1.35rem;
-            line-height: 1;
-            cursor: pointer;
-            font-family: inherit;
-            transition: background 0.15s ease, color 0.15s ease;
-        }
-
-        .open-cue-modal-close:hover {
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-        }
-
-        .open-cue-modal-title {
-            font-size: 1.05rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin: 0 1.75rem 1rem 0;
-            line-height: 1.4;
-            text-align: left;
-        }
-
-        .post-download-options {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            width: 100%;
-        }
-
-        .post-download-option {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            padding: 0.75rem 1rem;
-            font-size: 0.88rem;
-            font-weight: 500;
-            font-family: inherit;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-            background: transparent;
-            color: var(--text-primary);
-            border: 1px solid var(--border-light);
-        }
-
-        .post-download-option:hover {
-            background: var(--bg-secondary);
-            border-color: var(--text-muted);
-        }
-
-        .post-download-option:active {
-            transform: scale(0.98);
-        }
-
-        .post-download-thanks {
-            font-size: 0.95rem;
-            color: var(--text-secondary);
-            font-weight: 500;
-            margin: 0.5rem 0 0;
-        }
+        .mobile-transfer-icon { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.85rem; color: var(--text-secondary); opacity: 0.6; }
+        .mobile-cta-heading { font-size: 1.05rem; font-weight: 500; color: var(--text-primary); margin-bottom: 1.25rem; }
+        .mobile-cta-sub { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; opacity: 0.8; }
+        .mobile-cta-sub.mobile-cta-platform { margin-bottom: 0.45rem; }
+        .mobile-send-actions { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+        .mobile-action-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.8rem 1rem; font-size: 0.88rem; font-weight: 600; font-family: inherit; border-radius: 10px; cursor: pointer; transition: transform 0.15s ease; text-decoration: none; }
+        .mobile-action-primary { background: var(--wave-blue); color: white; border: none; }
+        .mobile-action-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border-light); }
+        .mobile-action-tertiary { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-light); font-weight: 500; }
+        .mobile-action-btn:active { transform: scale(0.97); }
+        .mobile-copy-toast { display: none; margin-top: 0.75rem; padding: 0.6rem 0.9rem; background: var(--green-soft); border: 1px solid var(--green-border); border-radius: 10px; color: var(--green); font-size: 0.82rem; font-weight: 500; }
+        .mobile-copy-toast.show { display: block; }
+        .mobile-cta-footer { margin-top: 1.25rem; font-size: 0.72rem; color: var(--text-secondary); opacity: 0.65; }
 
         @media (max-width: 480px) {
-            .container {
-                padding: 2rem 1.25rem;
-            }
-            h1 {
-                font-size: 1.75rem;
-            }
+            body { padding: 4vh 1rem 2rem; }
+            h1 { font-size: 1.25rem; }
         }
     </style>
     
@@ -590,10 +280,10 @@
         }
         
         const detectedPlatform = detectPlatform();
+        const isEdgeBrowser = /Edg(e)?\//i.test(navigator.userAgent || '');
         
         // Track page view function
         function trackPostHogPageView(fromCache = false) {
-            // Resolve UTMs from URL or early-captured values (survives replaceState)
             const earlyUtms = window.__cue_initial_utms || {};
             const urlParams = new URLSearchParams(window.location.search);
             const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
@@ -617,25 +307,16 @@
             if (utms.utm_term) baseProps.utm_term = utms.utm_term;
             
             if (userConsented) {
-                posthog.capture('page_viewed', {
-                    ...getBaseEventProps(),
-                    ...baseProps
-                });
+                posthog.capture('page_viewed', { ...getBaseEventProps(), ...baseProps });
                 console.log('📊 PostHog: page_viewed tracked (consented, with UTMs)' + (fromCache ? ' [from cache]' : ''));
             } else {
-                posthog.capture('page_viewed', {
-                    ...baseProps,
-                    screen_width: window.screen.width,
-                    screen_height: window.screen.height
-                });
+                posthog.capture('page_viewed', { ...baseProps, screen_width: window.screen.width, screen_height: window.screen.height });
                 console.log('📊 PostHog: page_viewed tracked (anonymous, with UTMs)' + (fromCache ? ' [from cache]' : ''));
             }
         }
         
-        // Track on initial load
         setTimeout(() => trackPostHogPageView(false), 200);
         
-        // Handle page restored from bfcache
         window.addEventListener('pageshow', function(event) {
             if (event.persisted) {
                 setTimeout(() => trackPostHogPageView(true), 200);
@@ -645,26 +326,41 @@
 </head>
 <body>
     <div class="container">
-        <div class="icon">
-            <img src="icon1.png" alt="BeatCue Logo">
-        </div>
-        <h1 id="downloadPageTitle">Download BeatCue</h1>
-        <p class="expectation-note">Without an active plan you can use all features, with export limitations.</p>
-        
-        <!-- Supported platform content -->
+
         <div id="supportedContent">
-            <a href="#" class="download-btn-main" id="downloadBtn">
-                <span id="downloadBtnIcon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg></span>
-                <span id="downloadBtnLabel">Download for macOS</span>
-            </a>
-            <p class="other-platform" id="otherPlatform"></p>
-            <div class="trust-note">
-                <p><strong>Heads up:</strong> BeatCue is a new indie app, so your OS may show a security warning on first launch. This is normal for apps that haven't yet built up reputation with platform trust systems - You can safely proceed.</p>
+            <div class="dl-icon">
+                <img src="icon1.png" alt="BeatCue">
             </div>
+
+            <div class="dl-status-pill" id="dlStatusPill">
+                <span class="dl-spinner"></span>
+                <span id="dlStatusText">Preparing download&hellip;</span>
+            </div>
+
+            <h1 id="downloadPageTitle">Downloading BeatCue</h1>
+            <p class="dl-subtitle" id="dlSubtitle">Free to try &middot; No account needed</p>
+
+            <p class="dl-fallback" id="dlFallback">
+                Download didn't start? <a href="#" id="manualDownloadLink">Click here</a>
+            </p>
+
+            <div class="security-tip" id="securityTip">
+                <div class="security-tip-header" id="securityTipHeader"></div>
+                <div class="security-tip-body" id="securityTipBody"></div>
+                <div class="edge-video" id="edgeVideo">
+                    <video autoplay loop muted playsinline>
+                        <source src="edge_run_anyway_2.mp4" type="video/mp4">
+                    </video>
+                </div>
+            </div>
+
+            <p class="other-platform" id="otherPlatform"></p>
         </div>
-        
-        <!-- Mobile / unsupported platform content -->
+
         <div id="unsupportedContent" style="display: none;">
+            <div class="dl-icon">
+                <img src="icon1.png" alt="BeatCue">
+            </div>
             <div class="mobile-transfer-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
@@ -687,306 +383,136 @@
                 </a>
             </div>
             <div class="mobile-copy-toast" id="mobileCopyToast">Link copied. Open it on your computer.</div>
-            <p class="mobile-cta-footer">Mac & Windows · Recommended: macOS 14+</p>
+            <p class="mobile-cta-footer">Mac & Windows &middot; Recommended: macOS 14+</p>
         </div>
-        
-    </div>
 
-    <div class="open-cue-modal" id="openBeatCueModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="openBeatCueModalTitle">
-        <div class="open-cue-modal-backdrop" data-close-open-beatcue-modal></div>
-        <div class="open-cue-modal-panel">
-            <button type="button" class="open-cue-modal-close" data-close-open-beatcue-modal aria-label="Close">&times;</button>
-            <div id="postDownloadPoll" aria-live="polite">
-                <h2 class="open-cue-modal-title" id="openBeatCueModalTitle">Did you manage to open BeatCue?</h2>
-                <div class="post-download-options" role="group" aria-label="Open BeatCue feedback">
-                    <button type="button" class="post-download-option" data-open-beatcue="yes">Yes</button>
-                    <button type="button" class="post-download-option" data-open-beatcue="blocked_os">Blocked by OS</button>
-                    <button type="button" class="post-download-option" data-open-beatcue="didnt_try">Didn’t try yet</button>
-                    <button type="button" class="post-download-option" data-open-beatcue="something_else">Something else</button>
-                </div>
-            </div>
-            <p class="post-download-thanks" id="postDownloadThanks" hidden>Thanks for letting us know.</p>
-        </div>
     </div>
     
     <script>
-        // Download URLs
         const DOWNLOAD_URLS = {
             macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/BeatCue.pkg',
             windows: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/BeatCue.exe'
         };
         
-        // Platform display info
         const PLATFORM_INFO = {
             macos: { name: 'macOS' },
             windows: { name: 'Windows' }
         };
 
-        // Track download event
         function trackDownload(platform) {
             if (typeof fbq === 'function') {
-                fbq('track', 'StartTrial', {
-                    value: '0.00',
-                    currency: 'USD',
-                    content_name: 'BeatCue',
-                    platform: platform
-                });
+                fbq('track', 'StartTrial', { value: '0.00', currency: 'USD', content_name: 'BeatCue', platform: platform });
             }
-
+            var props = { page: 'download', platform: platform };
             if (userConsented) {
-                posthog.capture('trial_download_started', {
-                    ...getBaseEventProps(),
-                    page: 'download',
-                    platform: platform,
-                    source: 'free_trial_page'
-                });
+                posthog.capture('trial_download_started', { ...getBaseEventProps(), ...props, source: 'free_trial_page' });
             } else {
-                posthog.capture('trial_download_started', {
-                    page: 'download',
-                    platform: platform,
-                    url: window.location.href
-                });
+                posthog.capture('trial_download_started', { ...props, url: window.location.href });
             }
-            console.log(`${platform} download tracked`);
         }
         
-        // Setup UI for platform
         function setupUI(platform) {
-            const isSupported = platform === 'macos' || platform === 'windows';
-            const info = PLATFORM_INFO[platform];
-
-            const pageTitleEl = document.getElementById('downloadPageTitle');
+            var isSupported = platform === 'macos' || platform === 'windows';
 
             if (isSupported) {
                 document.getElementById('supportedContent').style.display = 'block';
                 document.getElementById('unsupportedContent').style.display = 'none';
-                if (pageTitleEl) pageTitleEl.textContent = 'Download BeatCue';
 
-                const downloadBtn = document.getElementById('downloadBtn');
-                const downloadBtnLabel = document.getElementById('downloadBtnLabel');
+                var otherPlatform = platform === 'macos' ? 'windows' : 'macos';
+                var otherInfo = PLATFORM_INFO[otherPlatform];
 
-                downloadBtnLabel.textContent = `Download for ${info.name}`;
-                downloadBtn.href = DOWNLOAD_URLS[platform];
-
-                const downloadBtnIcon = document.getElementById('downloadBtnIcon');
-                if (platform === 'windows' && downloadBtnIcon) {
-                    downloadBtnIcon.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.39l9.5-1.64V12h-9.5V5.39zM11.5 12.5H21v7.75l-9.5-1.64V12.5z"/></svg>';
-                }
-
-                downloadBtn.addEventListener('click', function() {
+                var manualLink = document.getElementById('manualDownloadLink');
+                manualLink.href = DOWNLOAD_URLS[platform];
+                manualLink.addEventListener('click', function() {
                     trackDownload(platform);
-                    scheduleOpenBeatCueModal(platform);
                 });
 
-                const otherPlatform = platform === 'macos' ? 'windows' : 'macos';
-                const otherInfo = PLATFORM_INFO[otherPlatform];
-                document.getElementById('otherPlatform').innerHTML = 
-                    `<a href="${DOWNLOAD_URLS[otherPlatform]}" class="other-platform-download">Download for ${otherInfo.name}</a>`;
-                const otherDl = document.querySelector('.other-platform-download');
-                if (otherDl) {
-                    otherDl.addEventListener('click', function() {
-                        trackDownload(otherPlatform);
-                        scheduleOpenBeatCueModal(otherPlatform);
-                    });
+                document.getElementById('otherPlatform').innerHTML =
+                    'Looking for <a href="' + DOWNLOAD_URLS[otherPlatform] + '" id="otherPlatformLink">' + otherInfo.name + ' version</a>?';
+                var opLink = document.getElementById('otherPlatformLink');
+                if (opLink) {
+                    opLink.addEventListener('click', function() { trackDownload(otherPlatform); });
+                }
+
+                if (platform === 'windows') {
+                    document.getElementById('securityTipHeader').innerHTML = '🔒 Seeing a Windows warning?';
+                    document.getElementById('securityTipBody').innerHTML = 'This is normal. Windows flags all new apps it hasn\'t seen before.<br>Click <strong>"More info"</strong> then <strong>"Run anyway"</strong> to open BeatCue.';
+
+                    if (isEdgeBrowser) {
+                        var edgeVid = document.getElementById('edgeVideo');
+                        if (edgeVid) {
+                            edgeVid.style.display = 'block';
+                            var v = edgeVid.querySelector('video');
+                            if (v) v.play().catch(function() {});
+                        }
+                    }
+                } else {
+                    document.getElementById('securityTipHeader').innerHTML = '🔒 Seeing a macOS warning?';
+                    document.getElementById('securityTipBody').innerHTML = 'Go to <strong>System Settings &rarr; Privacy &amp; Security</strong> and click <strong>"Open Anyway"</strong>. macOS warns about apps downloaded outside the App Store &mdash; this is normal.';
                 }
                 
             } else {
                 document.getElementById('supportedContent').style.display = 'none';
                 document.getElementById('unsupportedContent').style.display = 'block';
-                if (pageTitleEl) pageTitleEl.textContent = 'Download on desktop';
-                var subtitleEl = document.getElementById('subtitle');
-                if (subtitleEl) subtitleEl.textContent = 'BeatCue is a desktop app (Mac & Windows).';
-                document.querySelector('.expectation-note').style.display = 'none';
             }
         }
         
-        // Initialize
         function init() {
-            const platform = detectedPlatform;
-            console.log('Detected platform:', platform);
-            
+            var platform = detectedPlatform;
             setupUI(platform);
 
-            // Mobile send-to-computer actions
-            const mobileCopyBtn = document.getElementById('mobileCopyLink');
-            const mobileCopyToast = document.getElementById('mobileCopyToast');
-            const mobileWhatsApp = document.getElementById('mobileWhatsApp');
-            const mobileEmailBtn = document.getElementById('mobileEmail');
+            if (platform === 'macos' || platform === 'windows') {
+                setTimeout(function() {
+                    var a = document.createElement('a');
+                    a.href = DOWNLOAD_URLS[platform];
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    trackDownload(platform);
+
+                    var pill = document.getElementById('dlStatusPill');
+                    if (pill) {
+                        pill.classList.add('visible');
+                        setTimeout(function() {
+                            document.getElementById('dlStatusText').textContent = 'Download started';
+                            var sp = pill.querySelector('.dl-spinner');
+                            if (sp) sp.style.display = 'none';
+                            pill.insertAdjacentHTML('afterbegin', '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>');
+                        }, 1500);
+                    }
+                }, 400);
+            }
+
+            var mobileCopyBtn = document.getElementById('mobileCopyLink');
+            var mobileCopyToast = document.getElementById('mobileCopyToast');
+            var mobileWhatsApp = document.getElementById('mobileWhatsApp');
+            var mobileEmailBtn = document.getElementById('mobileEmail');
 
             function trackSendToComputer(method) {
                 if (typeof fbq === 'function') {
-                    fbq('track', 'Lead', {
-                        content_name: 'BeatCue Send to Desktop',
-                        content_category: method
-                    });
+                    fbq('track', 'Lead', { content_name: 'BeatCue Send to Desktop', content_category: method });
                 }
                 if (typeof posthog !== 'undefined' && posthog.capture) {
-                    posthog.capture('send_to_computer', {
-                        ...getBaseEventProps(),
-                        method: method,
-                        device: platform,
-                        source: 'download_page'
-                    });
+                    posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: platform, source: 'download_page' });
                 }
             }
 
             if (mobileCopyBtn) {
                 mobileCopyBtn.addEventListener('click', function() {
-                    const copyText = document.getElementById('mobileCopyText');
+                    var copyText = document.getElementById('mobileCopyText');
                     navigator.clipboard.writeText('https://gocue.app/download').then(function() {
                         mobileCopyToast.classList.add('show');
                         copyText.textContent = 'Copied!';
-                        setTimeout(function() {
-                            mobileCopyToast.classList.remove('show');
-                            copyText.textContent = 'Open on your computer';
-                        }, 6000);
+                        setTimeout(function() { mobileCopyToast.classList.remove('show'); copyText.textContent = 'Open on your computer'; }, 6000);
                         trackSendToComputer('copy');
                     });
                 });
             }
-
-            if (mobileWhatsApp) {
-                mobileWhatsApp.addEventListener('click', function() {
-                    trackSendToComputer('whatsapp');
-                });
-            }
-
-            if (mobileEmailBtn) {
-                mobileEmailBtn.addEventListener('click', function() {
-                    trackSendToComputer('email');
-                });
-            }
-
-            initOpenBeatCueModal();
-        }
-
-        const OPEN_BEATCUE_STORAGE_KEY = 'cue_open_beatcue_feedback';
-        const OPEN_BEATCUE_MODAL_DELAY_MS = 3000;
-        let openBeatCueModalPlatform = 'macos';
-        let openBeatCueModalPreviousFocus = null;
-        let openBeatCueModalTimerId = null;
-
-        function clearOpenBeatCueModalTimer() {
-            if (openBeatCueModalTimerId !== null) {
-                clearTimeout(openBeatCueModalTimerId);
-                openBeatCueModalTimerId = null;
-            }
-        }
-
-        function hasOpenBeatCueFeedbackAnswered() {
-            try {
-                return !!localStorage.getItem(OPEN_BEATCUE_STORAGE_KEY);
-            } catch (e) {
-                return false;
-            }
-        }
-
-        function scheduleOpenBeatCueModal(platform) {
-            if (hasOpenBeatCueFeedbackAnswered()) return;
-            const modal = document.getElementById('openBeatCueModal');
-            if (modal && !modal.hidden) return;
-
-            openBeatCueModalPlatform = platform;
-            clearOpenBeatCueModalTimer();
-
-            openBeatCueModalTimerId = window.setTimeout(function() {
-                openBeatCueModalTimerId = null;
-                if (hasOpenBeatCueFeedbackAnswered()) return;
-                const m = document.getElementById('openBeatCueModal');
-                if (m && !m.hidden) return;
-                openOpenBeatCueModal();
-            }, OPEN_BEATCUE_MODAL_DELAY_MS);
-        }
-
-        function openOpenBeatCueModal() {
-            const modal = document.getElementById('openBeatCueModal');
-            const pollEl = document.getElementById('postDownloadPoll');
-            const thanksEl = document.getElementById('postDownloadThanks');
-            if (!modal || !pollEl || !thanksEl) return;
-
-            pollEl.hidden = false;
-            thanksEl.hidden = true;
-
-            modal.hidden = false;
-            modal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-
-            openBeatCueModalPreviousFocus = document.activeElement;
-            const firstOption = modal.querySelector('[data-open-beatcue]');
-            if (firstOption) firstOption.focus();
-
-            document.addEventListener('keydown', onOpenBeatCueModalKeydown);
-        }
-
-        function closeOpenBeatCueModal() {
-            const modal = document.getElementById('openBeatCueModal');
-            if (!modal || modal.hidden) return;
-
-            clearOpenBeatCueModalTimer();
-
-            modal.hidden = true;
-            modal.setAttribute('aria-hidden', 'true');
-            document.body.style.overflow = '';
-
-            document.removeEventListener('keydown', onOpenBeatCueModalKeydown);
-
-            if (openBeatCueModalPreviousFocus && typeof openBeatCueModalPreviousFocus.focus === 'function') {
-                try {
-                    openBeatCueModalPreviousFocus.focus();
-                } catch (e) { /* ignore */ }
-            }
-            openBeatCueModalPreviousFocus = null;
-        }
-
-        function onOpenBeatCueModalKeydown(e) {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                closeOpenBeatCueModal();
-            }
-        }
-
-        function initOpenBeatCueModal() {
-            const modal = document.getElementById('openBeatCueModal');
-            const pollEl = document.getElementById('postDownloadPoll');
-            const thanksEl = document.getElementById('postDownloadThanks');
-            if (!modal || !pollEl || !thanksEl) return;
-
-            modal.querySelectorAll('[data-close-open-beatcue-modal]').forEach(function(el) {
-                el.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    closeOpenBeatCueModal();
-                });
-            });
-
-            pollEl.querySelectorAll('[data-open-beatcue]').forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    const value = btn.getAttribute('data-open-beatcue');
-                    try {
-                        localStorage.setItem(OPEN_BEATCUE_STORAGE_KEY, value);
-                    } catch (e) { /* ignore */ }
-
-                    if (typeof fbq === 'function') {
-                        fbq('trackCustom', 'OpenBeatCueFeedback', { response: value });
-                    }
-                    if (typeof posthog !== 'undefined' && posthog.capture) {
-                        posthog.capture('open_beatcue_feedback', {
-                            ...getBaseEventProps(),
-                            response: value,
-                            page: 'download',
-                            platform: openBeatCueModalPlatform
-                        });
-                    }
-
-                    pollEl.hidden = true;
-                    thanksEl.hidden = false;
-                    window.setTimeout(function() {
-                        closeOpenBeatCueModal();
-                    }, 1400);
-                });
-            });
+            if (mobileWhatsApp) { mobileWhatsApp.addEventListener('click', function() { trackSendToComputer('whatsapp'); }); }
+            if (mobileEmailBtn) { mobileEmailBtn.addEventListener('click', function() { trackSendToComputer('email'); }); }
         }
         
-        // Run on page load
         init();
     </script>
 </body>

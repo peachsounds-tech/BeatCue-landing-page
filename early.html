@@ -4840,7 +4840,7 @@
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
             
             if (typeof posthog !== 'undefined' && posthog.capture) {
-                posthog.capture('download_clicked', {
+                posthog.capture('download_cta_clicked', {
                     ...(posthogFullyInitialized ? getBaseEventProps() : {}),
                     page: 'early_access',
                     platform: platform
@@ -4975,26 +4975,13 @@
             downloadBtn.addEventListener('click', () => {
                 // Track download click
                 if (typeof posthog !== 'undefined') {
-                    posthog.capture('app_download_clicked', {
+                    posthog.capture('download_started', {
                         ...getBaseEventProps(),
                         platform: 'mac',
                         source: 'early_access_page'
                     });
                 }
-                
-                // Track download finished after a delay (heuristic approach)
-                // Most browsers don't expose download completion events for security reasons
-                // We use a reasonable timeout as a proxy for download completion
-                setTimeout(() => {
-                    if (typeof posthog !== 'undefined') {
-                        posthog.capture('app_download_finished', {
-                            ...getBaseEventProps(),
-                            platform: 'mac',
-                            source: 'early_access_page',
-                            tracking_method: 'timeout_heuristic'
-                        });
-                    }
-                }, 3000); // 3 seconds - reasonable time for download to start/complete for most connections
+
             });
         }
         
