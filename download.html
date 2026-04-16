@@ -98,80 +98,111 @@
             font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg-primary);
             min-height: 100vh;
-            display: flex; align-items: flex-start; justify-content: center;
-            padding: 6vh 1rem 3rem;
+            display: flex; align-items: center; justify-content: center;
+            padding: 2rem 1rem;
             color: var(--text-primary); line-height: 1.6;
             transition: background 0.3s ease, color 0.3s ease;
         }
 
         .container { text-align: center; width: 100%; max-width: 460px; }
 
-        .dl-icon { width: 200px; height: 200px; margin: 0 auto 0.85rem; animation: float 3s ease-in-out infinite; }
+        .dl-icon { width: 180px; height: 180px; margin: 0 auto 1.2rem; animation: float 3s ease-in-out infinite; }
         .dl-icon img { width: 100%; height: 100%; object-fit: contain; }
 
         @keyframes float {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+            50% { transform: translateY(-8px); }
         }
-
-        .dl-status-pill {
-            display: inline-flex; align-items: center; gap: 0.4rem;
-            font-size: 0.76rem; font-weight: 500; color: var(--green);
-            background: var(--green-soft); border: 1px solid var(--green-border);
-            border-radius: 100px; padding: 0.28rem 0.85rem;
-            margin-bottom: 0.85rem;
-            opacity: 0; transform: translateY(5px);
-            transition: opacity 0.5s ease, transform 0.5s ease;
-        }
-        .dl-status-pill.visible { opacity: 1; transform: translateY(0); }
 
         @keyframes spin { to { transform: rotate(360deg); } }
-        .dl-spinner {
-            width: 12px; height: 12px; flex-shrink: 0;
-            border: 2px solid var(--green-border); border-top-color: var(--green);
-            border-radius: 50%; animation: spin 0.7s linear infinite;
+
+        h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.3rem; }
+        .dl-subtitle { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.6rem; }
+
+        .dl-card {
+            background: var(--bg-secondary); border: 1px solid var(--border-light);
+            border-radius: 14px; padding: 1.4rem 1.5rem;
+            margin-bottom: 1rem;
         }
 
-        h1 { font-size: 1.45rem; font-weight: 700; margin-bottom: 0.15rem; }
-        .dl-subtitle { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.4rem; }
+        .dl-checklist { text-align: left; }
+        .dl-check {
+            display: flex; align-items: center; gap: 0.65rem;
+            padding: 0.55rem 0;
+        }
+        .dl-check + .dl-check { border-top: 1px solid var(--border-light); }
+        .dl-check-box {
+            width: 20px; height: 20px; flex-shrink: 0;
+            border-radius: 6px; border: 1.5px solid var(--border-light);
+            background: var(--bg-primary);
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.35s ease;
+        }
+        .dl-check-box svg { opacity: 0; transform: scale(0.5); transition: all 0.3s ease; }
+        .dl-check.checked .dl-check-box {
+            background: var(--green-soft); border-color: var(--green-border);
+        }
+        .dl-check.checked .dl-check-box svg { opacity: 1; transform: scale(1); }
+        .dl-check.active .dl-check-box {
+            border-color: #F59E0B; background: rgba(245, 158, 11, 0.06);
+        }
+        .dl-check.active .dl-check-box::after {
+            content: ''; width: 8px; height: 8px; border-radius: 50%;
+            background: #F59E0B;
+        }
+        .dl-check.active .dl-check-box svg { display: none; }
+        .dl-check.active .dl-check-label { font-weight: 600; }
+        .dl-check-label {
+            font-size: 0.92rem; line-height: 1.4; color: var(--text-primary);
+            transition: opacity 0.35s ease;
+        }
+        .dl-check.checked .dl-check-label {
+            text-decoration: line-through; color: var(--text-muted); opacity: 0.5;
+        }
+        .dl-check-spinner {
+            width: 16px; height: 16px; flex-shrink: 0;
+            border: 1.5px solid var(--border-light); border-top-color: var(--wave-blue);
+            border-radius: 50%; animation: spin 0.7s linear infinite;
+            display: none;
+        }
+        .dl-check.loading .dl-check-box { display: none; }
+        .dl-check.loading .dl-check-spinner { display: block; }
 
-        .dl-fallback { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 1.75rem; }
+        .dl-trust { font-size: 0.78rem; color: var(--text-muted); margin-top: 1rem; }
+        .dl-fallback { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem; }
         .dl-fallback a { color: var(--wave-blue); text-decoration: none; font-weight: 500; cursor: pointer; }
         .dl-fallback a:hover { text-decoration: underline; }
 
         .security-tip {
-            text-align: left; padding: 0.7rem 0.85rem;
+            text-align: left; padding: 0.75rem 0.9rem;
             background: var(--bg-secondary); border: 1px solid var(--border-light);
-            border-radius: 10px; margin-bottom: 1.25rem;
+            border-radius: 12px; margin-bottom: 1rem;
         }
-        .security-tip-header { font-size: 0.72rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.15rem; }
-        .security-tip-body { font-size: 0.7rem; color: var(--text-muted); line-height: 1.5; }
+        .security-tip-header { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; }
+        .security-tip-body { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; }
         .security-tip-body strong { color: var(--text-secondary); font-weight: 500; }
 
         .edge-video { display: none; margin: 0.5rem 0 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-light); }
         .edge-video video { width: 100%; display: block; }
 
-        .other-platform { font-size: 0.72rem; color: var(--text-muted); }
-        .other-platform a { color: var(--wave-blue); text-decoration: none; font-weight: 500; }
-        .other-platform a:hover { text-decoration: underline; }
-
         .mobile-transfer-icon { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.85rem; color: var(--text-secondary); opacity: 0.6; }
-        .mobile-cta-heading { font-size: 1.05rem; font-weight: 500; color: var(--text-primary); margin-bottom: 1.25rem; }
-        .mobile-cta-sub { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.25rem; opacity: 0.8; }
+        .mobile-cta-heading { font-size: 1.3rem; font-weight: 500; color: var(--text-primary); margin-bottom: 1.25rem; }
+        .mobile-cta-sub { font-size: 1.02rem; color: var(--text-secondary); margin-bottom: 1.25rem; opacity: 0.8; }
         .mobile-cta-sub.mobile-cta-platform { margin-bottom: 0.45rem; }
         .mobile-send-actions { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
-        .mobile-action-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.8rem 1rem; font-size: 0.88rem; font-weight: 600; font-family: inherit; border-radius: 10px; cursor: pointer; transition: transform 0.15s ease; text-decoration: none; }
+        .mobile-action-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.8rem 1rem; font-size: 1.1rem; font-weight: 600; font-family: inherit; border-radius: 10px; cursor: pointer; transition: transform 0.15s ease; text-decoration: none; }
         .mobile-action-primary { background: var(--wave-blue); color: white; border: none; }
         .mobile-action-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border-light); }
         .mobile-action-tertiary { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-light); font-weight: 500; }
         .mobile-action-btn:active { transform: scale(0.97); }
-        .mobile-copy-toast { display: none; margin-top: 0.75rem; padding: 0.6rem 0.9rem; background: var(--green-soft); border: 1px solid var(--green-border); border-radius: 10px; color: var(--green); font-size: 0.82rem; font-weight: 500; }
+        .mobile-copy-toast { display: none; margin-top: 0.75rem; padding: 0.6rem 0.9rem; background: var(--green-soft); border: 1px solid var(--green-border); border-radius: 10px; color: var(--green); font-size: 1.02rem; font-weight: 500; }
         .mobile-copy-toast.show { display: block; }
-        .mobile-cta-footer { margin-top: 1.25rem; font-size: 0.72rem; color: var(--text-secondary); opacity: 0.65; }
+        .mobile-cta-footer { margin-top: 1.25rem; font-size: 0.9rem; color: var(--text-secondary); opacity: 0.65; }
 
         @media (max-width: 480px) {
-            body { padding: 4vh 1rem 2rem; }
-            h1 { font-size: 1.25rem; }
+            body { padding: 1.5rem 1rem; }
+            h1 { font-size: 1.35rem; }
+            .dl-card { padding: 1.1rem 1.2rem; }
         }
     </style>
     
@@ -332,13 +363,28 @@
                 <img src="icon1.png" alt="BeatCue">
             </div>
 
-            <div class="dl-status-pill" id="dlStatusPill">
-                <span class="dl-spinner"></span>
-                <span id="dlStatusText">Preparing download&hellip;</span>
-            </div>
-
             <h1 id="downloadPageTitle">Downloading BeatCue</h1>
-            <p class="dl-subtitle" id="dlSubtitle">Free to try &middot; No account needed</p>
+            <p class="dl-subtitle" id="dlSubtitle">Free to use &middot; Email required on export</p>
+
+            <div class="dl-card">
+                <div class="dl-checklist" id="dlChecklist">
+                    <div class="dl-check loading" id="checkDownload">
+                        <div class="dl-check-spinner"></div>
+                        <div class="dl-check-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                        <div class="dl-check-label">Download BeatCue</div>
+                    </div>
+                    <div class="dl-check" id="checkInstall">
+                        <div class="dl-check-spinner"></div>
+                        <div class="dl-check-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                        <div class="dl-check-label" id="checkInstallLabel">Run the installer</div>
+                    </div>
+                    <div class="dl-check" id="checkEdit">
+                        <div class="dl-check-spinner"></div>
+                        <div class="dl-check-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                        <div class="dl-check-label">Start editing</div>
+                    </div>
+                </div>
+            </div>
 
             <p class="dl-fallback" id="dlFallback">
                 Download didn't start? <a href="#" id="manualDownloadLink">Click here</a>
@@ -354,7 +400,6 @@
                 </div>
             </div>
 
-            <p class="other-platform" id="otherPlatform"></p>
         </div>
 
         <div id="unsupportedContent" style="display: none;">
@@ -427,14 +472,10 @@
                     trackDownload(platform);
                 });
 
-                document.getElementById('otherPlatform').innerHTML =
-                    'Looking for <a href="' + DOWNLOAD_URLS[otherPlatform] + '" id="otherPlatformLink">' + otherInfo.name + ' version</a>?';
-                var opLink = document.getElementById('otherPlatformLink');
-                if (opLink) {
-                    opLink.addEventListener('click', function() { trackDownload(otherPlatform); });
-                }
 
                 if (platform === 'windows') {
+                    var securityTipEl = document.getElementById('securityTip');
+                    if (securityTipEl) securityTipEl.style.display = '';
                     document.getElementById('securityTipHeader').innerHTML = '🔒 Seeing a Windows warning?';
                     document.getElementById('securityTipBody').innerHTML = 'This is normal. Windows flags all new apps it hasn\'t seen before.<br>Click <strong>"More info"</strong> then <strong>"Run anyway"</strong> to open BeatCue.';
 
@@ -446,9 +487,9 @@
                             if (v) v.play().catch(function() {});
                         }
                     }
-                } else {
-                    document.getElementById('securityTipHeader').innerHTML = '🔒 Seeing a macOS warning?';
-                    document.getElementById('securityTipBody').innerHTML = 'Go to <strong>System Settings &rarr; Privacy &amp; Security</strong> and click <strong>"Open Anyway"</strong>. macOS warns about apps downloaded outside the App Store &mdash; this is normal.';
+                } else if (platform === 'macos') {
+                    var st = document.getElementById('securityTip');
+                    if (st) st.style.display = 'none';
                 }
                 
             } else {
@@ -471,16 +512,19 @@
                     document.body.removeChild(a);
                     trackDownload(platform);
 
-                    var pill = document.getElementById('dlStatusPill');
-                    if (pill) {
-                        pill.classList.add('visible');
-                        setTimeout(function() {
-                            document.getElementById('dlStatusText').textContent = 'Download started';
-                            var sp = pill.querySelector('.dl-spinner');
-                            if (sp) sp.style.display = 'none';
-                            pill.insertAdjacentHTML('afterbegin', '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>');
-                        }, 1500);
-                    }
+                    setTimeout(function() {
+                        var chk = document.getElementById('checkDownload');
+                        if (chk) { chk.classList.remove('loading'); chk.classList.add('checked'); }
+
+                        document.getElementById('downloadPageTitle').textContent = 'Downloading BeatCue';
+                        document.getElementById('dlSubtitle').textContent = 'Free to use \u00b7 Email required on export';
+
+                        var fileName = platform === 'macos' ? 'BeatCue.pkg' : 'BeatCue.exe';
+                        var installItem = document.getElementById('checkInstall');
+                        if (installItem) installItem.classList.add('active');
+                        var installLabel = document.getElementById('checkInstallLabel');
+                        if (installLabel) installLabel.innerHTML = 'Run <strong>' + fileName + '</strong>';
+                    }, 1500);
                 }, 400);
             }
 
