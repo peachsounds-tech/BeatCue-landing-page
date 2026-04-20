@@ -434,8 +434,8 @@
     
     <script>
         const DOWNLOAD_URLS = {
-            macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/BeatCue.pkg',
-            windows: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/BeatCue.exe'
+            macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/beatcue-installer.pkg',
+            windows: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/beatcue-installer.exe'
         };
         
         const PLATFORM_INFO = {
@@ -514,7 +514,7 @@
                         document.getElementById('downloadPageTitle').textContent = 'Downloading BeatCue';
                         document.getElementById('dlSubtitle').textContent = 'Free to use \u00b7 Email required on export';
 
-                        var fileName = platform === 'macos' ? 'BeatCue.pkg' : 'BeatCue.exe';
+                        var fileName = platform === 'macos' ? 'beatcue-installer.pkg' : 'beatcue-installer.exe';
                         var installItem = document.getElementById('checkInstall');
                         if (installItem) installItem.classList.add('active');
                         var installLabel = document.getElementById('checkInstallLabel');
