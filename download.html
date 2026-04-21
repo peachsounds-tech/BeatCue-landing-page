@@ -13,7 +13,7 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="/favicon.png">
 
-    <!-- Meta Pixel Code -->
+    <!-- Meta Pixel Code (with enhanced matching for better attribution) -->
     <script>
     !function(f,b,e,v,n,t,s)
     {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -23,10 +23,55 @@
     t.src=v;s=b.getElementsByTagName(e)[0];
     s.parentNode.insertBefore(t,s)}(window, document,'script',
     'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '708429622326201');
+    
+    // Helper: Read cookie by name
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? decodeURIComponent(match[2]) : null;
+    }
+    
+    // Helper: Get fbclid from URL or sessionStorage
+    function getFbclid() {
+        var params = new URLSearchParams(window.location.search);
+        var fbclid = params.get('fbclid');
+        if (fbclid) {
+            try { sessionStorage.setItem('cue_fbclid', fbclid); } catch(e) {}
+            return fbclid;
+        }
+        try { return sessionStorage.getItem('cue_fbclid'); } catch(e) { return null; }
+    }
+    
+    // Helper: Build _fbc cookie format if we have fbclid but no _fbc cookie
+    function getFbc() {
+        var fbc = getCookie('_fbc');
+        if (fbc) return fbc;
+        var fbclid = getFbclid();
+        if (fbclid) {
+            return 'fb.1.' + Date.now() + '.' + fbclid;
+        }
+        return null;
+    }
+    
+    // Store for use in other scripts
+    window.__cue_fbclid = getFbclid();
+    window.__cue_fbp = getCookie('_fbp');
+    window.__cue_fbc = getFbc();
+    
+    // Initialize with fbc/fbp for better matching
+    var initOptions = {};
+    if (window.__cue_fbc) {
+        initOptions.fbc = window.__cue_fbc;
+    }
+    if (window.__cue_fbp) {
+        initOptions.fbp = window.__cue_fbp;
+    }
+    
+    fbq('init', '708429622326201', {}, initOptions);
     
     // Track PageView on initial load
     fbq('track', 'PageView');
+    
+    console.log('📊 Meta Pixel: Initialized', { fbp: window.__cue_fbp, fbc: window.__cue_fbc, fbclid: window.__cue_fbclid });
     
     // Handle page restored from bfcache (back-forward cache)
     window.addEventListener('pageshow', function(event) {
@@ -41,7 +86,7 @@
     /></noscript>
     <!-- End Meta Pixel Code -->
 
-    <!-- Capture UTMs immediately before anything can modify the URL -->
+    <!-- Capture UTMs and Meta Click ID (fbclid) immediately -->
     <script>
         (function() {
             var params = new URLSearchParams(window.location.search);
@@ -56,6 +101,11 @@
                     var stored = sessionStorage.getItem('cue_session_utms');
                     if (stored) window.__cue_initial_utms = JSON.parse(stored);
                 } catch(e) {}
+            }
+            // Capture fbclid (Meta Click ID) for attribution
+            var fbclid = params.get('fbclid');
+            if (fbclid) {
+                try { sessionStorage.setItem('cue_fbclid', fbclid); } catch(e) {}
             }
             window.__cue_initial_url = window.location.href;
         })();
@@ -445,9 +495,17 @@
 
         function trackDownload(platform) {
             if (typeof fbq === 'function') {
-                fbq('track', 'StartTrial', { value: '0.00', currency: 'USD', content_name: 'BeatCue', platform: platform });
+                var eventData = { 
+                    value: '0.00', 
+                    currency: 'USD', 
+                    content_name: 'BeatCue', 
+                    platform: platform 
+                };
+                fbq('track', 'StartTrial', eventData);
+                console.log('📊 Meta Pixel: StartTrial tracked', eventData);
             }
             var props = { ...getBaseEventProps(), page: 'download', platform: platform, url: window.location.href, source: 'free_trial_page' };
+            if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
             posthog.capture('trial_download_started', props);
         }
         
