@@ -175,6 +175,41 @@
             margin-bottom: 1rem;
         }
 
+        /* Status banner above the checklist — gives the user context for the
+           spinner ("why am I still waiting?") so the don't-close-tab nudge
+           reads as helpful info, not an alarm. Auto-hidden once paired. */
+        .dl-pair-banner {
+            display: flex; align-items: center; gap: 0.7rem;
+            padding: 0.7rem 0.85rem;
+            margin-bottom: 0.85rem;
+            background: rgba(74, 144, 217, 0.06);
+            border: 1px solid rgba(74, 144, 217, 0.18);
+            border-radius: 10px;
+            font-size: 0.84rem; line-height: 1.4;
+            color: var(--text-secondary);
+            text-align: left;
+            overflow: hidden;
+            transition: opacity 0.35s ease, max-height 0.35s ease,
+                        margin 0.35s ease, padding 0.35s ease,
+                        border-width 0.35s ease;
+        }
+        .dl-pair-banner strong { color: var(--text-primary); font-weight: 600; }
+        .dl-pair-banner.hidden {
+            opacity: 0;
+            max-height: 0;
+            padding-top: 0; padding-bottom: 0;
+            margin-top: 0; margin-bottom: 0;
+            border-width: 0;
+            pointer-events: none;
+        }
+        .dl-pair-spinner {
+            width: 18px; height: 18px; flex-shrink: 0;
+            border: 1.8px solid var(--border-light);
+            border-top-color: var(--wave-blue);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
         .dl-checklist { text-align: left; }
         .dl-check {
             display: flex; align-items: center; gap: 0.65rem;
@@ -419,6 +454,10 @@
             <p class="dl-subtitle" id="dlSubtitle">Free to use &middot; Email required on export</p>
 
             <div class="dl-card">
+                <div class="dl-pair-banner" id="pairBanner">
+                    <div class="dl-pair-spinner" aria-hidden="true"></div>
+                    <div>Keep this tab open while opening BeatCue</div>
+                </div>
                 <div class="dl-checklist" id="dlChecklist">
                     <div class="dl-check loading" id="checkDownload">
                         <div class="dl-check-spinner"></div>
@@ -584,12 +623,25 @@
         }
 
         function markPairingChecklistDone() {
+            // Pairing succeeded → step 2 (install) is implicitly done too,
+            // since the app couldn't have answered without being installed.
+            var installEl = document.getElementById('checkInstall');
+            if (installEl) {
+                installEl.classList.remove('loading', 'active');
+                installEl.classList.add('checked');
+            }
             var el = document.getElementById('checkEdit');
-            if (!el) return;
-            el.classList.remove('loading', 'active');
-            el.classList.add('checked');
-            var lbl = el.querySelector('.dl-check-label');
-            if (lbl) lbl.textContent = 'Start editing';
+            if (el) {
+                el.classList.remove('loading', 'active');
+                el.classList.add('checked');
+                var lbl = el.querySelector('.dl-check-label');
+                if (lbl) lbl.textContent = 'Start editing';
+            }
+            // Pairing is done — the "keep this tab open" banner has served
+            // its purpose; collapse it so the card settles into a clean
+            // "you're connected" state.
+            var banner = document.getElementById('pairBanner');
+            if (banner) banner.classList.add('hidden');
         }
 
         function startPairingPoller() {
