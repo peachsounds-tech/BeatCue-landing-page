@@ -39,6 +39,12 @@ const PAIRINGS_ALLOWED_ORIGINS = new Set([
  *  launch). Longer windows raise the chance of NAT misattribution. */
 const PAIRING_TTL_SECONDS = 15 * 60;
 
+/** How long a "claimed:<bcid>" marker survives so the download page can
+ *  notice the desktop app paired and tick the launch checklist item. The
+ *  page polls every few seconds and stops on its own well within this
+ *  window — this is just the safety upper bound. */
+const CLAIMED_TTL_SECONDS = 10 * 60;
+
 /** Hard upper bound on incoming JSON to keep KV writes cheap. */
 const PAIRINGS_MAX_BODY_BYTES = 4 * 1024;
 
@@ -346,7 +352,7 @@ function pairingsCorsHeaders(origin) {
     const allow = PAIRINGS_ALLOWED_ORIGINS.has(origin) ? origin : 'null';
     return {
         'access-control-allow-origin': allow,
-        'access-control-allow-methods': 'POST, OPTIONS',
+        'access-control-allow-methods': 'GET, POST, OPTIONS',
         'access-control-allow-headers': 'content-type',
         'access-control-max-age': '600',
         'vary': 'origin',
@@ -523,6 +529,25 @@ async function handlePairings(request, env, url) {
         // same NAT doesn't accidentally reuse this user's bcid.
         await env.PAIRINGS.delete(key);
 
+        // Drop a short-lived breadcrumb so the still-open download page can
+        // poll /pairings/claimed/<bcid> and tick its "Start editing"
+        // checklist item. We extract the bcid from the stored payload — the
+        // app already validates it before persisting, so this is trusted.
+        try {
+            const parsed = JSON.parse(raw);
+            const claimedBcid = clampString(parsed && parsed.bcid, 96);
+            if (claimedBcid && BCID_RE.test(claimedBcid)) {
+                await env.PAIRINGS.put(
+                    `claimed:${claimedBcid}`,
+                    JSON.stringify({ at: Date.now() }),
+                    { expirationTtl: CLAIMED_TTL_SECONDS },
+                );
+            }
+        } catch (_) {
+            // Bad JSON in KV would only mean a malformed earlier write — the
+            // claim itself still succeeds. The page will just never tick.
+        }
+
         return new Response(raw, {
             status: 200,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -530,6 +555,61 @@ async function handlePairings(request, env, url) {
     }
 
     return new Response('not_found', { status: 404, headers: cors });
+}
+
+/**
+ * GET /pairings/claimed/:bcid
+ *
+ * Lightweight poll endpoint for the download page. Returns 200 with the
+ * timestamp once /pairings/claim has fired for this bcid; 404 otherwise.
+ *
+ * No auth: bcids are random 22+ char tokens, not enumerable. Worst case
+ * leak is "this bcid was paired at time T" — same info the page already
+ * knows for its own user.
+ */
+async function handleClaimedStatus(request, env, url) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    if (request.method !== 'GET') {
+        return new Response('method_not_allowed', { status: 405, headers: cors });
+    }
+    if (!env.PAIRINGS) {
+        return new Response('kv_unavailable', { status: 503, headers: cors });
+    }
+
+    // /pairings/claimed/<bcid>  →  segments: ['', 'pairings', 'claimed', '<bcid>']
+    const segments = url.pathname.split('/');
+    const bcid = clampString(segments[3], 96);
+    if (!bcid || !BCID_RE.test(bcid)) {
+        return new Response(JSON.stringify({ ok: false, error: 'invalid_bcid' }), {
+            status: 400,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    const raw = await env.PAIRINGS.get(`claimed:${bcid}`);
+    if (!raw) {
+        return new Response(JSON.stringify({ ok: false, claimed: false }), {
+            status: 404,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    let payload = { claimed: true };
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.at === 'number') payload.at = parsed.at;
+    } catch (_) { /* tolerate */ }
+    payload.ok = true;
+
+    return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+    });
 }
 
 /**
@@ -549,6 +629,10 @@ export default {
 
         if (url.pathname === '/pairings' || url.pathname === '/pairings/claim') {
             return handlePairings(request, env, url);
+        }
+
+        if (url.pathname.startsWith('/pairings/claimed/')) {
+            return handleClaimedStatus(request, env, url);
         }
 
         return new Response('Not found', { status: 404 });
