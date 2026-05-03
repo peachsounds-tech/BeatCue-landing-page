@@ -16,12 +16,22 @@ const POSTHOG_HOST = 'https://us.i.posthog.com';
 
 // ─── Pairing constants ────────────────────────────────────────────────────────
 
-/** Origins that may POST /pairings from a browser (CORS allowlist). */
+/** Origins that may POST /pairings from a browser (CORS allowlist).
+ *  Includes localhost variants so we can run end-to-end tests against the
+ *  live worker without standing up a separate dev deployment. The risk
+ *  surface is "any process on a developer machine" — strictly smaller than
+ *  what curl/scripts already enjoy via the no-Origin path. */
 const PAIRINGS_ALLOWED_ORIGINS = new Set([
     'https://gocue.app',
     'https://www.gocue.app',
     'https://beatcue.app',
     'https://www.beatcue.app',
+    'http://localhost:8000',
+    'http://localhost:8001',
+    'http://localhost:8080',
+    'http://127.0.0.1:8000',
+    'http://127.0.0.1:8001',
+    'http://127.0.0.1:8080',
 ]);
 
 /** How long a pending pairing record lingers before KV evicts it.
