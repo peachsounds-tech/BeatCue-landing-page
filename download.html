@@ -175,41 +175,6 @@
             margin-bottom: 1rem;
         }
 
-        /* Status banner above the checklist — gives the user context for the
-           spinner ("why am I still waiting?") so the don't-close-tab nudge
-           reads as helpful info, not an alarm. Auto-hidden once paired. */
-        .dl-pair-banner {
-            display: flex; align-items: center; gap: 0.7rem;
-            padding: 0.7rem 0.85rem;
-            margin-bottom: 0.85rem;
-            background: rgba(74, 144, 217, 0.06);
-            border: 1px solid rgba(74, 144, 217, 0.18);
-            border-radius: 10px;
-            font-size: 0.84rem; line-height: 1.4;
-            color: var(--text-secondary);
-            text-align: left;
-            overflow: hidden;
-            transition: opacity 0.35s ease, max-height 0.35s ease,
-                        margin 0.35s ease, padding 0.35s ease,
-                        border-width 0.35s ease;
-        }
-        .dl-pair-banner strong { color: var(--text-primary); font-weight: 600; }
-        .dl-pair-banner.hidden {
-            opacity: 0;
-            max-height: 0;
-            padding-top: 0; padding-bottom: 0;
-            margin-top: 0; margin-bottom: 0;
-            border-width: 0;
-            pointer-events: none;
-        }
-        .dl-pair-spinner {
-            width: 18px; height: 18px; flex-shrink: 0;
-            border: 1.8px solid var(--border-light);
-            border-top-color: var(--wave-blue);
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
-
         .dl-checklist { text-align: left; }
         .dl-check {
             display: flex; align-items: center; gap: 0.65rem;
@@ -252,6 +217,21 @@
         }
         .dl-check.loading .dl-check-box { display: none; }
         .dl-check.loading .dl-check-spinner { display: block; }
+
+        /* Shown on HTTPS only: Chrome may prompt for loopback/local access when
+           this page polls 127.0.0.1 for pairing (Local Network Access policy). */
+        .dl-lna-hint {
+            display: none;
+            margin-top: 0.85rem;
+            padding-top: 0.85rem;
+            border-top: 1px solid var(--border-light);
+            font-size: 0.76rem;
+            line-height: 1.45;
+            color: var(--text-muted);
+            text-align: left;
+        }
+        .dl-lna-hint.visible { display: block; }
+        .dl-lna-hint strong { color: var(--text-secondary); font-weight: 600; }
 
         .dl-trust { font-size: 0.78rem; color: var(--text-muted); margin-top: 1rem; }
         .dl-fallback { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem; }
@@ -454,10 +434,6 @@
             <p class="dl-subtitle" id="dlSubtitle">Free to use &middot; Email required on export</p>
 
             <div class="dl-card">
-                <div class="dl-pair-banner" id="pairBanner">
-                    <div class="dl-pair-spinner" aria-hidden="true"></div>
-                    <div>Keep this tab open while opening BeatCue</div>
-                </div>
                 <div class="dl-checklist" id="dlChecklist">
                     <div class="dl-check loading" id="checkDownload">
                         <div class="dl-check-spinner"></div>
@@ -475,6 +451,9 @@
                         <div class="dl-check-label">Start editing</div>
                     </div>
                 </div>
+                <p class="dl-lna-hint" id="lnaHint">
+                    If your browser asks to access this device or your local network, choose <strong>Allow</strong> so BeatCue on your computer can connect. Blocking it stops pairing.
+                </p>
             </div>
 
             <p class="dl-fallback" id="dlFallback">
@@ -534,10 +513,6 @@
             macos: { name: 'macOS' },
             windows: { name: 'Windows' }
         };
-        
-        // Check if Windows downloads should be blocked (force_mac=true)
-        const urlParams = new URLSearchParams(window.location.search);
-        const forceMac = urlParams.get('force_mac') === 'true';
 
         function trackDownload(platform) {
             if (typeof fbq === 'function') {
@@ -605,12 +580,24 @@
         }
 
         function postPair(port, nonce, bcid) {
+            // Send Facebook attribution cookies/IDs so the app can persist them
+            // for server-side Conversion API later. _fbp / _fbc cookies are read
+            // up-front in the head; fbclid is also captured from the URL.
+            var payload = {
+                bcid: bcid,
+                nonce: nonce,
+                web_ts: Date.now()
+            };
+            if (window.__cue_fbp) payload.fbp = window.__cue_fbp;
+            if (window.__cue_fbc) payload.fbc = window.__cue_fbc;
+            if (window.__cue_fbclid) payload.fbclid = window.__cue_fbclid;
+
             return fetch('http://127.0.0.1:' + port + '/beatcue/pair', {
                 method: 'POST',
                 mode: 'cors',
                 credentials: 'omit',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ bcid: bcid, nonce: nonce, web_ts: Date.now() })
+                body: JSON.stringify(payload)
             }).then(function(r) {
                 return r.text().then(function(t) {
                     try {
@@ -622,26 +609,28 @@
             });
         }
 
+        function markEditCheckpointWaiting() {
+            var el = document.getElementById('checkEdit');
+            if (!el) return;
+            el.classList.remove('checked', 'active');
+            el.classList.add('loading');
+            var lbl = el.querySelector('.dl-check-label');
+            if (lbl) lbl.textContent = 'Keep this tab open while BeatCue starts';
+        }
+
         function markPairingChecklistDone() {
-            // Pairing succeeded → step 2 (install) is implicitly done too,
-            // since the app couldn't have answered without being installed.
             var installEl = document.getElementById('checkInstall');
             if (installEl) {
                 installEl.classList.remove('loading', 'active');
                 installEl.classList.add('checked');
             }
+
             var el = document.getElementById('checkEdit');
-            if (el) {
-                el.classList.remove('loading', 'active');
-                el.classList.add('checked');
-                var lbl = el.querySelector('.dl-check-label');
-                if (lbl) lbl.textContent = 'Start editing';
-            }
-            // Pairing is done — the "keep this tab open" banner has served
-            // its purpose; collapse it so the card settles into a clean
-            // "you're connected" state.
-            var banner = document.getElementById('pairBanner');
-            if (banner) banner.classList.add('hidden');
+            if (!el) return;
+            el.classList.remove('loading', 'active');
+            el.classList.add('checked');
+            var lbl = el.querySelector('.dl-check-label');
+            if (lbl) lbl.textContent = 'Start editing';
         }
 
         function startPairingPoller() {
@@ -696,35 +685,8 @@
         
         function setupUI(platform) {
             var isSupported = platform === 'macos' || platform === 'windows';
-            
-            // Block Windows downloads if force_mac=true
-            var blockWindowsDownload = forceMac && platform === 'windows';
 
-            if (blockWindowsDownload) {
-                // Show "Windows coming soon" message
-                document.getElementById('supportedContent').style.display = 'block';
-                document.getElementById('unsupportedContent').style.display = 'none';
-                
-                document.getElementById('downloadPageTitle').textContent = 'Windows Coming Soon';
-                document.getElementById('dlSubtitle').textContent = 'BeatCue is currently available for macOS only';
-                
-                // Hide the checklist
-                var checklist = document.getElementById('dlChecklist');
-                if (checklist) checklist.style.display = 'none';
-                
-                // Hide fallback link
-                var fallback = document.getElementById('dlFallback');
-                if (fallback) fallback.style.display = 'none';
-                
-                // Update security tip to show Windows coming soon message
-                var securityTipEl = document.getElementById('securityTip');
-                if (securityTipEl) {
-                    securityTipEl.style.display = '';
-                    document.getElementById('securityTipHeader').innerHTML = '🪟 Windows version in development';
-                    document.getElementById('securityTipBody').innerHTML = 'We\'re working on bringing BeatCue to Windows.<br>In the meantime, BeatCue is available for <strong>macOS 14+</strong>.';
-                }
-                
-            } else if (isSupported) {
+            if (isSupported) {
                 document.getElementById('supportedContent').style.display = 'block';
                 document.getElementById('unsupportedContent').style.display = 'none';
 
@@ -766,8 +728,20 @@
         function init() {
             var platform = detectedPlatform;
             setupUI(platform);
-            
-            // Block Windows downloads if force_mac=true
+
+            // Chrome 142+ (and similar): a public HTTPS page calling http://127.0.0.1
+            // for pairing triggers a permission prompt ("Access other apps and
+            // services on this device"). We cannot remove it from JS; surface a
+            // hint so users choose Allow.
+            if ((platform === 'macos' || platform === 'windows') && location.protocol === 'https:') {
+                var lna = document.getElementById('lnaHint');
+                if (lna) lna.classList.add('visible');
+            }
+
+            // ?force_mac=true forces the macOS asset and blocks the Windows path (legacy debug flag)
+            var initParams = new URLSearchParams(window.location.search);
+            var forceMacFlag = initParams.get('force_mac');
+            var forceMac = forceMacFlag === 'true' || forceMacFlag === '1';
             var blockWindowsDownload = forceMac && platform === 'windows';
 
             if ((platform === 'macos' || platform === 'windows') && !blockWindowsDownload) {
@@ -793,6 +767,14 @@
                         if (installItem) installItem.classList.add('active');
                         var installLabel = document.getElementById('checkInstallLabel');
                         if (installLabel) installLabel.innerHTML = 'Run <strong>' + fileName + '</strong>';
+
+                        var alreadyPaired = false;
+                        try { alreadyPaired = sessionStorage.getItem('cue_paired') === 'true'; } catch (e) { /* ignore */ }
+                        if (alreadyPaired) {
+                            markPairingChecklistDone();
+                        } else {
+                            markEditCheckpointWaiting();
+                        }
                     }, 1500);
                 }, 400);
             }
