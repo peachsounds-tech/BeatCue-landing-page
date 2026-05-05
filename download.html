@@ -495,10 +495,138 @@
             macos: { name: 'macOS' },
             windows: { name: 'Windows' }
         };
-        
+
+        // Base URL of the pairing worker (Cloudflare Workers). Stores the
+        // bcid + Meta attribution under a (coarse_ip, os) key so the freshly
+        // installed desktop app can claim it on first launch.
+        // TODO: bind a custom subdomain (e.g. https://api.gocue.app) and update
+        // here + in Source/PluginProcessor.cpp (kPairingsBase).
+        const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
+
         // Check if Windows downloads should be blocked (force_mac=true)
         const urlParams = new URLSearchParams(window.location.search);
         const forceMac = urlParams.get('force_mac') === 'true';
+
+        // Fire-and-forget: hand the current attribution payload to the worker
+        // so the desktop app can claim it on first launch. Idempotent — repeat
+        // calls just overwrite the same KV entry. Failures are silent because
+        // a missed pairing only costs us a single anonymous app session.
+        function postPairing(platform) {
+            try {
+                var bcid = window.__cue_bcid;
+                if (!bcid) return;
+
+                var payload = {
+                    bcid: bcid,
+                    fbp: window.__cue_fbp || null,
+                    fbc: window.__cue_fbc || null,
+                    fbclid: window.__cue_fbclid || null,
+                    utms: getUtmProps(),
+                    platform: platform
+                };
+
+                fetch(PAIRINGS_BASE + '/pairings', {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).catch(function() {});
+            } catch (e) { /* never block download on a pairing hiccup */ }
+        }
+
+        // Tunable: every 3s we ask the worker if this bcid was claimed by a
+        // freshly launched desktop app. We give up after 10 minutes of wall
+        // time, and pause polling whenever the tab is hidden so we don't
+        // burn battery in the background. Single in-flight request at a time.
+        var PAIRING_POLL_INTERVAL_MS = 3000;
+        var PAIRING_POLL_MAX_MS      = 10 * 60 * 1000;
+
+        var pairingPoll = {
+            timer:    null,
+            inflight: false,
+            startedAt: 0,
+            bcid:     null,
+            done:     false,
+        };
+
+        function markPairedInChecklist() {
+            // Successful pairing implies installer ran AND app launched, so
+            // collapse the middle "active" state into a check too.
+            var install = document.getElementById('checkInstall');
+            if (install) {
+                install.classList.remove('active', 'loading');
+                install.classList.add('checked');
+            }
+            var edit = document.getElementById('checkEdit');
+            if (edit) {
+                edit.classList.remove('active', 'loading');
+                edit.classList.add('checked');
+            }
+        }
+
+        function stopPairingPoll() {
+            if (pairingPoll.timer) {
+                clearInterval(pairingPoll.timer);
+                pairingPoll.timer = null;
+            }
+        }
+
+        function checkPairingOnce() {
+            if (pairingPoll.done || pairingPoll.inflight) return;
+            if (Date.now() - pairingPoll.startedAt > PAIRING_POLL_MAX_MS) {
+                pairingPoll.done = true;
+                stopPairingPoll();
+                return;
+            }
+            if (document.hidden) return; // resume on visibilitychange
+            if (!pairingPoll.bcid) return;
+
+            pairingPoll.inflight = true;
+            fetch(PAIRINGS_BASE + '/pairings/claimed/' + encodeURIComponent(pairingPoll.bcid), {
+                method: 'GET',
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'no-store',
+            })
+                .then(function(r) {
+                    if (r.status === 200) return r.json();
+                    return null;
+                })
+                .then(function(json) {
+                    if (json && json.ok) {
+                        pairingPoll.done = true;
+                        stopPairingPoll();
+                        markPairedInChecklist();
+                        if (typeof posthog !== 'undefined' && posthog.capture) {
+                            posthog.capture('pairing_observed_in_page', {
+                                ...getBaseEventProps(),
+                                bcid: pairingPoll.bcid,
+                                latency_ms: Date.now() - pairingPoll.startedAt,
+                            });
+                        }
+                    }
+                })
+                .catch(function() { /* network blip — try again next tick */ })
+                .finally(function() { pairingPoll.inflight = false; });
+        }
+
+        function startPairingPoll() {
+            if (pairingPoll.timer || pairingPoll.done) return;
+            var bcid = window.__cue_bcid;
+            if (!bcid) return;
+            pairingPoll.bcid = bcid;
+            pairingPoll.startedAt = Date.now();
+            // First check is immediate so a refresh after pairing already
+            // happened ticks the bullet without waiting a full interval.
+            checkPairingOnce();
+            pairingPoll.timer = setInterval(checkPairingOnce, PAIRING_POLL_INTERVAL_MS);
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) checkPairingOnce();
+        });
 
         function trackDownload(platform) {
             if (typeof fbq === 'function') {
@@ -514,6 +642,9 @@
             var props = { ...getBaseEventProps(), page: 'download', platform: platform, url: window.location.href, source: 'free_trial_page' };
             if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
             posthog.capture('trial_download_started', props);
+
+            postPairing(platform);
+            startPairingPoll();
         }
 
         function setupUI(platform) {

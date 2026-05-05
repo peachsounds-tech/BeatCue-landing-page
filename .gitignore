@@ -14,6 +14,9 @@ Thumbs.db
 # Node modules (if you add any)
 node_modules/
 
+# Wrangler local dev cache (Miniflare KV/R2 emulation, build outputs)
+.wrangler/
+
 # Environment files
 .env
 .env.local

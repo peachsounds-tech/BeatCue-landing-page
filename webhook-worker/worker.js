@@ -1,13 +1,56 @@
 /**
- * Lemon Squeezy → PostHog Webhook Worker
- * 
- * Receives webhooks from Lemon Squeezy and forwards events to PostHog
- * Deploy to Cloudflare Workers
+ * BeatCue Webhook Worker
+ *
+ * Two responsibilities:
+ *   1. Lemon Squeezy → PostHog: receive purchase webhooks and forward to PostHog
+ *   2. Web ↔ desktop pairing: bridge the bcid + Meta attribution captured on
+ *      the download page over to the freshly installed desktop app, without
+ *      tripping Chrome's Local Network Access prompt.
+ *
+ * Deploy to Cloudflare Workers via `wrangler deploy`.
  */
 
 // PostHog configuration
 const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
 const POSTHOG_HOST = 'https://us.i.posthog.com';
+
+// ─── Pairing constants ────────────────────────────────────────────────────────
+
+/** Origins that may POST /pairings from a browser (CORS allowlist).
+ *  Includes localhost variants so we can run end-to-end tests against the
+ *  live worker without standing up a separate dev deployment. The risk
+ *  surface is "any process on a developer machine" — strictly smaller than
+ *  what curl/scripts already enjoy via the no-Origin path. */
+const PAIRINGS_ALLOWED_ORIGINS = new Set([
+    'https://gocue.app',
+    'https://www.gocue.app',
+    'https://beatcue.app',
+    'https://www.beatcue.app',
+    'http://localhost:8000',
+    'http://localhost:8001',
+    'http://localhost:8080',
+    'http://127.0.0.1:8000',
+    'http://127.0.0.1:8001',
+    'http://127.0.0.1:8080',
+]);
+
+/** How long a pending pairing record lingers before KV evicts it.
+ *  15 minutes covers most install flows (download → run installer → first
+ *  launch). Longer windows raise the chance of NAT misattribution. */
+const PAIRING_TTL_SECONDS = 15 * 60;
+
+/** How long a "claimed:<bcid>" marker survives so the download page can
+ *  notice the desktop app paired and tick the launch checklist item. The
+ *  page polls every few seconds and stops on its own well within this
+ *  window — this is just the safety upper bound. */
+const CLAIMED_TTL_SECONDS = 10 * 60;
+
+/** Hard upper bound on incoming JSON to keep KV writes cheap. */
+const PAIRINGS_MAX_BODY_BYTES = 4 * 1024;
+
+/** bcid shape contract — must match the page-side mint and the desktop
+ *  applyPairing() validator. */
+const BCID_RE = /^bc_[A-Za-z0-9-]{8,64}$/;
 
 // Lemon Squeezy webhook secret (set this in Cloudflare dashboard as environment variable)
 // const LEMONSQUEEZY_WEBHOOK_SECRET = env.LEMONSQUEEZY_WEBHOOK_SECRET;
@@ -301,23 +344,297 @@ async function handleLicenseKeyCreated(data) {
     await sendToPostHog('license_key_created', hashedEmail, properties);
 }
 
+// ─── Pairing helpers ──────────────────────────────────────────────────────────
+
+/** Build CORS headers for a request. Returns the strict-mode set if the origin
+ *  is on the allowlist, otherwise a deny header (browsers will fail-closed). */
+function pairingsCorsHeaders(origin) {
+    const allow = PAIRINGS_ALLOWED_ORIGINS.has(origin) ? origin : 'null';
+    return {
+        'access-control-allow-origin': allow,
+        'access-control-allow-methods': 'GET, POST, OPTIONS',
+        'access-control-allow-headers': 'content-type',
+        'access-control-max-age': '600',
+        'vary': 'origin',
+    };
+}
+
+/** Coarsen the connecting IP so minor rotation between page load and app
+ *  launch (DHCP renewal, dual-stack toggling) doesn't break matching.
+ *    - IPv4 → /24 (zero out the last octet)
+ *    - IPv6 → /48 (keep first three hextets)
+ *  Falls back to the raw value if parsing fails. */
+function coarseIp(req) {
+    const ip = req.headers.get('cf-connecting-ip') || '';
+    if (!ip) return '';
+    if (ip.includes(':')) {
+        const parts = ip.split(':');
+        return parts.slice(0, 3).join(':') + '::';
+    }
+    const parts = ip.split('.');
+    if (parts.length !== 4) return ip;
+    return `${parts[0]}.${parts[1]}.${parts[2]}.0`;
+}
+
+/** Derive a coarse OS family from a UA string, or accept an explicit value
+ *  (the desktop app sends `{ os: "mac"|"win" }` — no UA there). */
+function osFamily(ua, explicit) {
+    if (explicit === 'mac' || explicit === 'win') return explicit;
+    if (!ua) return 'other';
+    if (/Macintosh|Mac OS X/.test(ua)) return 'mac';
+    if (/Windows NT/.test(ua))         return 'win';
+    return 'other';
+}
+
+/** Hash (coarse_ip, os) → KV key prefix. 24 hex chars (96 bits) is plenty
+ *  of entropy for the small key space we operate in, and short enough to
+ *  keep KV reads cheap. */
+async function buildClaimKey(ip, os) {
+    const enc = new TextEncoder().encode(`${ip}|${os}`);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    const hex = [...new Uint8Array(buf)]
+        .slice(0, 12)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    return `pair:${hex}`;
+}
+
+function clampString(v, maxLen) {
+    if (typeof v !== 'string') return null;
+    const trimmed = v.trim();
+    if (!trimmed) return null;
+    return trimmed.length > maxLen ? trimmed.slice(0, maxLen) : trimmed;
+}
+
+function clampUtms(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const out = {};
+    const keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+    for (const k of keys) {
+        const v = clampString(raw[k], 256);
+        if (v) out[k] = v;
+    }
+    return Object.keys(out).length ? out : null;
+}
+
+async function readJsonBounded(request) {
+    const text = await request.text();
+    if (text.length > PAIRINGS_MAX_BODY_BYTES) {
+        const err = new Error('payload_too_large');
+        err.statusCode = 413;
+        throw err;
+    }
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        const err = new Error('invalid_json');
+        err.statusCode = 400;
+        throw err;
+    }
+}
+
+/**
+ * Pairing route handler.
+ *
+ *   POST /pairings        — page submits attribution payload (CORS-gated)
+ *   POST /pairings/claim  — desktop app fetches the pending pairing on
+ *                           first launch
+ *   OPTIONS /pairings*    — CORS preflight
+ */
+async function handlePairings(request, env, url) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+
+    if (request.method !== 'POST') {
+        return new Response('method_not_allowed', { status: 405, headers: cors });
+    }
+
+    if (!env.PAIRINGS) {
+        console.error('PAIRINGS KV binding missing — did you bind it in wrangler.toml?');
+        return new Response('kv_unavailable', { status: 503, headers: cors });
+    }
+
+    let body;
+    try {
+        body = await readJsonBounded(request);
+    } catch (e) {
+        return new Response(JSON.stringify({ ok: false, error: e.message }), {
+            status: e.statusCode || 400,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    // ── Page → store pending pairing ─────────────────────────────────────────
+    if (url.pathname === '/pairings') {
+        // CORS gate: browsers must come from an allowed origin. Non-browser
+        // calls (curl / scripts) won't have an origin header — those are
+        // accepted so we can smoke-test from the command line.
+        if (origin && !PAIRINGS_ALLOWED_ORIGINS.has(origin)) {
+            return new Response(JSON.stringify({ ok: false, error: 'forbidden_origin' }), {
+                status: 403,
+                headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+            });
+        }
+
+        const bcid = clampString(body.bcid, 96);
+        if (!bcid || !BCID_RE.test(bcid)) {
+            return new Response(JSON.stringify({ ok: false, error: 'invalid_bcid' }), {
+                status: 400,
+                headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+            });
+        }
+
+        const ua = request.headers.get('user-agent') || '';
+        const os = osFamily(ua);
+        const key = await buildClaimKey(coarseIp(request), os);
+
+        const payload = {
+            bcid,
+            fbp:    clampString(body.fbp,    256),
+            fbc:    clampString(body.fbc,    256),
+            fbclid: clampString(body.fbclid, 256),
+            utms:   clampUtms(body.utms),
+            ts:     Date.now(),
+            os,
+        };
+
+        await env.PAIRINGS.put(key, JSON.stringify(payload), {
+            expirationTtl: PAIRING_TTL_SECONDS,
+        });
+
+        return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    // ── App → claim pending pairing ──────────────────────────────────────────
+    if (url.pathname === '/pairings/claim') {
+        const os = osFamily(request.headers.get('user-agent') || '', body.os);
+        const key = await buildClaimKey(coarseIp(request), os);
+
+        const raw = await env.PAIRINGS.get(key);
+        if (!raw) {
+            return new Response(JSON.stringify({ ok: false, error: 'no_pending_pairing' }), {
+                status: 404,
+                headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+            });
+        }
+
+        // Single-shot: delete on read so a second BeatCue install behind the
+        // same NAT doesn't accidentally reuse this user's bcid.
+        await env.PAIRINGS.delete(key);
+
+        // Drop a short-lived breadcrumb so the still-open download page can
+        // poll /pairings/claimed/<bcid> and tick its "Start editing"
+        // checklist item. We extract the bcid from the stored payload — the
+        // app already validates it before persisting, so this is trusted.
+        try {
+            const parsed = JSON.parse(raw);
+            const claimedBcid = clampString(parsed && parsed.bcid, 96);
+            if (claimedBcid && BCID_RE.test(claimedBcid)) {
+                await env.PAIRINGS.put(
+                    `claimed:${claimedBcid}`,
+                    JSON.stringify({ at: Date.now() }),
+                    { expirationTtl: CLAIMED_TTL_SECONDS },
+                );
+            }
+        } catch (_) {
+            // Bad JSON in KV would only mean a malformed earlier write — the
+            // claim itself still succeeds. The page will just never tick.
+        }
+
+        return new Response(raw, {
+            status: 200,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    return new Response('not_found', { status: 404, headers: cors });
+}
+
+/**
+ * GET /pairings/claimed/:bcid
+ *
+ * Lightweight poll endpoint for the download page. Returns 200 with the
+ * timestamp once /pairings/claim has fired for this bcid; 404 otherwise.
+ *
+ * No auth: bcids are random 22+ char tokens, not enumerable. Worst case
+ * leak is "this bcid was paired at time T" — same info the page already
+ * knows for its own user.
+ */
+async function handleClaimedStatus(request, env, url) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    if (request.method !== 'GET') {
+        return new Response('method_not_allowed', { status: 405, headers: cors });
+    }
+    if (!env.PAIRINGS) {
+        return new Response('kv_unavailable', { status: 503, headers: cors });
+    }
+
+    // /pairings/claimed/<bcid>  →  segments: ['', 'pairings', 'claimed', '<bcid>']
+    const segments = url.pathname.split('/');
+    const bcid = clampString(segments[3], 96);
+    if (!bcid || !BCID_RE.test(bcid)) {
+        return new Response(JSON.stringify({ ok: false, error: 'invalid_bcid' }), {
+            status: 400,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    const raw = await env.PAIRINGS.get(`claimed:${bcid}`);
+    if (!raw) {
+        return new Response(JSON.stringify({ ok: false, claimed: false }), {
+            status: 404,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    let payload = { claimed: true };
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.at === 'number') payload.at = parsed.at;
+    } catch (_) { /* tolerate */ }
+    payload.ok = true;
+
+    return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+    });
+}
+
 /**
  * Cloudflare Worker entry point
  */
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
-        
-        // Health check endpoint
+
         if (url.pathname === '/health') {
             return new Response('OK', { status: 200 });
         }
-        
-        // Webhook endpoint
+
         if (url.pathname === '/webhook/lemonsqueezy') {
             return handleWebhook(request, env);
         }
-        
+
+        if (url.pathname === '/pairings' || url.pathname === '/pairings/claim') {
+            return handlePairings(request, env, url);
+        }
+
+        if (url.pathname.startsWith('/pairings/claimed/')) {
+            return handleClaimedStatus(request, env, url);
+        }
+
         return new Response('Not found', { status: 404 });
     }
 };

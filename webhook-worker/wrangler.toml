@@ -12,3 +12,20 @@ compatibility_date = "2024-01-01"
 # Secret variables (set via `wrangler secret put LEMONSQUEEZY_WEBHOOK_SECRET`)
 # LEMONSQUEEZY_WEBHOOK_SECRET = "set-via-wrangler-secret"
 
+# ─── Pairing KV ───────────────────────────────────────────────────────────────
+# Stores pending web→app pairing payloads (bcid + Meta attribution) for ~15
+# minutes between download and first app launch. One write per download, one
+# read+delete per first launch. Free tier (1k writes/day) is plenty until
+# >1k installs/day.
+#
+# First-time setup:
+#   1. wrangler kv namespace create PAIRINGS
+#      → prints an `id = "..."` line; paste it into the binding below.
+#   2. wrangler kv namespace create PAIRINGS --preview
+#      → prints a `preview_id = "..."` line; paste that for `wrangler dev`.
+#   3. wrangler deploy
+[[kv_namespaces]]
+binding = "PAIRINGS"
+id = "ec35a8800c954b81a7c3d2a3512b5cd6"
+preview_id = "abf00fa20f7347dcbe0f3a2d70c90fb1"
+
