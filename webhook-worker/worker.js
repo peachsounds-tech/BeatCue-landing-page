@@ -484,6 +484,14 @@ async function handlePairings(request, env, url) {
     try {
         body = await readJsonBounded(request);
     } catch (e) {
+        console.log(JSON.stringify({
+            evt: 'pair_bad_body',
+            path: url.pathname,
+            error: e.message,
+            content_length: request.headers.get('content-length') || null,
+            content_type: request.headers.get('content-type') || null,
+            origin,
+        }));
         return new Response(JSON.stringify({ ok: false, error: e.message }), {
             status: e.statusCode || 400,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -496,6 +504,7 @@ async function handlePairings(request, env, url) {
         // calls (curl / scripts) won't have an origin header — those are
         // accepted so we can smoke-test from the command line.
         if (origin && !PAIRINGS_ALLOWED_ORIGINS.has(origin)) {
+            console.log(JSON.stringify({ evt: 'pair_forbidden_origin', origin }));
             return new Response(JSON.stringify({ ok: false, error: 'forbidden_origin' }), {
                 status: 403,
                 headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -504,6 +513,15 @@ async function handlePairings(request, env, url) {
 
         const bcid = clampString(body.bcid, 96);
         if (!bcid || !BCID_RE.test(bcid)) {
+            console.log(JSON.stringify({
+                evt: 'pair_invalid_bcid',
+                origin,
+                bcid_present: typeof body.bcid !== 'undefined',
+                bcid_type: typeof body.bcid,
+                bcid_preview: typeof body.bcid === 'string' ? body.bcid.slice(0, 32) : null,
+                bcid_length: typeof body.bcid === 'string' ? body.bcid.length : null,
+                body_keys: Object.keys(body || {}),
+            }));
             return new Response(JSON.stringify({ ok: false, error: 'invalid_bcid' }), {
                 status: 400,
                 headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -538,6 +556,21 @@ async function handlePairings(request, env, url) {
         }
         await Promise.all(writes);
 
+        // Single-line structured log so `wrangler tail` shows what the
+        // worker actually saw for this request — IP family, ASN, OS, key
+        // hashes — without leaking the bcid or attribution payload.
+        console.log(JSON.stringify({
+            evt: 'pair_put',
+            bcid_prefix: bcid.slice(0, 8),
+            os,
+            ip_family: (request.headers.get('cf-connecting-ip') || '').includes(':') ? 'v6' : 'v4',
+            country: (request.cf && request.cf.country) || null,
+            asn:     (request.cf && request.cf.asn)     || null,
+            ip_key:  ipKey,
+            asn_key: asnKey,
+            wrote:   writes.length,
+        }));
+
         return new Response(JSON.stringify({ ok: true }), {
             status: 200,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -556,12 +589,22 @@ async function handlePairings(request, env, url) {
         // network, different IP family, otherwise different hashes.
         let raw = await env.PAIRINGS.get(ipKey);
         let hitKey = ipKey;
+        let hitVia = 'ip';
         if (!raw && asnKey && asnKey !== ipKey) {
             raw = await env.PAIRINGS.get(asnKey);
-            if (raw) hitKey = asnKey;
+            if (raw) { hitKey = asnKey; hitVia = 'asn'; }
         }
 
         if (!raw) {
+            console.log(JSON.stringify({
+                evt: 'pair_claim_miss',
+                os,
+                ip_family: (request.headers.get('cf-connecting-ip') || '').includes(':') ? 'v6' : 'v4',
+                country: (request.cf && request.cf.country) || null,
+                asn:     (request.cf && request.cf.asn)     || null,
+                ip_key:  ipKey,
+                asn_key: asnKey,
+            }));
             return new Response(JSON.stringify({ ok: false, error: 'no_pending_pairing' }), {
                 status: 404,
                 headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -602,6 +645,19 @@ async function handlePairings(request, env, url) {
             const { _alt, ...rest } = parsed;
             responseBody = JSON.stringify(rest);
         }
+
+        console.log(JSON.stringify({
+            evt: 'pair_claim_hit',
+            via: hitVia,
+            bcid_prefix: claimedBcid ? claimedBcid.slice(0, 8) : null,
+            os,
+            ip_family: (request.headers.get('cf-connecting-ip') || '').includes(':') ? 'v6' : 'v4',
+            country: (request.cf && request.cf.country) || null,
+            asn:     (request.cf && request.cf.asn)     || null,
+            ip_key:  ipKey,
+            asn_key: asnKey,
+            payload_age_s: parsed && typeof parsed.ts === 'number' ? Math.round((Date.now() - parsed.ts) / 1000) : null,
+        }));
 
         return new Response(responseBody, {
             status: 200,
