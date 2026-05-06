@@ -399,6 +399,28 @@ async function buildClaimKey(ip, os) {
     return `pair:${hex}`;
 }
 
+/** Fallback key for dual-stack networks where the page may connect to the
+ *  worker over IPv4 while the desktop app uses IPv6 (or vice-versa). The
+ *  ip-coarsened primary key in that case lives under a different hash for
+ *  the two requests, so the claim misses. ASN+country is independent of
+ *  IP family and stays stable across the small download → first-launch
+ *  window. Cross-user collision risk: two BeatCue downloads + first
+ *  launches, same ASN+country+OS, both within ~15 minutes — accepted given
+ *  current install volume. Returns null when Cloudflare didn't populate
+ *  request.cf (local dev / pathological edge cases) so callers can skip
+ *  the fallback gracefully. */
+async function buildAsnKey(cf, os) {
+    if (!cf || typeof cf.asn !== 'number' || cf.asn <= 0) return null;
+    const country = (cf.country && typeof cf.country === 'string') ? cf.country : 'XX';
+    const enc = new TextEncoder().encode(`asn:${cf.asn}|${country}|${os}`);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    const hex = [...new Uint8Array(buf)]
+        .slice(0, 12)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    return `pair:${hex}`;
+}
+
 function clampString(v, maxLen) {
     if (typeof v !== 'string') return null;
     const trimmed = v.trim();
@@ -490,8 +512,12 @@ async function handlePairings(request, env, url) {
 
         const ua = request.headers.get('user-agent') || '';
         const os = osFamily(ua);
-        const key = await buildClaimKey(coarseIp(request), os);
+        const ipKey  = await buildClaimKey(coarseIp(request), os);
+        const asnKey = await buildAsnKey(request.cf, os);
 
+        // Cross-key linkage: store the sibling under `_alt` so the claim
+        // path can delete-on-read both copies and avoid a stale fallback
+        // entry leaking to the next install on the same ASN.
         const payload = {
             bcid,
             fbp:    clampString(body.fbp,    256),
@@ -500,11 +526,17 @@ async function handlePairings(request, env, url) {
             utms:   clampUtms(body.utms),
             ts:     Date.now(),
             os,
+            _alt:   asnKey && asnKey !== ipKey ? asnKey : null,
         };
 
-        await env.PAIRINGS.put(key, JSON.stringify(payload), {
-            expirationTtl: PAIRING_TTL_SECONDS,
-        });
+        const json = JSON.stringify(payload);
+        const writes = [
+            env.PAIRINGS.put(ipKey, json, { expirationTtl: PAIRING_TTL_SECONDS }),
+        ];
+        if (asnKey && asnKey !== ipKey) {
+            writes.push(env.PAIRINGS.put(asnKey, json, { expirationTtl: PAIRING_TTL_SECONDS }));
+        }
+        await Promise.all(writes);
 
         return new Response(JSON.stringify({ ok: true }), {
             status: 200,
@@ -515,9 +547,20 @@ async function handlePairings(request, env, url) {
     // ── App → claim pending pairing ──────────────────────────────────────────
     if (url.pathname === '/pairings/claim') {
         const os = osFamily(request.headers.get('user-agent') || '', body.os);
-        const key = await buildClaimKey(coarseIp(request), os);
+        const ipKey  = await buildClaimKey(coarseIp(request), os);
+        const asnKey = await buildAsnKey(request.cf, os);
 
-        const raw = await env.PAIRINGS.get(key);
+        // Try the IP-coarsened key first (zero collision risk within a
+        // /24 + os), then fall back to ASN+country+os. The fallback
+        // catches dual-stack v4/v6 mismatches between page and app — same
+        // network, different IP family, otherwise different hashes.
+        let raw = await env.PAIRINGS.get(ipKey);
+        let hitKey = ipKey;
+        if (!raw && asnKey && asnKey !== ipKey) {
+            raw = await env.PAIRINGS.get(asnKey);
+            if (raw) hitKey = asnKey;
+        }
+
         if (!raw) {
             return new Response(JSON.stringify({ ok: false, error: 'no_pending_pairing' }), {
                 status: 404,
@@ -526,29 +569,41 @@ async function handlePairings(request, env, url) {
         }
 
         // Single-shot: delete on read so a second BeatCue install behind the
-        // same NAT doesn't accidentally reuse this user's bcid.
-        await env.PAIRINGS.delete(key);
+        // same NAT doesn't accidentally reuse this user's bcid. Wipe both
+        // copies (primary + ASN fallback) — best-effort, ignore failures.
+        const deletions = [env.PAIRINGS.delete(hitKey)];
+        let parsed = null;
+        try {
+            parsed = JSON.parse(raw);
+            const sibling = parsed && parsed._alt;
+            if (typeof sibling === 'string' && sibling && sibling !== hitKey) {
+                deletions.push(env.PAIRINGS.delete(sibling));
+            }
+        } catch (_) { /* tolerate */ }
+        await Promise.all(deletions.map(p => p.catch(() => {})));
 
         // Drop a short-lived breadcrumb so the still-open download page can
         // poll /pairings/claimed/<bcid> and tick its "Start editing"
         // checklist item. We extract the bcid from the stored payload — the
         // app already validates it before persisting, so this is trusted.
-        try {
-            const parsed = JSON.parse(raw);
-            const claimedBcid = clampString(parsed && parsed.bcid, 96);
-            if (claimedBcid && BCID_RE.test(claimedBcid)) {
-                await env.PAIRINGS.put(
-                    `claimed:${claimedBcid}`,
-                    JSON.stringify({ at: Date.now() }),
-                    { expirationTtl: CLAIMED_TTL_SECONDS },
-                );
-            }
-        } catch (_) {
-            // Bad JSON in KV would only mean a malformed earlier write — the
-            // claim itself still succeeds. The page will just never tick.
+        const claimedBcid = clampString(parsed && parsed.bcid, 96);
+        if (claimedBcid && BCID_RE.test(claimedBcid)) {
+            await env.PAIRINGS.put(
+                `claimed:${claimedBcid}`,
+                JSON.stringify({ at: Date.now() }),
+                { expirationTtl: CLAIMED_TTL_SECONDS },
+            );
         }
 
-        return new Response(raw, {
+        // Strip internal `_alt` linkage before returning to the desktop —
+        // it's a server-only implementation detail.
+        let responseBody = raw;
+        if (parsed && Object.prototype.hasOwnProperty.call(parsed, '_alt')) {
+            const { _alt, ...rest } = parsed;
+            responseBody = JSON.stringify(rest);
+        }
+
+        return new Response(responseBody, {
             status: 200,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
         });
