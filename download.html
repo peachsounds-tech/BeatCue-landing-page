@@ -279,18 +279,37 @@
         const isInternalTester = localStorage.getItem('cue_internal_tester') === 'true';
 
         // BeatCue browser ID (bcid): session-scoped, used for PostHog + loopback pairing with the app.
+        //
+        // Must satisfy /^bc_[A-Za-z0-9-]{8,64}$/ so the pairing worker accepts it.
+        // Anything we read back from sessionStorage or the URL (e.g. legacy
+        // ph_id values that started life as raw PostHog distinct_ids — UUID
+        // v4/v7 with no prefix) is normalized to that shape, otherwise the
+        // worker's bcid validator rejects /pairings POSTs and the desktop
+        // app can't claim attribution on first launch.
         function getOrCreateBcid() {
+            const VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+            const mint = function() {
+                return 'bc_' + (crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+            };
+            const normalize = function(raw) {
+                if (!raw || typeof raw !== 'string') return null;
+                var trimmed = raw.trim();
+                if (!trimmed) return null;
+                if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
+                return VALID.test(trimmed) ? trimmed : null;
+            };
             try {
                 const params = new URLSearchParams(window.location.search);
                 const fromUrl = params.get('bcid') || params.get('ph_id');
-                let b = sessionStorage.getItem('cue_bcid') || fromUrl;
-                if (!b) {
-                    b = 'bc_' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(36).slice(2)));
-                }
+                let b = normalize(sessionStorage.getItem('cue_bcid'))
+                     || normalize(fromUrl)
+                     || mint();
                 sessionStorage.setItem('cue_bcid', b);
                 return b;
             } catch (e) {
-                return 'bc_' + (Date.now() + '-' + Math.random().toString(36).slice(2));
+                return mint();
             }
         }
         const cueBcid = getOrCreateBcid();
