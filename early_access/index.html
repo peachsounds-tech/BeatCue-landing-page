@@ -2185,7 +2185,12 @@
             if (!params.get('utm_source') && document.referrer) {
                 try {
                     const referrerUrl = new URL(document.referrer);
-                    if (referrerUrl.hostname === window.location.hostname || 
+                    if (referrerUrl.hostname === window.location.hostname ||
+                        referrerUrl.hostname.endsWith('.beatcue.app') ||
+                        referrerUrl.hostname === 'beatcue.app' ||
+                        // Kept during the gocue.app → beatcue.app 301
+                        // transition so UTMs still flow when a returning
+                        // visitor lands here via the legacy redirect.
                         referrerUrl.hostname.endsWith('.gocue.app') ||
                         referrerUrl.hostname === 'gocue.app') {
                         params = new URLSearchParams(referrerUrl.search);
