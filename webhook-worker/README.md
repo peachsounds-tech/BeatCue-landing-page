@@ -1,9 +1,10 @@
 # BeatCue Webhook Worker
 
-A single Cloudflare Worker with two responsibilities:
+A single Cloudflare Worker with three responsibilities:
 
 1. **Lemon Squeezy → PostHog**: receive purchase webhooks and forward funnel events to PostHog.
 2. **Web ↔ desktop pairing**: bridge the `bcid` + Meta attribution captured on the download page over to the freshly installed desktop app — without tripping Chrome's Local Network Access permission prompt.
+3. **Meta Conversions API proxy**: accept `/capi` events from the desktop app (and optionally the browser) and forward them to Meta's Graph API, keeping the access token off-client.
 
 ## Routes
 
@@ -13,7 +14,9 @@ A single Cloudflare Worker with two responsibilities:
 | `POST` | `/webhook/lemonsqueezy` | Lemon Squeezy | order/subscription/license webhooks |
 | `POST` | `/pairings` | download page | store pending pairing payload (CORS-gated) |
 | `POST` | `/pairings/claim` | desktop app | fetch and consume pending pairing |
-| `OPTIONS` | `/pairings*` | browsers | CORS preflight |
+| `GET`  | `/pairings/claimed/:bcid` | download page | poll whether app has paired |
+| `POST` | `/capi` | desktop app | forward a single Meta CAPI event (CORS-gated for browsers) |
+| `OPTIONS` | `/pairings*`, `/capi` | browsers | CORS preflight |
 
 ## Lemon Squeezy events tracked
 
@@ -85,7 +88,7 @@ wrangler deploy
 
 You'll get a URL like: `https://peachsounds-webhook.YOUR_SUBDOMAIN.workers.dev`
 
-Bind a custom domain in the Cloudflare dashboard (e.g. `https://api.gocue.app`) and update `PAIRINGS_BASE` in `landing-page/download.html` and `Source/Identity/PairingClient.h` to point at it.
+Bind a custom domain in the Cloudflare dashboard (e.g. `https://api.beatcue.app`) and update `PAIRINGS_BASE` in `landing-page/download.html` and `Source/Identity/PairingClient.h` to point at it.
 
 ### 5. Set Webhook Secret (Optional but Recommended)
 
@@ -95,6 +98,63 @@ Get your webhook secret from Lemon Squeezy dashboard, then:
 wrangler secret put LEMONSQUEEZY_WEBHOOK_SECRET
 # Paste your secret when prompted
 ```
+
+### 5b. Configure Meta Conversions API
+
+Required for `/capi` to work. Without these the route returns 503.
+
+```bash
+# Pixel ID — same one used by fbq() on the landing page (708429622326201).
+wrangler secret put META_PIXEL_ID
+
+# Access token — generate in Meta Events Manager:
+#   Events Manager → your pixel → Settings → Conversions API
+#   → "Generate access token". Treat as a password.
+wrangler secret put META_CAPI_TOKEN
+
+# Optional: route events to "Test Events" tab while verifying.
+# Get the code from Events Manager → Test Events → "Test server events".
+wrangler secret put META_TEST_EVENT_CODE
+# After verification:
+#   wrangler secret delete META_TEST_EVENT_CODE
+```
+
+#### Verifying CAPI
+
+1. Open Events Manager → your pixel → **Test Events**.
+2. Set `META_TEST_EVENT_CODE` (above) to the code displayed there.
+3. Trigger an event from the desktop app (or curl):
+   ```bash
+   WORKER=https://peachsounds-webhook.YOUR_SUBDOMAIN.workers.dev
+   curl -i -X POST "$WORKER/capi" \
+       -H 'content-type: application/json' \
+       -d '{
+         "event_name": "InitiateCheckout",
+         "event_id": "evt_test_'"$(date +%s)"'",
+         "event_source_url": "https://beatcue.app/download",
+         "internal_name": "export_clicked",
+         "user_data": {
+           "fbp": "fb.1.0.test", "fbc": "fb.1.0.test",
+           "external_id": "bc_smoke12345678"
+         },
+         "custom_data": { "value": 0, "currency": "USD" }
+       }'
+   ```
+4. Watch it land in Test Events within a few seconds. Once green across all 5 events, delete `META_TEST_EVENT_CODE`.
+
+#### Event allowlist
+
+The worker rejects unknown event names to prevent accidental optimization-skewing pushes. Update the allowlist in `worker.js` (`CAPI_STANDARD_EVENTS` / `CAPI_CUSTOM_EVENTS`) when adding a new event.
+
+Currently allowed:
+
+| Event name on wire | Origin | Internal name | Optimization target? |
+|---|---|---|---|
+| `app_launched` (custom) | desktop app, first launch | `app_launched` | no |
+| `cut_played` (custom) | desktop app, first per session | `cut_played` | no |
+| `InitiateCheckout` | desktop app | `export_clicked` | **yes (start)** |
+| `AddPaymentInfo` | desktop app | `activation_started` | no |
+| `Subscribe` | desktop app | `activation_finished` | **yes (later)** |
 
 ### 6. Configure Lemon Squeezy Webhook
 
@@ -179,6 +239,9 @@ Check PostHog for events with `$lib: cloudflare-worker` property.
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `LEMONSQUEEZY_WEBHOOK_SECRET` | Webhook signing secret | Recommended |
+| `META_PIXEL_ID` | Numeric pixel ID (e.g. `708429622326201`) | Required for `/capi` |
+| `META_CAPI_TOKEN` | Conversions API access token | Required for `/capi` |
+| `META_TEST_EVENT_CODE` | Test Events code; events bypass prod attribution while set | Optional, verification only |
 
 ## Local Development
 

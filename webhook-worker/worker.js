@@ -52,6 +52,48 @@ const PAIRINGS_MAX_BODY_BYTES = 4 * 1024;
  *  applyPairing() validator. */
 const BCID_RE = /^bc_[A-Za-z0-9-]{8,64}$/;
 
+// ─── Meta Conversions API constants ───────────────────────────────────────────
+
+/** Graph API version pinned for predictable payload schema. Bump deliberately
+ *  after testing — Meta deprecates ~2 years out, no need to chase the head. */
+const META_GRAPH_VERSION = 'v19.0';
+
+/** Hard upper bound on /capi request bodies. Generous compared to /pairings
+ *  because custom_data can carry richer event context (cut indices, file
+ *  metadata, etc.) without being a tracking risk. */
+const CAPI_MAX_BODY_BYTES = 8 * 1024;
+
+/** Whitelist of event_name values the worker is willing to forward. Stops a
+ *  rogue caller from blasting random standard events at the pixel and skewing
+ *  optimization. Custom names (anything else) are also accepted but logged
+ *  separately so we can spot abuse. */
+const CAPI_STANDARD_EVENTS = new Set([
+    'PageView',
+    'ViewContent',
+    'Lead',
+    'CompleteRegistration',
+    'AddPaymentInfo',
+    'InitiateCheckout',
+    'Subscribe',
+    'StartTrial',
+    'Purchase',
+]);
+
+/** Custom event names BeatCue is allowed to send. Anything outside this set
+ *  AND outside CAPI_STANDARD_EVENTS gets rejected — a soft schema lock. */
+const CAPI_CUSTOM_EVENTS = new Set([
+    'app_launched',
+    'cut_played',
+    'activation_started',
+    // Keep this list in sync with MetaCapiClient call sites in the desktop app.
+]);
+
+/** action_source values Meta accepts. Anything else is rejected. */
+const CAPI_ACTION_SOURCES = new Set([
+    'website', 'email', 'app', 'phone_call', 'chat',
+    'physical_store', 'system_generated', 'business_messaging', 'other',
+]);
+
 // Lemon Squeezy webhook secret (set this in Cloudflare dashboard as environment variable)
 // const LEMONSQUEEZY_WEBHOOK_SECRET = env.LEMONSQUEEZY_WEBHOOK_SECRET;
 
@@ -723,6 +765,283 @@ async function handleClaimedStatus(request, env, url) {
     });
 }
 
+// ─── Meta Conversions API handler ─────────────────────────────────────────────
+
+/** Lower-case + trim + sha256 → 64-char lowercase hex. Matches Meta's
+ *  prescribed normalization for `em`, `ph`, `external_id`, etc. */
+async function sha256LowerHex(s) {
+    if (typeof s !== 'string') return null;
+    const normalized = s.trim().toLowerCase();
+    if (!normalized) return null;
+    const buf = await crypto.subtle.digest('SHA-256',
+        new TextEncoder().encode(normalized));
+    return [...new Uint8Array(buf)]
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+/** Validate that a string already looks like a 64-char hex sha256. We accept
+ *  pre-hashed values from the desktop app (it has EmailHasher already) so we
+ *  don't move plaintext email more times than necessary. */
+function isHexSha256(s) {
+    return typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
+}
+
+/**
+ * POST /capi  — desktop app or browser pushes a single Meta CAPI event.
+ *
+ * Body:
+ *   {
+ *     event_name:        string  (whitelisted: standard or custom),
+ *     event_id:          string  (caller-generated UUID; for retry dedupe),
+ *     event_source_url:  string  (https URL of the originating page; for app
+ *                                 events use the canonical landing page URL),
+ *     action_source:     string  (default "website"; see CAPI_ACTION_SOURCES),
+ *     internal_name:     string  (optional, copied into custom_data for
+ *                                 cross-checking against PostHog),
+ *     user_data: {
+ *       fbp, fbc, fbclid     (cookies / click ID),
+ *       external_id          (bcid; worker hashes before forwarding),
+ *       em_raw               (plaintext email; worker hashes),
+ *       em_hashed            (already-hashed email; preferred over em_raw),
+ *       client_user_agent    (override; falls back to request UA header)
+ *     },
+ *     custom_data: { value, currency, ... }
+ *   }
+ *
+ * The worker injects `client_ip_address` from `cf-connecting-ip`, falls back
+ * to the request's UA if no override is given, hashes anything Meta requires
+ * to be hashed, and forwards a single-event `data:[…]` payload to
+ * https://graph.facebook.com/<v>/<pixel_id>/events.
+ *
+ * Returns the Graph API status + a trimmed body so the caller can log
+ * fbtrace_id when something goes wrong. Failures don't retry — Meta CAPI is
+ * best-effort by design and double-firing would risk double-counting.
+ */
+async function handleCapi(request, env, url) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    if (request.method !== 'POST') {
+        return new Response('method_not_allowed', { status: 405, headers: cors });
+    }
+
+    // Browser CORS gate — same allowlist as /pairings. Non-browser callers
+    // (the desktop app) have no Origin header and are accepted; the worker is
+    // strictly a forwarder and the upstream (Meta) won't accept events
+    // without a valid pixel id + access token, so abuse surface is bounded.
+    if (origin && !PAIRINGS_ALLOWED_ORIGINS.has(origin)) {
+        console.log(JSON.stringify({ evt: 'capi_forbidden_origin', origin }));
+        return new Response(JSON.stringify({ ok: false, error: 'forbidden_origin' }), {
+            status: 403,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    if (!env.META_PIXEL_ID || !env.META_CAPI_TOKEN) {
+        console.error('CAPI: META_PIXEL_ID or META_CAPI_TOKEN missing — set via wrangler secret put');
+        return new Response(JSON.stringify({ ok: false, error: 'server_not_configured' }), {
+            status: 503,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    let body;
+    try {
+        const text = await request.text();
+        if (text.length > CAPI_MAX_BODY_BYTES) {
+            return new Response(JSON.stringify({ ok: false, error: 'payload_too_large' }), {
+                status: 413,
+                headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+            });
+        }
+        body = JSON.parse(text);
+    } catch (e) {
+        return new Response(JSON.stringify({ ok: false, error: 'invalid_json' }), {
+            status: 400,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    // ── Validate envelope ────────────────────────────────────────────────────
+    const eventName = clampString(body.event_name, 64);
+    if (!eventName
+        || (!CAPI_STANDARD_EVENTS.has(eventName) && !CAPI_CUSTOM_EVENTS.has(eventName))) {
+        console.log(JSON.stringify({ evt: 'capi_rejected_event_name', event_name: eventName }));
+        return new Response(JSON.stringify({ ok: false, error: 'event_name_not_allowed' }), {
+            status: 400,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    const eventId = clampString(body.event_id, 96);
+    if (!eventId) {
+        return new Response(JSON.stringify({ ok: false, error: 'event_id_required' }), {
+            status: 400,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    const actionSource = clampString(body.action_source, 32) || 'website';
+    if (!CAPI_ACTION_SOURCES.has(actionSource)) {
+        return new Response(JSON.stringify({ ok: false, error: 'bad_action_source' }), {
+            status: 400,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    const eventSourceUrl = clampString(body.event_source_url, 2048)
+        || 'https://beatcue.app/download';
+
+    // ── Build user_data ──────────────────────────────────────────────────────
+    const ud = (body.user_data && typeof body.user_data === 'object') ? body.user_data : {};
+
+    const ipHeader = request.headers.get('cf-connecting-ip');
+    const uaOverride = clampString(ud.client_user_agent, 512);
+    const uaHeader = request.headers.get('user-agent');
+
+    // bcid is treated as a quasi-PII identifier — Meta wants external_id
+    // hashed. Validate shape first so we never push a malformed token into
+    // the matching pool.
+    let externalIdHashed;
+    const rawExternalId = clampString(ud.external_id, 96);
+    if (rawExternalId) {
+        if (!BCID_RE.test(rawExternalId) && !isHexSha256(rawExternalId)) {
+            console.log(JSON.stringify({
+                evt: 'capi_bad_external_id',
+                preview: rawExternalId.slice(0, 16),
+            }));
+        } else {
+            externalIdHashed = isHexSha256(rawExternalId)
+                ? rawExternalId
+                : await sha256LowerHex(rawExternalId);
+        }
+    }
+
+    // em: prefer pre-hashed value, fall back to hashing em_raw. Either way
+    // Meta receives a 64-char hex string. Multiple values are allowed (an
+    // array) but we only ever ship one.
+    let emHashed;
+    const emHashedIn = clampString(ud.em_hashed, 128);
+    if (isHexSha256(emHashedIn)) {
+        emHashed = emHashedIn;
+    } else {
+        const emRaw = clampString(ud.em_raw, 256);
+        if (emRaw) emHashed = await sha256LowerHex(emRaw);
+    }
+
+    const userData = {};
+    if (ipHeader) userData.client_ip_address = ipHeader;
+    const ua = uaOverride || uaHeader;
+    if (ua) userData.client_user_agent = ua;
+
+    const fbp    = clampString(ud.fbp,    256);
+    const fbc    = clampString(ud.fbc,    256);
+    const fbclid = clampString(ud.fbclid, 256);
+    if (fbp)    userData.fbp = fbp;
+    if (fbc)    userData.fbc = fbc;
+    // fbclid is normally only used to synthesize an _fbc value when absent;
+    // we forward it as-is when present and let Meta's matching do the rest.
+    // It's not a documented user_data key, so stash under custom_data.
+    if (externalIdHashed) userData.external_id = externalIdHashed;
+    if (emHashed)         userData.em          = [emHashed];
+
+    // Meta requires AT LEAST one user_data identifier beyond IP/UA, otherwise
+    // the event is dropped from matching. IP+UA alone counts at lower
+    // confidence, so we accept it but log so we can spot anonymous sends.
+    const hasStrongMatch = !!(fbp || fbc || externalIdHashed || emHashed);
+
+    // ── Build custom_data ────────────────────────────────────────────────────
+    const cdIn = (body.custom_data && typeof body.custom_data === 'object') ? body.custom_data : {};
+    const customData = { ...cdIn };
+    if (typeof body.internal_name === 'string' && body.internal_name) {
+        customData.internal_event_name = clampString(body.internal_name, 64);
+    }
+    if (fbclid) customData.fbclid = fbclid;
+
+    // ── Build event ──────────────────────────────────────────────────────────
+    const event = {
+        event_name: eventName,
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: eventId,
+        event_source_url: eventSourceUrl,
+        action_source: actionSource,
+        user_data: userData,
+        custom_data: customData,
+    };
+
+    const payload = { data: [event] };
+    if (env.META_TEST_EVENT_CODE) {
+        // Routes this single event into the "Test Events" tab in Events
+        // Manager instead of into prod attribution. Set the secret while
+        // verifying, then `wrangler secret delete META_TEST_EVENT_CODE`.
+        payload.test_event_code = env.META_TEST_EVENT_CODE;
+    }
+
+    // ── Forward to Meta ──────────────────────────────────────────────────────
+    const graphUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/`
+        + encodeURIComponent(env.META_PIXEL_ID)
+        + `/events?access_token=${encodeURIComponent(env.META_CAPI_TOKEN)}`;
+
+    let upstreamStatus = 0;
+    let upstreamBody = '';
+    let fbtraceId = null;
+    let eventsReceived = null;
+    try {
+        const r = await fetch(graphUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        upstreamStatus = r.status;
+        upstreamBody = await r.text();
+        try {
+            const j = JSON.parse(upstreamBody);
+            fbtraceId = j.fbtrace_id || null;
+            eventsReceived = typeof j.events_received === 'number' ? j.events_received : null;
+        } catch (_) { /* non-JSON error body — passthrough */ }
+    } catch (e) {
+        console.log(JSON.stringify({
+            evt: 'capi_upstream_error',
+            event_name: eventName,
+            error: String(e && e.message || e),
+        }));
+        return new Response(JSON.stringify({ ok: false, error: 'upstream_unreachable' }), {
+            status: 502,
+            headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+        });
+    }
+
+    console.log(JSON.stringify({
+        evt: 'capi_forwarded',
+        event_name: eventName,
+        internal: customData.internal_event_name || null,
+        action_source: actionSource,
+        upstream_status: upstreamStatus,
+        events_received: eventsReceived,
+        fbtrace_id: fbtraceId,
+        had_fbp: !!fbp,
+        had_fbc: !!fbc,
+        had_external_id: !!externalIdHashed,
+        had_em: !!emHashed,
+        strong_match: hasStrongMatch,
+        test_mode: !!env.META_TEST_EVENT_CODE,
+    }));
+
+    return new Response(JSON.stringify({
+        ok: upstreamStatus >= 200 && upstreamStatus < 300,
+        upstream_status: upstreamStatus,
+        events_received: eventsReceived,
+        fbtrace_id: fbtraceId,
+    }), {
+        status: upstreamStatus >= 200 && upstreamStatus < 300 ? 200 : 502,
+        headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+    });
+}
+
 /**
  * Cloudflare Worker entry point
  */
@@ -744,6 +1063,10 @@ export default {
 
         if (url.pathname.startsWith('/pairings/claimed/')) {
             return handleClaimedStatus(request, env, url);
+        }
+
+        if (url.pathname === '/capi') {
+            return handleCapi(request, env, url);
         }
 
         return new Response('Not found', { status: 404 });

@@ -9,8 +9,28 @@ compatibility_date = "2024-01-01"
 # Non-secret environment variables go here
 # POSTHOG_API_KEY is hardcoded in worker.js for simplicity
 
-# Secret variables (set via `wrangler secret put LEMONSQUEEZY_WEBHOOK_SECRET`)
-# LEMONSQUEEZY_WEBHOOK_SECRET = "set-via-wrangler-secret"
+# Secret variables (set via `wrangler secret put NAME`):
+#
+#   LEMONSQUEEZY_WEBHOOK_SECRET    Lemon Squeezy → /webhook/lemonsqueezy HMAC.
+#                                  Optional; signature check is skipped when
+#                                  unset.
+#
+#   META_PIXEL_ID                  Meta Pixel numeric ID for /capi events.
+#                                  Must be set; /capi returns 503 otherwise.
+#                                  Today: 708429622326201 (matches the pixel
+#                                  loaded from landing-page/download.html).
+#
+#   META_CAPI_TOKEN                Conversions API access token. Generate in
+#                                  Events Manager → Settings → Conversions API
+#                                  → "Generate access token". Treat as a
+#                                  password — never commit, never ship to the
+#                                  desktop app or browser.
+#
+#   META_TEST_EVENT_CODE           Optional. Set during verification so events
+#                                  land in Events Manager → Test Events
+#                                  instead of prod attribution. Delete with
+#                                  `wrangler secret delete META_TEST_EVENT_CODE`
+#                                  once the integration is verified.
 
 # ─── Pairing KV ───────────────────────────────────────────────────────────────
 # Stores pending web→app pairing payloads (bcid + Meta attribution) for ~15
