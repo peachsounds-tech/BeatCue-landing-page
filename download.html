@@ -232,8 +232,30 @@
         .security-tip-body { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; }
         .security-tip-body strong { color: var(--text-secondary); font-weight: 500; }
 
-        .edge-video { display: none; margin: 0.5rem 0 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-light); }
-        .edge-video video { width: 100%; display: block; }
+        .security-videos { display: none; gap: 0.5rem; margin: 0.6rem 0 0; flex-wrap: wrap; }
+        .security-videos.show { display: flex; }
+        .security-video { flex: 1 1 100%; min-width: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-light); display: none; }
+        .security-video.show { display: block; }
+        .security-video video { width: 100%; display: block; }
+        .security-video-caption { font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 0.35rem 0.4rem; background: var(--bg-primary); border-top: 1px solid var(--border-light); line-height: 1.3; }
+        .security-videos.dual .security-video { flex: 1 1 calc(50% - 0.25rem); }
+        @media (max-width: 480px) {
+            .security-videos.dual .security-video { flex: 1 1 100%; }
+        }
+
+        @keyframes securityPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); }
+            70%  { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+        .security-tip.attention {
+            border-color: rgba(245, 158, 11, 0.45);
+            animation: securityPulse 1.6s ease-out 2;
+        }
+
+        body.windows-mode .dl-icon { width: 96px; height: 96px; margin-bottom: 0.6rem; }
+        body.windows-mode h1 { font-size: 1.35rem; }
+        body.windows-mode .dl-subtitle { margin-bottom: 1rem; }
 
         .mobile-transfer-icon { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.85rem; color: var(--text-secondary); opacity: 0.6; }
         .mobile-cta-heading { font-size: 1.3rem; font-weight: 500; color: var(--text-primary); margin-bottom: 1.25rem; }
@@ -464,10 +486,19 @@
             <div class="security-tip" id="securityTip">
                 <div class="security-tip-header" id="securityTipHeader"></div>
                 <div class="security-tip-body" id="securityTipBody"></div>
-                <div class="edge-video" id="edgeVideo">
-                    <video autoplay loop muted playsinline>
-                        <source src="edge_run_anyway_2.mp4" type="video/mp4">
-                    </video>
+                <div class="security-videos" id="securityVideos">
+                    <div class="security-video" id="smartScreenVideo">
+                        <video autoplay loop muted playsinline>
+                            <source src="smartScreen.mp4" type="video/mp4">
+                        </video>
+                        <div class="security-video-caption">Windows SmartScreen &middot; click <strong>More info</strong> &rarr; <strong>Run anyway</strong></div>
+                    </div>
+                    <div class="security-video" id="edgeVideo">
+                        <video autoplay loop muted playsinline>
+                            <source src="edge_run_anyway_2.mp4" type="video/mp4">
+                        </video>
+                        <div class="security-video-caption">Edge download warning &middot; click <strong>&#8230;</strong> &rarr; <strong>Keep</strong></div>
+                    </div>
                 </div>
             </div>
 
@@ -711,17 +742,28 @@
 
 
                 if (platform === 'windows') {
+                    document.body.classList.add('windows-mode');
+
                     var securityTipEl = document.getElementById('securityTip');
                     if (securityTipEl) securityTipEl.style.display = '';
                     document.getElementById('securityTipHeader').innerHTML = '🔒 Seeing a Windows warning?';
                     document.getElementById('securityTipBody').innerHTML = 'This is normal. Windows flags all new apps it hasn\'t seen before.<br>Click <strong>"More info"</strong> then <strong>"Run anyway"</strong> to open BeatCue.';
 
-                    if (isEdgeBrowser) {
-                        var edgeVid = document.getElementById('edgeVideo');
-                        if (edgeVid) {
-                            edgeVid.style.display = 'block';
-                            var v = edgeVid.querySelector('video');
-                            if (v) v.play().catch(function() {});
+                    var videosContainer = document.getElementById('securityVideos');
+                    var smartScreenVid = document.getElementById('smartScreenVideo');
+                    var edgeVid = document.getElementById('edgeVideo');
+
+                    if (videosContainer && smartScreenVid) {
+                        videosContainer.classList.add('show');
+                        smartScreenVid.classList.add('show');
+                        var ssv = smartScreenVid.querySelector('video');
+                        if (ssv) ssv.play().catch(function() {});
+
+                        if (isEdgeBrowser && edgeVid) {
+                            videosContainer.classList.add('dual');
+                            edgeVid.classList.add('show');
+                            var ev = edgeVid.querySelector('video');
+                            if (ev) ev.play().catch(function() {});
                         }
                     }
                 } else if (platform === 'macos') {
@@ -764,6 +806,18 @@
                         if (installItem) installItem.classList.add('active');
                         var installLabel = document.getElementById('checkInstallLabel');
                         if (installLabel) installLabel.innerHTML = 'Run <strong>' + fileName + '</strong>';
+
+                        if (platform === 'windows') {
+                            var tipEl = document.getElementById('securityTip');
+                            if (tipEl) {
+                                tipEl.classList.add('attention');
+                                try {
+                                    tipEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                } catch (e) {
+                                    tipEl.scrollIntoView();
+                                }
+                            }
+                        }
                     }, 1500);
                 }, 400);
             }
