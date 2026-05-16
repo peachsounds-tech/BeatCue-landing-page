@@ -230,15 +230,15 @@
         }
         .security-tip-header { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; }
         .security-tip-body { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; }
-        .security-tip-body strong { color: var(--text-secondary); font-weight: 500; }
+        .security-tip-body strong { color: #0078D4; font-weight: 600; }
 
         @keyframes securityPulse {
-            0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.35); }
-            70%  { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            0%   { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.35); }
+            70%  { box-shadow: 0 0 0 10px rgba(0, 120, 212, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0); }
         }
         .security-tip.attention {
-            border-color: rgba(16, 185, 129, 0.45);
+            border-color: rgba(0, 120, 212, 0.55);
             animation: securityPulse 1.6s ease-out 2;
         }
 
@@ -719,8 +719,8 @@
 
                     var securityTipEl = document.getElementById('securityTip');
                     if (securityTipEl) securityTipEl.style.display = '';
-                    document.getElementById('securityTipHeader').innerHTML = '✨ Last step — launch BeatCue';
-                    document.getElementById('securityTipBody').innerHTML = 'When SmartScreen appears, click <strong>"More info"</strong> → <strong>"Run anyway"</strong>. You\'ll be editing in seconds.';
+                    document.getElementById('securityTipHeader').innerHTML = '🎉 You\'re almost in!';
+                    document.getElementById('securityTipBody').innerHTML = 'When the Windows blue SmartScreen popup appears,<br>tap <strong>"More info"</strong> → <strong>"Run anyway"</strong>. Let\'s go!';
                 }
                 
             } else {
