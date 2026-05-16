@@ -232,17 +232,6 @@
         .security-tip-body { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; }
         .security-tip-body strong { color: var(--text-secondary); font-weight: 500; }
 
-        .security-videos { display: none; gap: 0.5rem; margin: 0.6rem 0 0; flex-wrap: wrap; }
-        .security-videos.show { display: flex; }
-        .security-video { flex: 1 1 100%; min-width: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-light); display: none; }
-        .security-video.show { display: block; }
-        .security-video video { width: 100%; display: block; }
-        .security-video-caption { font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 0.35rem 0.4rem; background: var(--bg-primary); border-top: 1px solid var(--border-light); line-height: 1.3; }
-        .security-videos.dual .security-video { flex: 1 1 calc(50% - 0.25rem); }
-        @media (max-width: 480px) {
-            .security-videos.dual .security-video { flex: 1 1 100%; }
-        }
-
         @keyframes securityPulse {
             0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); }
             70%  { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
@@ -417,7 +406,6 @@
         }
         
         const detectedPlatform = detectPlatform();
-        const isEdgeBrowser = /Edg(e)?\//i.test(navigator.userAgent || '');
         
         // Track page view function
         function trackPostHogPageView(fromCache = false) {
@@ -483,23 +471,9 @@
                 Download didn't start? <a href="#" id="manualDownloadLink">Click here</a>
             </p>
 
-            <div class="security-tip" id="securityTip">
+            <div class="security-tip" id="securityTip" style="display: none;">
                 <div class="security-tip-header" id="securityTipHeader"></div>
                 <div class="security-tip-body" id="securityTipBody"></div>
-                <div class="security-videos" id="securityVideos">
-                    <div class="security-video" id="smartScreenVideo">
-                        <video autoplay loop muted playsinline>
-                            <source src="smartScreen.mp4" type="video/mp4">
-                        </video>
-                        <div class="security-video-caption">Windows SmartScreen &middot; click <strong>More info</strong> &rarr; <strong>Run anyway</strong></div>
-                    </div>
-                    <div class="security-video" id="edgeVideo">
-                        <video autoplay loop muted playsinline>
-                            <source src="edge_run_anyway_2.mp4" type="video/mp4">
-                        </video>
-                        <div class="security-video-caption">Edge download warning &middot; click <strong>&#8230;</strong> &rarr; <strong>Keep</strong></div>
-                    </div>
-                </div>
             </div>
 
         </div>
@@ -719,7 +693,6 @@
                 var fallback = document.getElementById('dlFallback');
                 if (fallback) fallback.style.display = 'none';
                 
-                // Update security tip to show Windows coming soon message
                 var securityTipEl = document.getElementById('securityTip');
                 if (securityTipEl) {
                     securityTipEl.style.display = '';
@@ -747,28 +720,7 @@
                     var securityTipEl = document.getElementById('securityTip');
                     if (securityTipEl) securityTipEl.style.display = '';
                     document.getElementById('securityTipHeader').innerHTML = '🔒 Seeing a Windows warning?';
-                    document.getElementById('securityTipBody').innerHTML = 'This is normal. Windows flags all new apps it hasn\'t seen before.<br>Click <strong>"More info"</strong> then <strong>"Run anyway"</strong> to open BeatCue.';
-
-                    var videosContainer = document.getElementById('securityVideos');
-                    var smartScreenVid = document.getElementById('smartScreenVideo');
-                    var edgeVid = document.getElementById('edgeVideo');
-
-                    if (videosContainer && smartScreenVid) {
-                        videosContainer.classList.add('show');
-                        smartScreenVid.classList.add('show');
-                        var ssv = smartScreenVid.querySelector('video');
-                        if (ssv) ssv.play().catch(function() {});
-
-                        if (isEdgeBrowser && edgeVid) {
-                            videosContainer.classList.add('dual');
-                            edgeVid.classList.add('show');
-                            var ev = edgeVid.querySelector('video');
-                            if (ev) ev.play().catch(function() {});
-                        }
-                    }
-                } else if (platform === 'macos') {
-                    var st = document.getElementById('securityTip');
-                    if (st) st.style.display = 'none';
+                    document.getElementById('securityTipBody').innerHTML = 'BeatCue is new and hasn\'t built SmartScreen reputation yet.<br>Click <strong>"More info"</strong> → <strong>"Run anyway"</strong>.';
                 }
                 
             } else {
