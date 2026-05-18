@@ -350,7 +350,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '1.0.0';
+        const CUE_PAGE_VERSION = '1.1.0';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -4555,7 +4555,85 @@
         if (heroVideo) {
             videoObserver.observe(heroVideo);
         }
-        
+
+        // ============================================
+        // SECTION VIEW TRACKING
+        // Fire a PostHog event the first time each <section> is viewed.
+        // Runs in both pre-consent and full mode, like page_viewed.
+        // ============================================
+        (function setupSectionViewTracking() {
+            const sections = Array.from(document.querySelectorAll('section'));
+            if (!sections.length || typeof IntersectionObserver === 'undefined') return;
+
+            const seen = new Set();
+
+            // Derive a stable, human-readable name for a section.
+            // Priority: id > first class > tag name.
+            function getSectionName(section) {
+                if (section.id) return section.id;
+                const firstClass = (section.className || '')
+                    .split(/\s+/)
+                    .find(c => c.length > 0);
+                return firstClass || section.tagName.toLowerCase();
+            }
+
+            function fireSectionViewed(section, index) {
+                if (typeof posthog === 'undefined' || !posthog.capture) return;
+
+                const sectionName = getSectionName(section);
+                const baseProps = (typeof posthogFullyInitialized !== 'undefined'
+                    && posthogFullyInitialized
+                    && typeof getBaseEventProps === 'function')
+                    ? getBaseEventProps()
+                    : {};
+
+                const props = {
+                    ...baseProps,
+                    page: 'landing',
+                    section_name: sectionName,
+                    section_id: section.id || null,
+                    section_class: (section.className || '').trim() || null,
+                    section_index: index
+                };
+
+                posthog.capture('section_viewed', props);
+                console.log('PostHog: section_viewed tracked for', sectionName);
+            }
+
+            const MIN_RATIO = 0.35;            // 35% of the section visible, or
+            const MIN_VIEWPORT_FILL = 0.35;    // section fills 35% of the viewport
+                                               // (covers sections taller than viewport).
+
+            const sectionObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+
+                    const ratio = entry.intersectionRatio;
+                    const viewportFill = entry.intersectionRect.height
+                        / Math.max(1, window.innerHeight);
+                    if (ratio < MIN_RATIO && viewportFill < MIN_VIEWPORT_FILL) return;
+
+                    const section = entry.target;
+                    const key = getSectionName(section);
+                    if (seen.has(key)) return;
+                    seen.add(key);
+
+                    sectionObserver.unobserve(section);
+
+                    const index = sections.indexOf(section);
+                    fireSectionViewed(section, index);
+                });
+            }, {
+                root: null,
+                rootMargin: '0px',
+                // Multiple thresholds so we get callbacks at both small and
+                // larger ratios; the callback gates on MIN_RATIO / MIN_VIEWPORT_FILL.
+                threshold: [0, 0.1, 0.25, 0.35, 0.5, 0.75, 1.0]
+            });
+
+            sections.forEach(section => sectionObserver.observe(section));
+        })();
+
         function muteVideo(video, toggle) {
             video.muted = true;
             toggle.classList.remove('unmuted', 'faded');
