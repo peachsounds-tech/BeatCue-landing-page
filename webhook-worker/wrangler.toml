@@ -33,7 +33,7 @@ compatibility_date = "2024-01-01"
 #                                  once the integration is verified.
 
 # ─── Pairing KV ───────────────────────────────────────────────────────────────
-# Stores pending web→app pairing payloads (bcid + Meta attribution) for ~15
+# Stores pending web→app pairing payloads (bcid + Meta attribution) for ~30
 # minutes between download and first app launch. One write per download, one
 # read+delete per first launch. Free tier (1k writes/day) is plenty until
 # >1k installs/day.

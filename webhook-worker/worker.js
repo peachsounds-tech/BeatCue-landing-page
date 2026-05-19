@@ -35,9 +35,9 @@ const PAIRINGS_ALLOWED_ORIGINS = new Set([
 ]);
 
 /** How long a pending pairing record lingers before KV evicts it.
- *  15 minutes covers most install flows (download → run installer → first
+ *  30 minutes covers most install flows (download → run installer → first
  *  launch). Longer windows raise the chance of NAT misattribution. */
-const PAIRING_TTL_SECONDS = 15 * 60;
+const PAIRING_TTL_SECONDS = 30 * 60;
 
 /** How long a "claimed:<bcid>" marker survives so the download page can
  *  notice the desktop app paired and tick the launch checklist item. The
@@ -447,7 +447,7 @@ async function buildClaimKey(ip, os) {
  *  the two requests, so the claim misses. ASN+country is independent of
  *  IP family and stays stable across the small download → first-launch
  *  window. Cross-user collision risk: two BeatCue downloads + first
- *  launches, same ASN+country+OS, both within ~15 minutes — accepted given
+ *  launches, same ASN+country+OS, both within ~30 minutes — accepted given
  *  current install volume. Returns null when Cloudflare didn't populate
  *  request.cf (local dev / pathological edge cases) so callers can skip
  *  the fallback gracefully. */

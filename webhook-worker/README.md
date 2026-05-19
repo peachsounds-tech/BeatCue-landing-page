@@ -34,7 +34,7 @@ A single Cloudflare Worker with three responsibilities:
 
 2. User clicks "Download" button
    → page POSTs /pairings { bcid, fbp, fbc, fbclid, utms }
-   → worker stores it in KV under sha256(coarse_ip + os)[:24], TTL 15 min
+   → worker stores it in KV under sha256(coarse_ip + os)[:24], TTL 30 min
 
 3. User runs the installer
 
