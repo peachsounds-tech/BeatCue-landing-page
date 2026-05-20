@@ -350,7 +350,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '1.2.4';
+        const CUE_PAGE_VERSION = '1.2.5';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -5813,17 +5813,31 @@
             postWindowsStorePairing(window.__cue_bcid);
         }
 
+        // Same naming as section_viewed (id > first class > tag).
+        function getSectionNameFromElement(el) {
+            if (!el) return 'unknown';
+            const section = el.closest('section');
+            if (!section) return 'unknown';
+            if (section.id) return section.id;
+            const firstClass = (section.className || '')
+                .split(/\s+/)
+                .find(function(c) { return c.length > 0; });
+            return firstClass || section.tagName.toLowerCase();
+        }
+
         // Track trial download click. macOS → download.html with identity;
         // Windows → Microsoft Store (href set in platform detection below).
         function trackTrialDownloadClick(event) {
             const ua = navigator.userAgent || navigator.platform || '';
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
+            const sectionName = getSectionNameFromElement(event.currentTarget);
             
             if (typeof posthog !== 'undefined' && posthog.capture) {
                 posthog.capture('download_cta_clicked', {
                     ...(posthogFullyInitialized ? getBaseEventProps() : {}),
                     page: 'landing',
-                    platform: platform
+                    platform: platform,
+                    section_name: sectionName
                 });
             }
 
