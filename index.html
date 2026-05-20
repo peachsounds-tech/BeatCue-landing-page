@@ -350,7 +350,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '1.2.0';
+        const CUE_PAGE_VERSION = '1.2.1';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -388,6 +388,40 @@
         
         // Load PostHog snippet (runs immediately)
         !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="Ii init Di qi Sr Bi Zi Pi capture calculateEventProperties Yi register register_once register_for_session unregister unregister_for_session Xi getFeatureFlag getFeatureFlagPayload getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync Ji identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset setIdentity clearIdentity get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException startExceptionAutocapture stopExceptionAutocapture loadToolbar get_property getSessionProperty Wi Vi createPersonProfile setInternalOrTestUser Gi Fi tn opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing $i debug Tr Ui getPageViewId captureTraceFeedback captureTraceMetric Ri".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+
+        // BeatCue browser ID (bcid): session-scoped, used for PostHog + loopback
+        // pairing with the desktop app. Must be created BEFORE PostHog init so we
+        // can bootstrap PostHog with the same distinct_id the pairing worker sees.
+        // Mirrors download.html's logic so the bcid is consistent across pages.
+        function getOrCreateBcid() {
+            const VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+            const mint = function() {
+                return 'bc_' + (crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+            };
+            const normalize = function(raw) {
+                if (!raw || typeof raw !== 'string') return null;
+                var trimmed = raw.trim();
+                if (!trimmed) return null;
+                if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
+                return VALID.test(trimmed) ? trimmed : null;
+            };
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const fromUrl = params.get('bcid') || params.get('ph_id');
+                let b = normalize(sessionStorage.getItem('cue_bcid'))
+                     || normalize(fromUrl)
+                     || mint();
+                sessionStorage.setItem('cue_bcid', b);
+                return b;
+            } catch (e) {
+                return mint();
+            }
+        }
+        const cueBcid = getOrCreateBcid();
+        window.__cue_bcid = cueBcid;
+        console.log('📊 BeatCue browser ID (bcid):', cueBcid);
         
         /**
          * Check if user has already consented (used to skip pre-consent mode)
@@ -432,7 +466,8 @@
                 capture_pageview: false,
                 person_profiles: 'identified_only',  // Don't create person profiles yet
                 ip: false,                        // Don't capture IP for anonymous tracking
-                disable_geoip: true               // Disable server-side geo lookup
+                disable_geoip: true,              // Disable server-side geo lookup
+                bootstrap: { distinctID: cueBcid } // Match pairing worker's bcid
             });
             
             posthogPreConsentInitialized = true;
@@ -495,11 +530,12 @@
                 console.log('📊 Returning user - initializing with localStorage...');
                 posthog.init(POSTHOG_API_KEY, {
                     api_host: POSTHOG_API_HOST,
-                ui_host: 'https://us.posthog.com',
+                    ui_host: 'https://us.posthog.com',
                     persistence: 'localStorage',
                     autocapture: false,
                     capture_pageview: false,
-                    person_profiles: 'always'
+                    person_profiles: 'always',
+                    bootstrap: { distinctID: cueBcid } // Match pairing worker's bcid
                 });
                 
                 // Register internal flag IMMEDIATELY after init (before any auto-captured events)
@@ -4266,19 +4302,18 @@
         }
 
         /* ============================================
-           BEFORE / AFTER — "Hear the difference"
-           A single cinematic stage. Three chapters.
-           One audio source plays at a time.
+           BEFORE / AFTER — "The moment finally lands"
+           Cinematic auto-cycle. The hierarchy is:
+             1. The scene (a story moment)
+             2. The emotional caption ("The leap finally lands")
+             3. Everything else (UI strip, controls, dots)
         ============================================ */
         .before-after {
-            padding: var(--section-pad-y-tight) var(--section-pad-x);
+            padding: var(--section-pad-y) var(--section-pad-x);
             background: var(--bg-tertiary);
             position: relative;
             overflow: hidden;
             scroll-margin-top: var(--nav-h);
-        }
-        .before-after .section-header {
-            margin-bottom: clamp(1.25rem, 2.5vw, 2rem);
         }
         .before-after::before {
             content: '';
@@ -4290,49 +4325,63 @@
             pointer-events: none;
         }
         .ba-container {
-            max-width: 1180px;
+            max-width: 1200px;
             margin: 0 auto;
             position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: clamp(1.5rem, 3vw, 2.25rem);
         }
-        .before-after h2 .ba-blue {
+
+        /* Headline block (compact, emotion-first) */
+        .ba-headline {
+            text-align: center;
+            max-width: 720px;
+        }
+        .ba-eyebrow {
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: 0.78rem;
+            font-weight: 500;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--peach-orange);
+            opacity: 0.9;
+            margin: 0 0 0.75rem;
+        }
+        .ba-h2 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            margin: 0 0 0.85rem;
+            color: var(--text-on-card);
+        }
+        .ba-h2 .ba-blue {
             background: linear-gradient(135deg, var(--wave-blue) 0%, var(--wave-blue-light) 100%);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
         }
-
-        /* The deck: stage on the left, controls panel on the right.
-           Since controls no longer compete for vertical space, the stage
-           gets a generous height budget and can render much larger. */
-        .ba-deck {
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            gap: clamp(1.25rem, 2.5vw, 2rem);
-            margin: clamp(1.5rem, 3vw, 2.5rem) auto 0;
+        .ba-sub {
+            font-size: clamp(1rem, 1.6vw, 1.15rem);
+            color: var(--text-on-card-secondary);
+            margin: 0;
+            line-height: 1.5;
         }
 
-        .ba-stage-wrap {
-            flex: 1 1 0;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            /* Shared width budget so stage + toggle line up exactly. */
-            --ba-stage-w: min(640px, max(320px, calc((100vh - 300px) * 16 / 18)));
-        }
-
-        /* The stage: two stacked 16:9 panels = composed aspect 16:18.
-           max-width = the smaller of (640px) and (a width that, given the
-           16:18 aspect ratio, keeps height within the viewport minus room
-           for nav + section header + section padding). With controls now
-           to the side, vertical budget is generous. */
+        /* The stage: scene + UI as two equal panels, each rendered at the
+           UI's native 16:9 (no clipping). Layout flips responsively:
+             - Wide screens: side-by-side  → stage aspect 32:9
+             - Narrow screens: stacked     → stage aspect 16:18 (= 8:9)
+           Both panels are always the SAME WIDTH as each other. */
         .ba-stage {
             position: relative;
             width: 100%;
-            aspect-ratio: 16 / 18;
-            max-width: var(--ba-stage-w, 640px);
+            aspect-ratio: 32 / 9;
+            /* Cap by content max-width AND by viewport height (stage height
+               at 32:9 is short, so vh budget is generous). */
+            max-width: min(1180px, calc((100vh - 360px) * 32 / 9));
             margin: 0 auto;
             background: #000;
             border-radius: 18px;
@@ -4342,22 +4391,15 @@
                 0 30px 80px -20px rgba(0, 0, 0, 0.6),
                 0 0 60px -10px rgba(74, 144, 217, 0.15);
             display: grid;
-            grid-template-rows: 1fr 1fr;
-        }
-
-        /* Side panel: vertical stack of toggle + chapters + hint */
-        .ba-side {
-            flex: 0 0 320px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            min-width: 0;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto;
+            transition: box-shadow 0.45s ease;
         }
         .ba-stage[data-side="before"] {
             box-shadow:
                 0 0 0 1px rgba(255, 255, 255, 0.06),
                 0 30px 80px -20px rgba(0, 0, 0, 0.6),
-                0 0 60px -10px rgba(255, 107, 53, 0.18);
+                0 0 60px -10px rgba(255, 107, 53, 0.20);
         }
         .ba-scene,
         .ba-ui {
@@ -4374,30 +4416,24 @@
             object-fit: cover;
             display: block;
         }
-        /* Scene fades in once it has a frame to show */
         .ba-scene-video {
             opacity: 0;
             transition: opacity 0.25s ease;
         }
         .ba-scene-video.is-ready { opacity: 1; }
-        /* Both UI videos play simultaneously, stacked.
-           Only the active side is visible; sides crossfade on flip. */
+        /* Both UI videos play in parallel; only the active is visible. */
         .ba-ui-video {
             opacity: 0;
-            transition: opacity 0.12s ease-out;
+            transition: opacity 0.18s ease-out;
         }
-        .ba-ui-video.is-active {
-            opacity: 1;
-        }
-        /* Thin divider between scene and UI */
+        .ba-ui-video.is-active { opacity: 1; }
+        /* Hairline divider between scene and UI — vertical when side-by-side. */
         .ba-scene::after {
             content: '';
             position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 1px;
-            background: linear-gradient(90deg,
+            top: 0; bottom: 0; right: 0;
+            width: 1px;
+            background: linear-gradient(180deg,
                 transparent 0%,
                 rgba(255, 255, 255, 0.18) 30%,
                 rgba(255, 255, 255, 0.18) 70%,
@@ -4405,25 +4441,136 @@
             z-index: 2;
         }
 
+        /* Phase label — small, top-left of the scene. Colour-codes the
+           current side so even a glance tells you what's playing. */
+        .ba-phase {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            z-index: 4;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px 6px 10px;
+            background: rgba(0, 0, 0, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 999px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            font-family: 'JetBrains Mono', ui-monospace, monospace;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.18em;
+            color: #fff;
+            transition: color 0.25s ease, border-color 0.25s ease;
+        }
+        .ba-phase[data-side="before"] {
+            color: var(--peach-orange-light);
+            border-color: rgba(255, 107, 53, 0.35);
+        }
+        .ba-phase[data-side="after"] {
+            color: var(--wave-blue-light);
+            border-color: rgba(74, 144, 217, 0.45);
+        }
+        .ba-phase-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 10px currentColor;
+        }
+        .ba-phase-text { line-height: 1; }
+
+        /* Ghost A/B toggle — tiny, bottom-right of the scene.
+           For power users only; auto-cycle does the work otherwise. */
+        .ba-ab {
+            position: absolute;
+            bottom: 14px;
+            right: 14px;
+            z-index: 4;
+            display: inline-flex;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+            padding: 3px;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .ba-ab-btn {
+            width: 28px;
+            height: 24px;
+            background: transparent;
+            border: 0;
+            color: rgba(255, 255, 255, 0.55);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background 0.18s ease, color 0.18s ease;
+        }
+        .ba-ab-btn:hover { color: #fff; }
+        .ba-ab-btn.is-active {
+            background: rgba(255, 255, 255, 0.14);
+            color: #fff;
+        }
+        .ba-ab-btn[data-side="before"].is-active {
+            background: rgba(255, 107, 53, 0.45);
+            color: #fff;
+        }
+        .ba-ab-btn[data-side="after"].is-active {
+            background: rgba(74, 144, 217, 0.55);
+            color: #fff;
+        }
+
+        /* The emotional caption — the hierarchy hero, overlaid on the
+           bottom of the scene. Big, soft, fades on side change. */
+        .ba-caption {
+            position: absolute;
+            left: 0; right: 0;
+            bottom: 0;
+            z-index: 3;
+            padding: 24px 24px 22px;
+            background: linear-gradient(180deg,
+                rgba(0, 0, 0, 0) 0%,
+                rgba(0, 0, 0, 0.55) 60%,
+                rgba(0, 0, 0, 0.75) 100%);
+            pointer-events: none;
+        }
+        .ba-caption-text {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(1.1rem, 2.3vw, 1.7rem);
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: -0.01em;
+            text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+            transition: opacity 0.28s ease, transform 0.28s ease;
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .ba-caption-text.is-swapping {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+
         /* Initial play overlay covering the stage */
         .ba-overlay {
             position: absolute;
             inset: 0;
-            z-index: 5;
+            z-index: 10;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             gap: 14px;
-            background:
-                radial-gradient(ellipse at center, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.55) 100%);
+            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.55) 100%);
             color: #fff;
             border: 0;
             cursor: pointer;
             font-family: inherit;
-            transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
-            -webkit-backdrop-filter: saturate(115%);
-            backdrop-filter: saturate(115%);
+            transition: opacity 0.3s ease;
         }
         .ba-overlay:hover { background: radial-gradient(ellipse at center, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.45) 100%); }
         .ba-overlay.is-hidden {
@@ -4431,8 +4578,8 @@
             pointer-events: none;
         }
         .ba-overlay-icon {
-            width: 72px;
-            height: 72px;
+            width: 78px;
+            height: 78px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--peach-orange) 0%, var(--wave-blue) 100%);
             display: flex;
@@ -4447,18 +4594,16 @@
             font-size: 0.95rem;
             font-weight: 600;
             letter-spacing: 0.04em;
-            text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
         }
 
-        /* Progress bar pinned to the bottom of the stage */
+        /* Progress bar pinned to the bottom edge */
         .ba-progress {
             position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            left: 0; right: 0; bottom: 0;
             height: 3px;
             background: rgba(255, 255, 255, 0.08);
-            z-index: 3;
+            z-index: 5;
         }
         .ba-progress-fill {
             height: 100%;
@@ -4467,217 +4612,118 @@
             transition: width 0.08s linear;
         }
 
-        /* BEFORE / AFTER segmented toggle, sits directly under the stage
-           and matches its width via the shared --ba-stage-w variable. */
-        .ba-toggle {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            background: rgba(255, 255, 255, 0.04);
-            padding: 5px;
-            border-radius: 12px;
-            border: 1px solid var(--border-card);
-            width: 100%;
-            max-width: var(--ba-stage-w, 640px);
-        }
-        .ba-toggle-btn {
+        /* Scenario dots — three subtle pill chips below the stage.
+           Just enough nav to jump between moments; doesn't dominate. */
+        .ba-scenarios {
             display: flex;
-            align-items: center;
+            flex-wrap: wrap;
             justify-content: center;
-            gap: 8px;
-            padding: 11px 12px;
-            background: transparent;
+            gap: 10px;
+        }
+        .ba-dot {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            padding: 9px 16px 9px 13px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-card);
+            border-radius: 999px;
             color: var(--text-on-card-secondary);
-            border: 0;
-            border-radius: 9px;
-            font-family: 'JetBrains Mono', ui-monospace, monospace;
-            font-size: 0.78rem;
+            font-family: inherit;
+            font-size: 0.85rem;
             font-weight: 500;
-            letter-spacing: 0.16em;
+            letter-spacing: 0.01em;
             cursor: pointer;
-            transition: background 0.18s ease, color 0.18s ease, transform 0.12s ease;
-            position: relative;
+            transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease, transform 0.12s ease;
         }
-        .ba-toggle-btn:hover { color: var(--text-on-card); }
-        .ba-toggle-btn:active { transform: scale(0.98); }
-        .ba-toggle-btn.is-active.ba-toggle-btn--before {
-            background: linear-gradient(135deg, rgba(255, 107, 53, 0.18) 0%, rgba(255, 107, 53, 0.08) 100%);
-            color: var(--peach-orange-light);
-            box-shadow: inset 0 0 0 1px rgba(255, 107, 53, 0.35);
+        .ba-dot:hover {
+            color: var(--text-on-card);
+            border-color: rgba(255, 255, 255, 0.18);
         }
-        .ba-toggle-btn.is-active.ba-toggle-btn--after {
-            background: linear-gradient(135deg, rgba(74, 144, 217, 0.20) 0%, rgba(74, 144, 217, 0.08) 100%);
-            color: var(--wave-blue-light);
-            box-shadow: inset 0 0 0 1px rgba(74, 144, 217, 0.4);
-        }
-        .ba-toggle-dot {
+        .ba-dot:active { transform: scale(0.98); }
+        .ba-dot-mark {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: currentColor;
-            opacity: 0.45;
-            transition: opacity 0.18s ease, box-shadow 0.18s ease;
+            background: rgba(255, 255, 255, 0.25);
+            transition: background 0.2s ease, box-shadow 0.2s ease;
         }
-        .ba-toggle-btn.is-active .ba-toggle-dot {
-            opacity: 1;
-            box-shadow: 0 0 12px currentColor;
-        }
-
-        /* Chapter list: vertical stack inside the side panel */
-        .ba-chapters {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .ba-chapter {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 4px;
-            padding: 12px 14px 10px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-card);
-            border-radius: 12px;
-            color: var(--text-on-card-secondary);
-            cursor: pointer;
-            text-align: left;
-            font-family: inherit;
-            transition: border-color 0.2s ease, transform 0.15s ease, background 0.2s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        .ba-chapter:hover {
-            border-color: rgba(255, 255, 255, 0.15);
-            transform: translateX(2px);
-        }
-        .ba-chapter.is-active {
+        .ba-dot.is-active {
+            color: var(--text-on-card);
             border-color: rgba(74, 144, 217, 0.45);
-            background: linear-gradient(145deg, rgba(74, 144, 217, 0.10) 0%, rgba(255, 107, 53, 0.06) 100%);
-            color: var(--text-on-card);
-            transform: translateX(0);
+            background: linear-gradient(135deg, rgba(74, 144, 217, 0.12) 0%, rgba(255, 107, 53, 0.06) 100%);
         }
-        .ba-chapter-num {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.68rem;
-            font-weight: 500;
-            letter-spacing: 0.2em;
-            color: var(--peach-orange);
-            opacity: 0.85;
+        .ba-dot.is-active .ba-dot-mark {
+            background: var(--wave-blue-light);
+            box-shadow: 0 0 12px var(--wave-blue-light);
         }
-        .ba-chapter-title {
-            font-size: 0.95rem;
+        .ba-dot-label { line-height: 1; }
+
+        /* CTA — single strong call after the emotional realisation */
+        .ba-cta {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .ba-cta-btn {
+            padding: 0.95rem 2rem;
+            font-size: 1.05rem;
             font-weight: 600;
-            color: var(--text-on-card);
+            letter-spacing: 0.01em;
         }
-        .ba-chapter-sub {
-            font-size: 0.78rem;
-            font-weight: 400;
+        .ba-cta-sub {
+            margin: 0;
+            font-size: 0.85rem;
             color: var(--text-on-card-secondary);
-            line-height: 1.35;
-        }
-        .ba-chapter-bar {
-            display: block;
-            width: 100%;
-            height: 2px;
-            margin-top: 6px;
-            background: rgba(255, 255, 255, 0.06);
-            border-radius: 999px;
-            overflow: hidden;
-        }
-        .ba-chapter-fill {
-            display: block;
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, var(--peach-orange) 0%, var(--wave-blue) 100%);
-            transition: width 0.08s linear;
+            opacity: 0.75;
         }
 
-        /* Keyboard hint at bottom of side panel */
-        .ba-hint {
-            text-align: left;
-            margin-top: 4px;
-            color: var(--text-on-card-secondary);
-            font-size: 0.72rem;
-            opacity: 0.6;
-            letter-spacing: 0.02em;
-            line-height: 1.7;
-        }
-        .ba-hint kbd {
-            display: inline-block;
-            padding: 2px 7px;
-            margin: 0 2px;
-            background: rgba(255, 255, 255, 0.06);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 5px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            color: var(--text-on-card);
-        }
-
-        /* Audio-unlocked toast */
-        .ba-toast {
-            position: absolute;
-            top: 14px;
-            left: 50%;
-            transform: translateX(-50%) translateY(-8px);
-            background: rgba(0, 0, 0, 0.7);
-            color: #fff;
-            font-size: 0.8rem;
-            font-weight: 500;
-            padding: 8px 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            z-index: 6;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.25s ease, transform 0.25s ease;
-        }
-        .ba-toast.is-visible {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        /* Tablet / narrow desktop: stack deck vertically when there's no
-           room for stage + chapters side-by-side */
-        @media (max-width: 880px) {
-            .ba-deck {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 14px;
+        /* Tablet / phone: stack the two panels vertically. Each panel
+           keeps its native 16:9 — composed aspect becomes 16:18. */
+        @media (max-width: 720px) {
+            .ba-stage {
+                border-radius: 14px;
+                aspect-ratio: 16 / 18;
+                /* In stacked mode height matters again — cap via vh budget. */
+                max-width: min(560px, max(280px, calc((100vh - 400px) * 16 / 18)));
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr 1fr;
             }
-            .ba-stage-wrap {
-                /* When stacked we DO need to share vertical space with the
-                   chapter panel below, so use a tighter height budget. */
-                --ba-stage-w: min(560px, max(280px, calc((100vh - 480px) * 16 / 18)));
+            /* Divider flips to horizontal (separates the two stacked rows) */
+            .ba-scene::after {
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                width: auto;
+                height: 1px;
+                background: linear-gradient(90deg,
+                    transparent 0%,
+                    rgba(255, 255, 255, 0.18) 30%,
+                    rgba(255, 255, 255, 0.18) 70%,
+                    transparent 100%);
             }
-            .ba-side {
-                flex: 0 0 auto;
-                max-width: 560px;
-                margin: 0 auto;
-                width: 100%;
-            }
-            .ba-hint { text-align: center; }
-        }
-
-        /* Mobile */
-        @media (max-width: 560px) {
-            .ba-stage { border-radius: 14px; }
-            .ba-overlay-icon { width: 60px; height: 60px; }
+            .ba-phase { top: 10px; left: 10px; }
+            .ba-ab    { bottom: 10px; right: 10px; }
+            .ba-caption { padding: 18px 16px 14px; }
+            .ba-overlay-icon { width: 64px; height: 64px; }
             .ba-overlay-label { font-size: 0.85rem; }
-            .ba-hint { display: none; }
+            .ba-dot { font-size: 0.78rem; padding: 8px 14px 8px 11px; }
         }
 
-        /* Reduced motion: keep the swap, drop the transitions */
+        /* Reduced motion: drop transitions, keep instant state changes */
         @media (prefers-reduced-motion: reduce) {
             .ba-scene-video,
             .ba-ui-video,
             .ba-overlay,
-            .ba-toggle-btn,
-            .ba-chapter,
+            .ba-caption-text,
             .ba-progress-fill,
-            .ba-chapter-fill {
+            .ba-dot,
+            .ba-ab-btn,
+            .ba-phase,
+            .ba-stage {
                 transition: none !important;
             }
         }
@@ -4785,100 +4831,101 @@
     <!-- Hear the Difference — Before / After Demo -->
     <section class="before-after" id="hear-the-difference">
         <div class="ba-container">
-            <div class="section-header">
-                <p class="section-label">Hear the difference</p>
-                <h2>The moment, <span class="ba-blue">retimed</span>.</h2>
-                <p class="section-subtitle">
-                    Three scenes, three cues. Same track &mdash; different landings.
-                    Pick a chapter, then flip BEFORE / AFTER to hear what BeatCue rebuilt.
-                </p>
-            </div>
+            <header class="ba-headline">
+                <p class="ba-eyebrow">When the music lands</p>
+                <h2 class="ba-h2">The moment finally <span class="ba-blue">lands</span>.</h2>
+                <p class="ba-sub">Same footage. Same track. Different timing.</p>
+            </header>
 
-            <div class="ba-deck">
-                <div class="ba-stage-wrap">
-                    <div class="ba-stage" id="baStage" data-side="after" data-pair="train">
-                        <div class="ba-scene">
-                            <video class="ba-scene-video" id="baSceneVideo" loop muted playsinline preload="auto"></video>
-                        </div>
-                        <div class="ba-ui">
-                            <video class="ba-ui-video ba-ui-video--before" id="baUiVideoBefore" loop muted playsinline preload="auto" data-side="before"></video>
-                            <video class="ba-ui-video ba-ui-video--after is-active" id="baUiVideoAfter" loop muted playsinline preload="auto" data-side="after"></video>
-                        </div>
-                        <audio id="baAudioBefore" preload="auto" data-side="before" loop></audio>
-                        <audio id="baAudioAfter" preload="auto" data-side="after" loop></audio>
+            <div class="ba-stage" id="baStage" data-side="before" data-pair="train">
+                <div class="ba-scene">
+                    <video class="ba-scene-video" id="baSceneVideo" loop muted playsinline preload="auto"></video>
 
-                        <button class="ba-overlay" id="baOverlay" type="button" aria-label="Play with sound">
-                            <span class="ba-overlay-icon" aria-hidden="true">
-                                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                            </span>
-                            <span class="ba-overlay-label">Hear the difference</span>
-                        </button>
-
-                        <div class="ba-toast" id="baToast" role="status" aria-live="polite">Sound on</div>
-
-                        <div class="ba-progress" aria-hidden="true">
-                            <div class="ba-progress-fill" id="baProgressFill"></div>
-                        </div>
-                    </div>
-
-                    <div class="ba-toggle" role="group" aria-label="Compare before and after">
-                        <button class="ba-toggle-btn ba-toggle-btn--before" type="button" data-side="before" aria-pressed="false">
-                            <span class="ba-toggle-dot" aria-hidden="true"></span>
-                            <span class="ba-toggle-label">BEFORE</span>
-                        </button>
-                        <button class="ba-toggle-btn ba-toggle-btn--after is-active" type="button" data-side="after" aria-pressed="true">
-                            <span class="ba-toggle-dot" aria-hidden="true"></span>
-                            <span class="ba-toggle-label">AFTER</span>
-                        </button>
+                    <!-- Emotional caption overlaid on bottom of scene -->
+                    <div class="ba-caption" id="baCaption" aria-live="polite">
+                        <p class="ba-caption-text" id="baCaptionText">He finds her. The music doesn&rsquo;t notice.</p>
                     </div>
                 </div>
 
-                <aside class="ba-side" aria-label="Demo controls">
-                    <div class="ba-chapters" role="tablist" aria-label="Choose a scene">
-                        <button class="ba-chapter is-active" type="button" role="tab" aria-selected="true"
-                                data-pair="train"
-                                data-scene="Resources/train/train_station_scene.mp4"
-                                data-ui-before="Resources/train/train_station_before_ui.mp4"
-                                data-ui-after="Resources/train/train_station_after_ui.mp4"
-                                data-audio-before="Resources/train/train_station_before_audio.m4a"
-                                data-audio-after="Resources/train/train_station_after_audio.m4a">
-                            <span class="ba-chapter-num">01 / TRAIN</span>
-                            <span class="ba-chapter-title">Station</span>
-                            <span class="ba-chapter-sub">Cue hits the doors closing.</span>
-                            <span class="ba-chapter-bar"><span class="ba-chapter-fill"></span></span>
-                        </button>
-                        <button class="ba-chapter" type="button" role="tab" aria-selected="false"
-                                data-pair="jump"
-                                data-scene="Resources/jump/anime_jump_scene.mp4"
-                                data-ui-before="Resources/jump/anime_jump_before_ui.mp4"
-                                data-ui-after="Resources/jump/anime_jump_after_ui.mp4"
-                                data-audio-before="Resources/jump/anime_jump_before_audio.m4a"
-                                data-audio-after="Resources/jump/anime_jump_after_audio.m4a">
-                            <span class="ba-chapter-num">02 / ANIME</span>
-                            <span class="ba-chapter-title">The leap</span>
-                            <span class="ba-chapter-sub">Drop on the jump, not after.</span>
-                            <span class="ba-chapter-bar"><span class="ba-chapter-fill"></span></span>
-                        </button>
-                        <button class="ba-chapter" type="button" role="tab" aria-selected="false"
-                                data-pair="horror"
-                                data-scene="Resources/horror/horror_scene.mp4"
-                                data-ui-before="Resources/horror/horror_before_ui.mp4"
-                                data-ui-after="Resources/horror/horror_after_ui.mp4"
-                                data-audio-before="Resources/horror/horror_before_audio.m4a"
-                                data-audio-after="Resources/horror/horror_after_audio.m4a">
-                            <span class="ba-chapter-num">03 / HORROR</span>
-                            <span class="ba-chapter-title">Jump-scare</span>
-                            <span class="ba-chapter-sub">Music lands on the gasp.</span>
-                            <span class="ba-chapter-bar"><span class="ba-chapter-fill"></span></span>
-                        </button>
-                    </div>
+                <!-- The companion panel: BeatCue UI showing the cue + waveform -->
+                <div class="ba-ui">
+                    <video class="ba-ui-video ba-ui-video--before" id="baUiVideoBefore" loop muted playsinline preload="auto" data-side="before"></video>
+                    <video class="ba-ui-video ba-ui-video--after is-active" id="baUiVideoAfter" loop muted playsinline preload="auto" data-side="after"></video>
+                </div>
 
-                    <p class="ba-hint">
-                        <kbd>&larr;</kbd> <kbd>&rarr;</kbd> flip &middot;
-                        <kbd>1</kbd>&ndash;<kbd>3</kbd> chapter &middot;
-                        <kbd>Space</kbd> play / pause
-                    </p>
-                </aside>
+                <audio id="baAudioBefore" preload="auto" data-side="before"></audio>
+                <audio id="baAudioAfter" preload="auto" data-side="after"></audio>
+
+                <!-- Phase label (top-left of stage) -->
+                <div class="ba-phase" id="baPhase" data-side="before" aria-live="polite">
+                    <span class="ba-phase-dot" aria-hidden="true"></span>
+                    <span class="ba-phase-text">BEFORE</span>
+                </div>
+
+                <!-- Ghost A/B toggle (tiny, bottom-right of stage) -->
+                <div class="ba-ab" role="group" aria-label="Compare before and after">
+                    <button class="ba-ab-btn is-active" type="button" data-side="before" aria-pressed="true" title="Before">A</button>
+                    <button class="ba-ab-btn" type="button" data-side="after" aria-pressed="false" title="After">B</button>
+                </div>
+
+                <button class="ba-overlay" id="baOverlay" type="button" aria-label="Play with sound">
+                    <span class="ba-overlay-icon" aria-hidden="true">
+                        <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    </span>
+                    <span class="ba-overlay-label">Play with sound</span>
+                </button>
+
+                <div class="ba-progress" aria-hidden="true">
+                    <div class="ba-progress-fill" id="baProgressFill"></div>
+                </div>
+            </div>
+
+            <!-- Scenario dots: subtle nav between three moments -->
+            <div class="ba-scenarios" role="tablist" aria-label="Choose a moment">
+                <button class="ba-dot is-active" type="button" role="tab" aria-selected="true"
+                        data-pair="train"
+                        data-label="The reunion"
+                        data-before-caption="He finds her. The music doesn&rsquo;t notice."
+                        data-after-caption="The music finds her too."
+                        data-scene="Resources/train/train_station_scene.mp4"
+                        data-ui-before="Resources/train/train_station_before_ui.mp4"
+                        data-ui-after="Resources/train/train_station_after_ui.mp4"
+                        data-audio-before="Resources/train/train_station_before_audio.m4a"
+                        data-audio-after="Resources/train/train_station_after_audio.m4a">
+                    <span class="ba-dot-mark" aria-hidden="true"></span>
+                    <span class="ba-dot-label">The reunion</span>
+                </button>
+                <button class="ba-dot" type="button" role="tab" aria-selected="false"
+                        data-pair="jump"
+                        data-label="The leap"
+                        data-before-caption="The leap goes by."
+                        data-after-caption="The leap finally lands."
+                        data-scene="Resources/jump/anime_jump_scene.mp4"
+                        data-ui-before="Resources/jump/anime_jump_before_ui.mp4"
+                        data-ui-after="Resources/jump/anime_jump_after_ui.mp4"
+                        data-audio-before="Resources/jump/anime_jump_before_audio.m4a"
+                        data-audio-after="Resources/jump/anime_jump_after_audio.m4a">
+                    <span class="ba-dot-mark" aria-hidden="true"></span>
+                    <span class="ba-dot-label">The leap</span>
+                </button>
+                <button class="ba-dot" type="button" role="tab" aria-selected="false"
+                        data-pair="horror"
+                        data-label="The reveal"
+                        data-before-caption="The scare lands soft."
+                        data-after-caption="The scare hits."
+                        data-scene="Resources/horror/horror_scene.mp4"
+                        data-ui-before="Resources/horror/horror_before_ui.mp4"
+                        data-ui-after="Resources/horror/horror_after_ui.mp4"
+                        data-audio-before="Resources/horror/horror_before_audio.m4a"
+                        data-audio-after="Resources/horror/horror_after_audio.m4a">
+                    <span class="ba-dot-mark" aria-hidden="true"></span>
+                    <span class="ba-dot-label">The reveal</span>
+                </button>
+            </div>
+
+            <div class="ba-cta">
+                <a href="download.html" class="btn btn-primary ba-cta-btn">Try it on your own edit</a>
+                <p class="ba-cta-sub">Free to try &middot; macOS &amp; Windows</p>
             </div>
         </div>
     </section>
@@ -5075,14 +5122,24 @@
         }
 
         // ============================================
-        // BEFORE / AFTER DEMO — "Hear the difference"
-        // Concept A: one stage, three chapters.
+        // BEFORE / AFTER — "The moment finally lands"
         //
-        // Per pair we preload BOTH sides in parallel:
-        //   - 2 UI videos (before/after) stacked, only one is visible
-        //   - 2 audio elements (before/after), only one has volume
-        // Flipping sides just swaps opacity + volume — no reload, no
-        // restart — so the user hears the same musical moment cleanly.
+        // GUIDED AUTO-CYCLE:
+        //   For each scenario: full BEFORE → full AFTER → advance to next.
+        //   After the first user click ("Play with sound"), no further
+        //   interaction is required. The contrast is delivered to them.
+        //
+        // ARCHITECTURE:
+        //   Both BEFORE and AFTER audio elements are loaded in parallel
+        //   per scenario and play simultaneously. Only the active side
+        //   has volume; the other is muted-but-playing so the timeline
+        //   stays shared. The ghost A/B toggle just swaps volume + UI
+        //   opacity (no seek) for instant manual comparison.
+        //
+        // CYCLE BOUNDARY:
+        //   audio.ended on the active side is the canonical "phase over"
+        //   signal. We then either flip to AFTER or advance to the next
+        //   scenario, restarting all media from 0 in lockstep.
         // ============================================
         (function setupBeforeAfter() {
             const stage = document.getElementById('baStage');
@@ -5098,40 +5155,39 @@
                 after:  document.getElementById('baAudioAfter'),
             };
             const overlay = document.getElementById('baOverlay');
-            const toast = document.getElementById('baToast');
             const progressFill = document.getElementById('baProgressFill');
-            const toggleBtns = Array.from(document.querySelectorAll('.ba-toggle-btn'));
-            const chapterBtns = Array.from(document.querySelectorAll('.ba-chapter'));
+            const phase = document.getElementById('baPhase');
+            const phaseText = phase && phase.querySelector('.ba-phase-text');
+            const captionText = document.getElementById('baCaptionText');
+            const abBtns = Array.from(document.querySelectorAll('.ba-ab-btn'));
+            const dotBtns = Array.from(document.querySelectorAll('.ba-dot'));
 
-            // Pair config from chapter button data-attributes
+            // Build the scenario list in DOM order — that's the cycle order.
+            const scenarioOrder = dotBtns.map((b) => b.dataset.pair);
             const pairs = {};
-            chapterBtns.forEach((btn) => {
+            dotBtns.forEach((btn) => {
                 pairs[btn.dataset.pair] = {
                     scene: btn.dataset.scene,
                     uiBefore: btn.dataset.uiBefore,
                     uiAfter: btn.dataset.uiAfter,
                     audioBefore: btn.dataset.audioBefore,
                     audioAfter: btn.dataset.audioAfter,
+                    label: btn.dataset.label,
+                    captionBefore: btn.dataset.beforeCaption,
+                    captionAfter:  btn.dataset.afterCaption,
                 };
             });
 
             const state = {
-                pair: 'train',
-                side: 'after',     // sell the win by default
-                unlocked: false,   // true after first user interaction
+                pair: scenarioOrder[0] || 'train',
+                side: 'before',    // we always START on BEFORE so the contrast is felt
+                unlocked: false,   // becomes true after the first user click
                 playing: false,
-                toastTimer: null,
+                cycling: false,    // gates re-entrancy on the ended boundary
                 rafId: null,
             };
 
-            function showToast(msg, ms) {
-                if (!toast) return;
-                toast.textContent = msg;
-                toast.classList.add('is-visible');
-                clearTimeout(state.toastTimer);
-                state.toastTimer = setTimeout(() => toast.classList.remove('is-visible'), ms || 1600);
-            }
-
+            // ---------- helpers ----------
             function setElementSrc(el, src) {
                 if (!el || el.src.endsWith(src)) return false;
                 el.src = src;
@@ -5139,7 +5195,6 @@
                 return true;
             }
 
-            // Load all 5 elements for a pair. Returns true if anything changed.
             function loadPair(pair) {
                 const cfg = pairs[pair];
                 if (!cfg) return false;
@@ -5155,13 +5210,14 @@
 
             sceneVideo.addEventListener('loadeddata', () => sceneVideo.classList.add('is-ready'));
 
-            // Audio levels: only the active side has volume, but BOTH play
-            // in parallel so flipping is instant + the timeline stays shared.
+            function activeAudio()   { return audios[state.side]; }
+            function inactiveSide()  { return state.side === 'before' ? 'after' : 'before'; }
+
             function applyAudioLevels() {
                 ['before', 'after'].forEach((side) => {
                     const a = audios[side];
                     const isActive = side === state.side;
-                    a.muted = !(isActive && state.unlocked);
+                    a.muted  = !(isActive && state.unlocked);
                     a.volume = (isActive && state.unlocked) ? 1.0 : 0.0;
                 });
             }
@@ -5172,6 +5228,47 @@
                 });
             }
 
+            // Caption swap with a brief fade so it feels intentional.
+            function setCaption(text) {
+                if (!captionText) return;
+                if (captionText.textContent === text) return;
+                captionText.classList.add('is-swapping');
+                setTimeout(() => {
+                    captionText.textContent = text;
+                    captionText.classList.remove('is-swapping');
+                }, 220);
+            }
+
+            function setPhase(side) {
+                if (phase) phase.dataset.side = side;
+                if (phaseText) phaseText.textContent = side === 'before' ? 'BEFORE' : 'AFTER';
+            }
+
+            function setActiveAb(side) {
+                abBtns.forEach((btn) => {
+                    const isOn = btn.dataset.side === side;
+                    btn.classList.toggle('is-active', isOn);
+                    btn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
+                });
+                stage.dataset.side = side;
+            }
+
+            function setActiveDot(pair) {
+                dotBtns.forEach((btn) => {
+                    const isOn = btn.dataset.pair === pair;
+                    btn.classList.toggle('is-active', isOn);
+                    btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
+                });
+                stage.dataset.pair = pair;
+            }
+
+            function updateCaptionForCurrent() {
+                const cfg = pairs[state.pair];
+                if (!cfg) return;
+                setCaption(state.side === 'before' ? cfg.captionBefore : cfg.captionAfter);
+            }
+
+            // ---------- playback ----------
             function playAll() {
                 sceneVideo.play().catch(() => {});
                 uiVideos.before.play().catch(() => {});
@@ -5192,10 +5289,8 @@
                 stopProgressLoop();
             }
 
-            // Restart everything from 0. Used on chapter change + first unlock,
-            // so all five elements share a single starting timestamp. After that
-            // we let them play undisturbed — periodic drift correction would
-            // fight the user's playback (especially around loop boundaries).
+            // Reset every clock to 0 and play — used at cycle boundaries and on
+            // chapter/scenario change. Keeps the five elements in lockstep.
             function restartAndPlay() {
                 [sceneVideo, uiVideos.before, uiVideos.after, audios.before, audios.after].forEach((el) => {
                     try { el.currentTime = 0; } catch (e) {}
@@ -5203,24 +5298,15 @@
                 playAll();
             }
 
-            // The active audio is the master clock for the progress bar.
-            function activeAudio() { return audios[state.side]; }
-            function inactiveAudio() { return audios[state.side === 'before' ? 'after' : 'before']; }
-
             function startProgressLoop() {
                 stopProgressLoop();
                 const tick = () => {
                     if (!state.playing) return;
                     const a = activeAudio();
                     const dur = a.duration || sceneVideo.duration || 0;
-                    const t = a.currentTime || 0;
+                    const t   = a.currentTime || 0;
                     const pct = dur > 0 ? Math.min(100, (t / dur) * 100) : 0;
                     progressFill.style.width = pct + '%';
-                    chapterBtns.forEach((btn) => {
-                        const fill = btn.querySelector('.ba-chapter-fill');
-                        if (!fill) return;
-                        fill.style.width = (btn.dataset.pair === state.pair) ? (pct + '%') : '0%';
-                    });
                     state.rafId = requestAnimationFrame(tick);
                 };
                 state.rafId = requestAnimationFrame(tick);
@@ -5230,52 +5316,84 @@
                 state.rafId = null;
             }
 
-            function setActiveToggle(side) {
-                toggleBtns.forEach((btn) => {
-                    const isOn = btn.dataset.side === side;
-                    btn.classList.toggle('is-active', isOn);
-                    btn.setAttribute('aria-pressed', isOn ? 'true' : 'false');
-                });
-                stage.dataset.side = side;
+            // ---------- auto-cycle: full BEFORE → full AFTER → next scenario ----------
+            function advanceCycle() {
+                if (state.cycling) return;          // guard against both audios firing 'ended'
+                state.cycling = true;
+
+                if (state.side === 'before') {
+                    // Phase 1 complete → swap to AFTER (same scenario) and restart in lockstep
+                    state.side = 'after';
+                    setActiveAb('after');
+                    setPhase('after');
+                    applyUiOpacity();
+                    applyAudioLevels();
+                    updateCaptionForCurrent();
+                    restartAndPlay();
+                    state.cycling = false;
+                } else {
+                    // Phase 2 complete → advance to the next scenario, reset to BEFORE
+                    const idx = scenarioOrder.indexOf(state.pair);
+                    const nextPair = scenarioOrder[(idx + 1) % scenarioOrder.length];
+                    state.pair = nextPair;
+                    state.side = 'before';
+                    setActiveDot(nextPair);
+                    setActiveAb('before');
+                    setPhase('before');
+                    loadPair(nextPair);
+                    updateCaptionForCurrent();
+                    applyUiOpacity();
+                    applyAudioLevels();
+                    const a = activeAudio();
+                    const start = () => {
+                        a.removeEventListener('canplay', start);
+                        restartAndPlay();
+                        state.cycling = false;
+                    };
+                    if (a.readyState >= 2) start(); else a.addEventListener('canplay', start);
+                }
             }
 
-            function setActiveChapter(pair) {
-                chapterBtns.forEach((btn) => {
-                    const isOn = btn.dataset.pair === pair;
-                    btn.classList.toggle('is-active', isOn);
-                    btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
+            // Listen on BOTH audio elements; the guard above debounces duplicate fires.
+            ['before', 'after'].forEach((side) => {
+                audios[side].addEventListener('ended', () => {
+                    if (!state.unlocked) return;     // first user click hasn't happened yet
+                    if (side !== state.side) return; // only the active side defines the cycle
+                    advanceCycle();
                 });
-                stage.dataset.pair = pair;
-            }
+            });
 
-            // Flip side WITHOUT restarting playback — the whole point of the demo.
-            // We do NOT touch currentTime here; both audios + both UI videos have
-            // been playing in parallel from the same start, so they're already in
-            // sync. Only volume + opacity change.
-            function applySide(side) {
+            // ---------- manual interactions ----------
+            // Ghost A/B flip — no seek, just swap volume + opacity.
+            function applyManualSide(side) {
                 if (side === state.side) return;
                 state.side = side;
-                setActiveToggle(side);
+                setActiveAb(side);
+                setPhase(side);
                 applyUiOpacity();
                 applyAudioLevels();
+                updateCaptionForCurrent();
             }
 
-            function applyChapter(pair) {
+            // Jump to a different scenario (dot click). Always restarts on BEFORE
+            // so the user feels the full contrast for that moment.
+            function jumpToScenario(pair) {
                 if (!pairs[pair] || pair === state.pair) return;
                 state.pair = pair;
-                setActiveChapter(pair);
+                state.side = 'before';
+                setActiveDot(pair);
+                setActiveAb('before');
+                setPhase('before');
                 loadPair(pair);
-                // Wait for the active audio to be ready, then restart all
+                updateCaptionForCurrent();
+                applyUiOpacity();
+                applyAudioLevels();
                 const a = activeAudio();
-                const startWhenReady = () => {
-                    a.removeEventListener('canplay', startWhenReady);
+                const start = () => {
+                    a.removeEventListener('canplay', start);
                     restartAndPlay();
                 };
-                if (a.readyState >= 2) {
-                    restartAndPlay();
-                } else {
-                    a.addEventListener('canplay', startWhenReady);
-                }
+                if (a.readyState >= 2) start(); else a.addEventListener('canplay', start);
             }
 
             function unlockAudioFirstTime() {
@@ -5283,25 +5401,20 @@
                 state.unlocked = true;
                 overlay.classList.add('is-hidden');
                 applyAudioLevels();
-                // Restart everything from 0 so audio + both videos share the
-                // exact same starting timestamp. The videos have been muted-
-                // autoplaying ahead of this moment to show motion behind the
-                // overlay — without this reset they'd be 5–10s ahead of audio.
-                restartAndPlay();
-                showToast('Sound on \u00B7 click BEFORE / AFTER to compare', 2200);
+                restartAndPlay();   // start the very first cycle cleanly
             }
 
-            toggleBtns.forEach((btn) => {
+            abBtns.forEach((btn) => {
                 btn.addEventListener('click', () => {
                     unlockAudioFirstTime();
-                    applySide(btn.dataset.side);
+                    applyManualSide(btn.dataset.side);
                 });
             });
 
-            chapterBtns.forEach((btn) => {
+            dotBtns.forEach((btn) => {
                 btn.addEventListener('click', () => {
                     unlockAudioFirstTime();
-                    applyChapter(btn.dataset.pair);
+                    jumpToScenario(btn.dataset.pair);
                 });
             });
 
@@ -5309,41 +5422,12 @@
                 unlockAudioFirstTime();
             });
 
-            let inView = false;
-            document.addEventListener('keydown', (e) => {
-                if (!inView) return;
-                const tag = (e.target && e.target.tagName) || '';
-                if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
-
-                if (e.key === 'ArrowLeft') {
-                    e.preventDefault();
-                    unlockAudioFirstTime();
-                    applySide('before');
-                } else if (e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    unlockAudioFirstTime();
-                    applySide('after');
-                } else if (e.key === ' ') {
-                    e.preventDefault();
-                    unlockAudioFirstTime();
-                    if (state.playing) pauseAll(); else playAll();
-                } else if (e.key === '1' || e.key === '2' || e.key === '3') {
-                    const order = ['horror', 'jump', 'train'];
-                    const target = order[parseInt(e.key, 10) - 1];
-                    if (target) {
-                        e.preventDefault();
-                        unlockAudioFirstTime();
-                        applyChapter(target);
-                    }
-                }
-            });
-
-            // Pause when scrolled away — saves bandwidth, frees audio focus.
+            // Pause when the section scrolls out of view — saves bandwidth and
+            // frees audio focus for the rest of the page.
             const sectionEl = document.getElementById('hear-the-difference');
             if (sectionEl && typeof IntersectionObserver !== 'undefined') {
                 const io = new IntersectionObserver((entries) => {
                     entries.forEach((entry) => {
-                        inView = entry.isIntersecting;
                         if (!entry.isIntersecting && state.playing) {
                             pauseAll();
                         } else if (entry.isIntersecting && state.unlocked && !state.playing) {
@@ -5354,8 +5438,13 @@
                 io.observe(sectionEl);
             }
 
-            // Initial setup: load the first chapter, start muted videos behind overlay
+            // Initial setup: preload the first scenario and start the muted
+            // videos behind the overlay so the still frame is alive.
             loadPair(state.pair);
+            setActiveDot(state.pair);
+            setActiveAb(state.side);
+            setPhase(state.side);
+            updateCaptionForCurrent();
             applyUiOpacity();
             applyAudioLevels();
             sceneVideo.play().catch(() => {});
@@ -5683,35 +5772,9 @@
         const MS_STORE_URL = 'https://apps.microsoft.com/detail/9nrc99fw338g';
         const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
 
-        // Mirror download.html's bcid logic so attribution still pairs with
-        // the desktop app on first launch after a Store install.
-        function getOrCreateBcid() {
-            const VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
-            const mint = function() {
-                return 'bc_' + (crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : (Date.now() + '-' + Math.random().toString(36).slice(2)));
-            };
-            const normalize = function(raw) {
-                if (!raw || typeof raw !== 'string') return null;
-                var trimmed = raw.trim();
-                if (!trimmed) return null;
-                if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
-                return VALID.test(trimmed) ? trimmed : null;
-            };
-            try {
-                var stored = normalize(sessionStorage.getItem('cue_bcid'));
-                if (stored) return stored;
-                var fresh = mint();
-                sessionStorage.setItem('cue_bcid', fresh);
-                return fresh;
-            } catch (e) {
-                return mint();
-            }
-        }
-
         // Fire-and-forget pairing post. keepalive: true lets the request
         // survive the impending top-level navigation to the Store.
+        // Uses window.__cue_bcid which was created early and used to bootstrap PostHog.
         function postWindowsStorePairing(bcid) {
             try {
                 var payload = {
@@ -5758,7 +5821,7 @@
                 if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
                 posthog.capture('trial_download_started', props);
             }
-            postWindowsStorePairing(getOrCreateBcid());
+            postWindowsStorePairing(window.__cue_bcid);
         }
 
         // Track trial download click (fires before navigation to download page
