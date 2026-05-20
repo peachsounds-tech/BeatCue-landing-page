@@ -353,7 +353,7 @@
         // Bootstrap PostHog with bcid so events match loopback pairing + analytics in the app
         initConfig.bootstrap = { distinctID: cueBcid };
         
-        const CUE_PAGE_VERSION = '1.1.2';
+        const CUE_PAGE_VERSION = '1.2.0';
 
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         posthog.register({ page_version: CUE_PAGE_VERSION });
@@ -512,6 +512,11 @@
     <script>
         const DOWNLOAD_URLS = {
             macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/beatcue-installer.pkg',
+            // Windows now ships via the Microsoft Store. This is a top-level
+            // page navigation (not a file download) — init() does a same-tab
+            // redirect after firing the pixel/PostHog/pairing so popup
+            // blockers can't kill it. The manual fallback link is wired off
+            // this same URL.
             windows: 'https://apps.microsoft.com/detail/9nrc99fw338g'
         };
         
@@ -717,10 +722,16 @@
                 if (platform === 'windows') {
                     document.body.classList.add('windows-mode');
 
+                    // Windows users get a fast same-tab redirect to the
+                    // Microsoft Store (see init() below). This copy is for
+                    // the brief flash before the redirect lands.
+                    document.getElementById('downloadPageTitle').textContent = 'Opening the Microsoft Store…';
+                    document.getElementById('dlSubtitle').textContent = 'Tap Get to install BeatCue \u00b7 Free to use';
+
                     var securityTipEl = document.getElementById('securityTip');
                     if (securityTipEl) securityTipEl.style.display = '';
                     document.getElementById('securityTipHeader').innerHTML = '🎉 You\'re almost in!';
-                    document.getElementById('securityTipBody').innerHTML = 'When the Windows blue SmartScreen popup appears,<br>tap <strong>"More info"</strong> → <strong>"Run anyway"</strong>. Let\'s go!';
+                    document.getElementById('securityTipBody').innerHTML = 'Redirecting you to the <strong>Microsoft Store</strong>…<br>Tap <strong>"Get"</strong> (or <strong>"Install"</strong>) to add BeatCue to your PC.';
                 }
                 
             } else {
@@ -738,10 +749,16 @@
 
             if ((platform === 'macos' || platform === 'windows') && !blockWindowsDownload) {
                 if (platform === 'windows') {
-                    trackDownload(platform);
+                    // Windows ships via the Microsoft Store. Fire the same
+                    // pixel + PostHog + pairing flow we use for macOS, then
+                    // do a same-tab top-level redirect to the Store. The
+                    // pairing POST uses keepalive:true so it survives the
+                    // navigation, and the pixel beacon goes out before the
+                    // 200ms delay elapses. No popup, no blocker.
+                    trackDownload('windows');
                     setTimeout(function() {
-                        window.location.href = DOWNLOAD_URLS[platform];
-                    }, 150);
+                        window.location.href = DOWNLOAD_URLS.windows;
+                    }, 200);
                     return;
                 }
 
