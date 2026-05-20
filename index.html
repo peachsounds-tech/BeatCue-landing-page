@@ -4497,15 +4497,15 @@
             -webkit-backdrop-filter: blur(10px);
         }
         .ba-ab-btn {
-            width: 28px;
+            padding: 0 10px;
             height: 24px;
             background: transparent;
             border: 0;
             color: rgba(255, 255, 255, 0.55);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 600;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.03em;
             border-radius: 999px;
             cursor: pointer;
             transition: background 0.18s ease, color 0.18s ease;
@@ -4837,7 +4837,7 @@
                 <p class="ba-sub">Same footage. Same track. Different timing.</p>
             </header>
 
-            <div class="ba-stage" id="baStage" data-side="before" data-pair="train">
+            <div class="ba-stage" id="baStage" data-side="before" data-pair="jump">
                 <div class="ba-scene">
                     <video class="ba-scene-video" id="baSceneVideo" loop muted playsinline preload="auto"></video>
 
@@ -4862,10 +4862,10 @@
                     <span class="ba-phase-text">BEFORE</span>
                 </div>
 
-                <!-- Ghost A/B toggle (tiny, bottom-right of stage) -->
+                <!-- Ghost before/after toggle (tiny, bottom-right of stage) -->
                 <div class="ba-ab" role="group" aria-label="Compare before and after">
-                    <button class="ba-ab-btn is-active" type="button" data-side="before" aria-pressed="true" title="Before">A</button>
-                    <button class="ba-ab-btn" type="button" data-side="after" aria-pressed="false" title="After">B</button>
+                    <button class="ba-ab-btn is-active" type="button" data-side="before" aria-pressed="true" title="Before">Before</button>
+                    <button class="ba-ab-btn" type="button" data-side="after" aria-pressed="false" title="After">After</button>
                 </div>
 
                 <button class="ba-overlay" id="baOverlay" type="button" aria-label="Play with sound">
@@ -4883,19 +4883,6 @@
             <!-- Scenario dots: subtle nav between three moments -->
             <div class="ba-scenarios" role="tablist" aria-label="Choose a moment">
                 <button class="ba-dot is-active" type="button" role="tab" aria-selected="true"
-                        data-pair="train"
-                        data-label="The reunion"
-                        data-before-caption="He finds her. The music doesn&rsquo;t notice."
-                        data-after-caption="The music finds her too."
-                        data-scene="Resources/train/train_station_scene.mp4"
-                        data-ui-before="Resources/train/train_station_before_ui.mp4"
-                        data-ui-after="Resources/train/train_station_after_ui.mp4"
-                        data-audio-before="Resources/train/train_station_before_audio.m4a"
-                        data-audio-after="Resources/train/train_station_after_audio.m4a">
-                    <span class="ba-dot-mark" aria-hidden="true"></span>
-                    <span class="ba-dot-label">The reunion</span>
-                </button>
-                <button class="ba-dot" type="button" role="tab" aria-selected="false"
                         data-pair="jump"
                         data-label="The leap"
                         data-before-caption="The leap goes by."
@@ -4907,6 +4894,19 @@
                         data-audio-after="Resources/jump/anime_jump_after_audio.m4a">
                     <span class="ba-dot-mark" aria-hidden="true"></span>
                     <span class="ba-dot-label">The leap</span>
+                </button>
+                <button class="ba-dot" type="button" role="tab" aria-selected="false"
+                        data-pair="train"
+                        data-label="The reunion"
+                        data-before-caption="He finds her. The music doesn&rsquo;t notice."
+                        data-after-caption="The music finds her too."
+                        data-scene="Resources/train/train_station_scene.mp4"
+                        data-ui-before="Resources/train/train_station_before_ui.mp4"
+                        data-ui-after="Resources/train/train_station_after_ui.mp4"
+                        data-audio-before="Resources/train/train_station_before_audio.m4a"
+                        data-audio-after="Resources/train/train_station_after_audio.m4a">
+                    <span class="ba-dot-mark" aria-hidden="true"></span>
+                    <span class="ba-dot-label">The reunion</span>
                 </button>
                 <button class="ba-dot" type="button" role="tab" aria-selected="false"
                         data-pair="horror"
@@ -5179,7 +5179,7 @@
             });
 
             const state = {
-                pair: scenarioOrder[0] || 'train',
+                pair: scenarioOrder[0] || 'jump',
                 side: 'before',    // we always START on BEFORE so the contrast is felt
                 unlocked: false,   // becomes true after the first user click
                 playing: false,
