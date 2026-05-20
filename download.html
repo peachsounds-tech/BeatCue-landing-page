@@ -753,12 +753,13 @@
                     // pixel + PostHog + pairing flow we use for macOS, then
                     // do a same-tab top-level redirect to the Store. The
                     // pairing POST uses keepalive:true so it survives the
-                    // navigation, and the pixel beacon goes out before the
-                    // 200ms delay elapses. No popup, no blocker.
+                    // navigation. The ~1.5s pause lets the "Opening the
+                    // Microsoft Store…" copy read as intentional rather
+                    // than an instant pop. No popup, no blocker.
                     trackDownload('windows');
                     setTimeout(function() {
                         window.location.href = DOWNLOAD_URLS.windows;
-                    }, 200);
+                    }, 1500);
                     return;
                 }
 
