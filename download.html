@@ -353,7 +353,7 @@
         // Bootstrap PostHog with bcid so events match loopback pairing + analytics in the app
         initConfig.bootstrap = { distinctID: cueBcid };
         
-        const CUE_PAGE_VERSION = '1.1.0';
+        const CUE_PAGE_VERSION = '1.1.1';
 
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         posthog.register({ page_version: CUE_PAGE_VERSION });
@@ -512,11 +512,7 @@
     <script>
         const DOWNLOAD_URLS = {
             macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/beatcue-installer.pkg',
-            // Windows now ships via the Microsoft Store. This is a top-level
-            // page navigation (not a file download), so the auto-trigger
-            // below opens it in a new tab and the manual fallback link
-            // is still wired up to the same URL.
-            windows: 'https://apps.microsoft.com/detail/9nrc99fw338g'
+            windows: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/beatcue-installer.exe'
         };
         
         const PLATFORM_INFO = {
@@ -721,17 +717,10 @@
                 if (platform === 'windows') {
                     document.body.classList.add('windows-mode');
 
-                    // Windows path on /download is a fast top-level redirect to
-                    // the Microsoft Store (see init() below), so users barely
-                    // see this UI. Keep the messaging accurate for the brief
-                    // flash, in case the network is slow.
-                    document.getElementById('downloadPageTitle').textContent = 'Opening the Microsoft Store…';
-                    document.getElementById('dlSubtitle').textContent = 'Tap Get to install BeatCue \u00b7 Free to use';
-
                     var securityTipEl = document.getElementById('securityTip');
                     if (securityTipEl) securityTipEl.style.display = '';
                     document.getElementById('securityTipHeader').innerHTML = '🎉 You\'re almost in!';
-                    document.getElementById('securityTipBody').innerHTML = 'Redirecting you to the <strong>Microsoft Store</strong>…<br>Tap <strong>"Get"</strong> (or <strong>"Install"</strong>) to add BeatCue to your PC.';
+                    document.getElementById('securityTipBody').innerHTML = 'When the Windows blue SmartScreen popup appears,<br>tap <strong>"More info"</strong> → <strong>"Run anyway"</strong>. Let\'s go!';
                 }
                 
             } else {
@@ -748,18 +737,6 @@
             var blockWindowsDownload = forceMac && platform === 'windows';
 
             if ((platform === 'macos' || platform === 'windows') && !blockWindowsDownload) {
-                if (platform === 'windows') {
-                    // Direct visitors to /download with a Windows UA shouldn't
-                    // see this page at all — fire the pixel + pairing and then
-                    // top-level redirect to the Microsoft Store. Using
-                    // window.location.href avoids any popup-blocker path.
-                    trackDownload(platform);
-                    setTimeout(function() {
-                        window.location.href = DOWNLOAD_URLS[platform];
-                    }, 150);
-                    return;
-                }
-
                 setTimeout(function() {
                     var a = document.createElement('a');
                     a.href = DOWNLOAD_URLS[platform];
@@ -776,10 +753,23 @@
                         document.getElementById('downloadPageTitle').textContent = 'Downloading BeatCue';
                         document.getElementById('dlSubtitle').textContent = 'Free to use \u00b7 Email required on export';
 
+                        var fileName = platform === 'macos' ? 'beatcue-installer.pkg' : 'beatcue-installer.exe';
                         var installItem = document.getElementById('checkInstall');
                         if (installItem) installItem.classList.add('active');
                         var installLabel = document.getElementById('checkInstallLabel');
-                        if (installLabel) installLabel.innerHTML = 'Run <strong>beatcue-installer.pkg</strong>';
+                        if (installLabel) installLabel.innerHTML = 'Run <strong>' + fileName + '</strong>';
+
+                        if (platform === 'windows') {
+                            var tipEl = document.getElementById('securityTip');
+                            if (tipEl) {
+                                tipEl.classList.add('attention');
+                                try {
+                                    tipEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                } catch (e) {
+                                    tipEl.scrollIntoView();
+                                }
+                            }
+                        }
                     }, 1500);
                 }, 400);
             }

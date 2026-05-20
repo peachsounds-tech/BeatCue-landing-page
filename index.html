@@ -350,7 +350,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '1.2.1';
+        const CUE_PAGE_VERSION = '1.2.3';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -4924,7 +4924,7 @@
             </div>
 
             <div class="ba-cta">
-                <a href="download.html" class="btn btn-primary ba-cta-btn">Try it on your own edit</a>
+                <a href="download.html" class="btn btn-primary ba-cta-btn" id="beforeAfterDownloadBtn">Try it on your own edit</a>
                 <p class="ba-cta-sub">Free to try &middot; macOS &amp; Windows</p>
             </div>
         </div>
@@ -5767,65 +5767,8 @@
             }
         }
         
-        // Windows ships via the Microsoft Store — clicks go straight there so
-        // the user never sees download.html (no popup blocker, no extra hop).
-        const MS_STORE_URL = 'https://apps.microsoft.com/detail/9nrc99fw338g';
-        const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
-
-        // Fire-and-forget pairing post. keepalive: true lets the request
-        // survive the impending top-level navigation to the Store.
-        // Uses window.__cue_bcid which was created early and used to bootstrap PostHog.
-        function postWindowsStorePairing(bcid) {
-            try {
-                var payload = {
-                    bcid: bcid,
-                    fbp: window.__cue_fbp || null,
-                    fbc: window.__cue_fbc || null,
-                    fbclid: window.__cue_fbclid || null,
-                    utms: (typeof getUtmProps === 'function') ? getUtmProps() : {},
-                    platform: 'windows'
-                };
-                fetch(PAIRINGS_BASE + '/pairings', {
-                    method: 'POST',
-                    mode: 'cors',
-                    credentials: 'omit',
-                    keepalive: true,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                }).catch(function() {});
-            } catch (e) { /* never block the click on a pairing hiccup */ }
-        }
-
-        // Fires the exact same "download started" pixel + PostHog event that
-        // download.html would have fired, so dashboards and ad optimization
-        // see no break when Windows users go straight to the Store.
-        function fireWindowsDownloadStarted() {
-            if (typeof fbq === 'function') {
-                var eventData = {
-                    value: '0.00',
-                    currency: 'USD',
-                    content_name: 'BeatCue',
-                    platform: 'windows'
-                };
-                fbq('track', 'StartTrial', eventData);
-                console.log('📊 Meta Pixel: StartTrial tracked (Windows → Microsoft Store)', eventData);
-            }
-            if (typeof posthog !== 'undefined' && posthog.capture) {
-                var props = {
-                    ...(typeof getBaseEventProps === 'function' ? getBaseEventProps() : {}),
-                    page: 'landing',
-                    platform: 'windows',
-                    url: window.location.href,
-                    source: 'landing_to_store'
-                };
-                if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
-                posthog.capture('trial_download_started', props);
-            }
-            postWindowsStorePairing(window.__cue_bcid);
-        }
-
-        // Track trial download click (fires before navigation to download page
-        // for macOS, or before navigation to the Microsoft Store for Windows).
+        // Track trial download click (fires before navigation to download page)
+        // Download page auto-detects OS, so we always link to download.html
         function trackTrialDownloadClick(event) {
             const ua = navigator.userAgent || navigator.platform || '';
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
@@ -5836,14 +5779,6 @@
                     page: 'landing',
                     platform: platform
                 });
-            }
-
-            // Windows path: button href was rewritten to MS_STORE_URL during
-            // platform detection. Fire the pixel + pairing now, then let the
-            // default <a> navigation take the user to the Store.
-            if (platform === 'windows') {
-                fireWindowsDownloadStarted();
-                return;
             }
 
             // Pass anonymous ID to download page so PostHog can preserve identity
@@ -6162,15 +6097,17 @@
 
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
             const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
+            const beforeAfterDownloadBtn = document.getElementById('beforeAfterDownloadBtn');
             const heroLabel = document.getElementById('heroDownloadLabel');
 
             // Check if we should block Windows downloads (force_mac=true and user is on Windows)
             const blockWindowsDownload = forceMac && isWindows;
 
-            // Attach identity-preserving click handler to both download buttons (only if not blocked)
+            // Attach identity-preserving click handler to all download buttons (only if not blocked)
             if (!blockWindowsDownload) {
                 if (heroDownloadBtn) heroDownloadBtn.addEventListener('click', trackTrialDownloadClick);
                 if (pricingDownloadBtn) pricingDownloadBtn.addEventListener('click', trackTrialDownloadClick);
+                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.addEventListener('click', trackTrialDownloadClick);
             }
 
             var heroIcon = document.getElementById('heroDownloadIcon');
@@ -6197,16 +6134,17 @@
                     pricingDownloadBtn.style.cursor = 'not-allowed';
                     pricingDownloadBtn.textContent = 'Windows coming soon';
                 }
+                if (beforeAfterDownloadBtn) {
+                    beforeAfterDownloadBtn.removeAttribute('href');
+                    beforeAfterDownloadBtn.style.pointerEvents = 'none';
+                    beforeAfterDownloadBtn.style.opacity = '0.6';
+                    beforeAfterDownloadBtn.style.cursor = 'not-allowed';
+                    beforeAfterDownloadBtn.textContent = 'Windows coming soon';
+                }
             } else if (isWindows || forcePlatform === 'windows') {
-                // Send Windows users straight to the Microsoft Store. The
-                // click handler (trackTrialDownloadClick) fires the Meta
-                // StartTrial pixel + pairing before the browser navigates,
-                // so download.html is skipped entirely (no popup blocker).
-                if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', MS_STORE_URL);
-                if (pricingDownloadBtn) pricingDownloadBtn.setAttribute('href', MS_STORE_URL);
-                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Get BeatCue from the Microsoft Store';
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download BeatCue for Windows';
                 if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
-                if (heroNote) heroNote.textContent = 'Free to try \u00b7 Windows 10+ \u00b7 Microsoft Store';
+                if (heroNote) heroNote.textContent = 'Free to try \u00b7 Windows 10+';
             } else if (isMac || forcePlatform === 'mac') {
                 if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download BeatCue for macOS';
                 if (heroIcon) heroIcon.innerHTML = appleIconSvg;
