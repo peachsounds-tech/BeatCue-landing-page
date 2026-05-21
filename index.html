@@ -350,7 +350,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '1.2.5';
+        const CUE_PAGE_VERSION = '1.2.6';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -4309,6 +4309,7 @@
              3. Everything else (UI strip, controls, dots)
         ============================================ */
         .before-after {
+            display: none; /* Hidden from page — code kept for future re-enable */
             padding: var(--section-pad-y) var(--section-pad-x);
             background: var(--bg-tertiary);
             position: relative;
