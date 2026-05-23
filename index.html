@@ -5091,6 +5091,7 @@
         </div>
     </footer>
 
+    <script src="/js/microsoft-store.js"></script>
     <script>
         
         // Video sound toggle
@@ -5768,7 +5769,13 @@
             }
         }
         
-        const MS_STORE_URL = 'https://apps.microsoft.com/detail/9nrc99fw338g';
+        function getMicrosoftStoreUrl() {
+            if (window.CueMicrosoftStore) {
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps);
+            }
+            return 'https://apps.microsoft.com/detail/9nrc99fw338g';
+        }
+
         const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
 
         function postWindowsStorePairing(bcid) {
@@ -5806,8 +5813,13 @@
                     page: 'landing',
                     platform: 'windows',
                     url: window.location.href,
-                    source: 'landing_to_store'
+                    source: 'landing_to_store',
+                    ms_store_url: getMicrosoftStoreUrl()
                 };
+                if (window.CueMicrosoftStore) {
+                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps);
+                    if (cid) props.ms_store_cid = cid;
+                }
                 if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
                 posthog.capture('trial_download_started', props);
             }
@@ -6209,12 +6221,13 @@
                 }
             } else if (isWindows || forcePlatform === 'windows') {
                 // All download CTAs go straight to the Microsoft Store on Windows.
-                if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', MS_STORE_URL);
+                var storeUrl = getMicrosoftStoreUrl();
+                if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', storeUrl);
                 if (pricingDownloadBtn) {
-                    pricingDownloadBtn.setAttribute('href', MS_STORE_URL);
+                    pricingDownloadBtn.setAttribute('href', storeUrl);
                     pricingDownloadBtn.textContent = 'Get BeatCue from the Microsoft Store';
                 }
-                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.setAttribute('href', MS_STORE_URL);
+                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.setAttribute('href', storeUrl);
                 if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
                 if (heroNote) heroNote.textContent = 'Free to try \u00b7 Windows 10+ \u00b7 Microsoft Store';
             } else if (isMac || forcePlatform === 'mac') {

@@ -508,7 +508,8 @@
         </div>
 
     </div>
-    
+
+    <script src="/js/microsoft-store.js"></script>
     <script>
         const DOWNLOAD_URLS = {
             macos: 'https://github.com/peachsounds-tech/cue-releases/releases/latest/download/beatcue-installer.pkg',
@@ -519,6 +520,13 @@
             // this same URL.
             windows: 'https://apps.microsoft.com/detail/9nrc99fw338g'
         };
+
+        function getWindowsStoreUrl() {
+            if (window.CueMicrosoftStore) {
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps);
+            }
+            return DOWNLOAD_URLS.windows;
+        }
         
         const PLATFORM_INFO = {
             macos: { name: 'macOS' },
@@ -669,6 +677,13 @@
                 console.log('📊 Meta Pixel: StartTrial tracked', eventData);
             }
             var props = { ...getBaseEventProps(), page: 'download', platform: platform, url: window.location.href, source: 'free_trial_page' };
+            if (platform === 'windows') {
+                props.ms_store_url = getWindowsStoreUrl();
+                if (window.CueMicrosoftStore) {
+                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps);
+                    if (cid) props.ms_store_cid = cid;
+                }
+            }
             if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
             posthog.capture('trial_download_started', props);
 
@@ -713,7 +728,7 @@
                 var otherInfo = PLATFORM_INFO[otherPlatform];
 
                 var manualLink = document.getElementById('manualDownloadLink');
-                manualLink.href = DOWNLOAD_URLS[platform];
+                manualLink.href = platform === 'windows' ? getWindowsStoreUrl() : DOWNLOAD_URLS[platform];
                 manualLink.addEventListener('click', function() {
                     trackDownload(platform);
                 });
@@ -758,7 +773,7 @@
                     // than an instant pop. No popup, no blocker.
                     trackDownload('windows');
                     setTimeout(function() {
-                        window.location.href = DOWNLOAD_URLS.windows;
+                        window.location.href = getWindowsStoreUrl();
                     }, 1500);
                     return;
                 }
