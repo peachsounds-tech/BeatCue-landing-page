@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- noindex keeps this out of organic search; Meta's facebookexternalhit
+         crawler ignores robots directives for share previews, so the OG tags
+         below are still consumed when the ad URL is unfurled. -->
+    <meta name="robots" content="noindex,nofollow">
+
+    <!-- Public-facing identity: mirror the landing page so the ad summary,
+         link previews, and browser tab all look like the real product page. -->
+    <title>BeatCue – Music Retiming for Storytellers</title>
+    <meta name="description" content="Move the drop. BeatCue fixes the rest. Remap any moment in your music to sync perfectly with your story.">
+
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/icon.png">
+
+    <!-- Open Graph (Facebook, Instagram, Messenger, WhatsApp, LinkedIn) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="BeatCue">
+    <meta property="og:title" content="BeatCue – Music Retiming for Storytellers">
+    <meta property="og:description" content="Move the drop. BeatCue fixes the rest. Remap any moment in your music to sync perfectly with your story.">
+    <meta property="og:url" content="https://beatcue.app/go/">
+    <meta property="og:image" content="https://beatcue.app/icon.png">
+    <meta property="og:image:width" content="1024">
+    <meta property="og:image:height" content="1024">
+    <meta property="og:image:alt" content="BeatCue app icon">
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="BeatCue – Music Retiming for Storytellers">
+    <meta name="twitter:description" content="Move the drop. BeatCue fixes the rest. Remap any moment in your music to sync perfectly with your story.">
+    <meta name="twitter:image" content="https://beatcue.app/icon.png">
+
+    <link rel="preconnect" href="https://apps.microsoft.com">
+    <link rel="preconnect" href="https://peachsounds-webhook.sareldu.workers.dev">
+    <link rel="preconnect" href="https://t.beatcue.app">
+
+    <!--
+        ===========================================================================
+         BeatCue Ad → Microsoft Store bouncer
+         ───────────────────────────────────────────────────────────────────────
+         Goal: paid ad clicks land here and bounce to the Store in ~300ms while
+         we (a) mint a bcid the desktop app can claim on first launch, (b) record
+         first-touch UTMs as PostHog person properties, and (c) fire StartTrial
+         to Meta via server-side CAPI for ad-set optimization.
+
+         Design rules:
+           • No SDKs. The PostHog snippet and Meta Pixel are async — they don't
+             reliably flush before location.replace(). We POST raw payloads via
+             fetch(keepalive:true), which is designed for fire-and-forget on
+             navigation and supports CORS preflight (unlike sendBeacon).
+           • Pre-consent posture. No localStorage. No cookies set here. No IP
+             collected (ip:false equivalent: PostHog properties omit it; the
+             CAPI worker uses cf-connecting-ip server-side only). bcid lives
+             in sessionStorage so it dies with the tab.
+           • Hard deadline. ~300ms budget for the beacons to fly, then we
+             redirect. fetch(keepalive) keeps them alive past unload.
+           • Reuses /js/microsoft-store.js so the ?cid=<utm_campaign> mapping
+             stays in one place.
+         ===========================================================================
+    -->
+    <script src="/js/microsoft-store.js"></script>
+
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: #0b0b0e;
+            color: #e7e7ea;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .wrap {
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            padding: 24px;
+            text-align: center;
+        }
+        .spinner {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-top-color: #ffffff;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .label { font-size: 15px; opacity: 0.85; }
+        .fallback {
+            margin-top: 8px;
+            font-size: 13px;
+            opacity: 0.6;
+        }
+        .fallback a {
+            color: #9ec1ff;
+            text-decoration: underline;
+        }
+    </style>
+
+    <!-- Noscript fallback: bounce to the Store with no attribution. Rare path. -->
+    <noscript>
+        <meta http-equiv="refresh" content="0;url=https://apps.microsoft.com/detail/9nrc99fw338g">
+    </noscript>
+</head>
+<body>
+    <div class="wrap">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="label">Opening the Microsoft Store…</div>
+        <div class="fallback">
+            Not redirecting? <a id="manual-link" href="https://apps.microsoft.com/detail/9nrc99fw338g">Click here</a>.
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ── Config ──────────────────────────────────────────────────────────────
+        var POSTHOG_API_KEY  = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
+        var POSTHOG_API_HOST = 'https://t.beatcue.app';
+        var WORKER_BASE      = 'https://peachsounds-webhook.sareldu.workers.dev';
+        var MS_STORE_FALLBACK = 'https://apps.microsoft.com/detail/9nrc99fw338g';
+
+        var PAGE_NAME    = 'bouncer';
+        var PAGE_VERSION = '1.0.0';
+        var FLOW_TAG     = 'bouncer';
+
+        // Budget between dispatching beacons and the redirect. fetch(keepalive)
+        // survives unload, but a tiny window of "in-process" send time helps
+        // browsers actually hand the request to the network stack.
+        var REDIRECT_BUDGET_MS = 300;
+
+        // Absolute ceiling — if anything goes wrong above, we still leave.
+        var HARD_REDIRECT_CAP_MS = 1500;
+
+        // ── 1. Capture inputs (synchronous, fast) ───────────────────────────────
+        var params = new URLSearchParams(window.location.search);
+
+        function getCookie(name) {
+            var m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return m ? decodeURIComponent(m[2]) : null;
+        }
+
+        function getUTMs() {
+            var keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+            var out = {};
+            keys.forEach(function (k) {
+                var v = params.get(k);
+                if (v) out[k] = v;
+            });
+            return out;
+        }
+
+        function getFbclid() {
+            var v = params.get('fbclid');
+            if (v) {
+                try { sessionStorage.setItem('cue_fbclid', v); } catch (e) {}
+                return v;
+            }
+            try { return sessionStorage.getItem('cue_fbclid'); } catch (e) { return null; }
+        }
+
+        function getFbc(fbclid) {
+            var fbc = getCookie('_fbc');
+            if (fbc) return fbc;
+            if (fbclid) return 'fb.1.' + Date.now() + '.' + fbclid;
+            return null;
+        }
+
+        // bcid: must match the page-side mint and the desktop /pairings/claim
+        // contract exactly (regex /^bc_[A-Za-z0-9-]{8,64}$/). Mirror the helper
+        // in landing-page/index.html so a user visiting both pages keeps the
+        // same id within a tab session.
+        function getOrCreateBcid() {
+            var VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+            function mint() {
+                return 'bc_' + (crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+            }
+            function normalize(raw) {
+                if (!raw || typeof raw !== 'string') return null;
+                var t = raw.trim();
+                if (!t) return null;
+                if (!/^bc_/.test(t)) t = 'bc_' + t;
+                return VALID.test(t) ? t : null;
+            }
+            try {
+                var fromUrl = params.get('bcid') || params.get('ph_id');
+                var b = normalize(sessionStorage.getItem('cue_bcid'))
+                     || normalize(fromUrl)
+                     || mint();
+                sessionStorage.setItem('cue_bcid', b);
+                return b;
+            } catch (e) {
+                return mint();
+            }
+        }
+
+        var utms    = getUTMs();
+        var fbclid  = getFbclid();
+        var fbp     = getCookie('_fbp');
+        var fbc     = getFbc(fbclid);
+        var bcid    = getOrCreateBcid();
+        var nowIso  = new Date().toISOString();
+        var pageUrl = window.location.href;
+        var referrer = document.referrer || '';
+        var ua = navigator.userAgent || '';
+        var isWindows = /Win/i.test(ua);
+        var isMac     = /Mac/i.test(ua) && !/iPhone|iPad|iPod/i.test(ua);
+        var platform  = isWindows ? 'windows' : (isMac ? 'mac' : 'other');
+
+        // ── 2. Build destination URL ────────────────────────────────────────────
+        function buildStoreUrl() {
+            if (window.CueMicrosoftStore && window.CueMicrosoftStore.buildMicrosoftStoreUrl) {
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUTMs);
+            }
+            return MS_STORE_FALLBACK;
+        }
+
+        // Mac users who somehow land on /go/ get sent to the standard macOS
+        // download page (which has its own attribution flow). We don't lose
+        // anything by passing the captured query string through.
+        function buildMacDownloadUrl() {
+            var u = new URL('/download.html', window.location.origin);
+            ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'].forEach(function (k) {
+                var v = params.get(k);
+                if (v) u.searchParams.set(k, v);
+            });
+            u.searchParams.set('bcid', bcid);
+            return u.toString();
+        }
+
+        var destination = (platform === 'mac') ? buildMacDownloadUrl() : buildStoreUrl();
+
+        var manualLink = document.getElementById('manual-link');
+        if (manualLink) manualLink.href = destination;
+
+        // ── 3. Fire-and-bounce helpers ──────────────────────────────────────────
+        // fetch(keepalive) is preferred over sendBeacon because:
+        //   • it supports normal CORS (worker endpoints expect application/json
+        //     with a preflight that sendBeacon can't perform reliably);
+        //   • it accepts arbitrary content-types;
+        //   • the keepalive flag explicitly tells the browser the request must
+        //     survive document unload.
+        // We swallow all errors — the redirect must not depend on any of these.
+        function fire(url, payload) {
+            try {
+                fetch(url, {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).catch(function () {});
+            } catch (e) { /* never block the bounce */ }
+        }
+
+        function uuid() {
+            return crypto.randomUUID
+                ? crypto.randomUUID()
+                : (Date.now() + '-' + Math.random().toString(36).slice(2));
+        }
+
+        // ── 4. POST /pairings — desktop app handshake ───────────────────────────
+        // Worker stores { bcid, fbp, fbc, fbclid, utms } keyed on
+        // sha256(coarse_ip + os) for ~30 min. The desktop app POSTs /pairings/claim
+        // from the same NAT on first launch and gets the payload back.
+        // utms travel on the wire but the C++ PairingClient does not consume
+        // them — first-touch UTM attribution lives on the PostHog person record
+        // we create below, not on the desktop side.
+        fire(WORKER_BASE + '/pairings', {
+            bcid: bcid,
+            fbp: fbp || null,
+            fbc: fbc || null,
+            fbclid: fbclid || null,
+            utms: utms,
+            platform: (platform === 'windows') ? 'windows' : (platform === 'mac' ? 'mac' : 'other')
+        });
+
+        // ── 5. PostHog: $identify with $set_once (first-touch person props) ─────
+        // We intentionally bypass the PostHog SDK — the snippet is async and
+        // unlikely to flush before location.replace(). Posting directly to
+        // /e/ matches the path the JS SDK uses, which we know t.beatcue.app
+        // already proxies (it's how the landing page sends events today).
+        //
+        // Privacy posture: no $ip (server can geo from IP otherwise — we ask it
+        // not to via $geoip_disable), no email, no display name. UTMs are
+        // marketing parameters, not PII.
+        var personProps = { first_seen_flow: FLOW_TAG, first_seen_at: nowIso };
+        if (utms.utm_source)   personProps.first_utm_source   = utms.utm_source;
+        if (utms.utm_medium)   personProps.first_utm_medium   = utms.utm_medium;
+        if (utms.utm_campaign) personProps.first_utm_campaign = utms.utm_campaign;
+        if (utms.utm_content)  personProps.first_utm_content  = utms.utm_content;
+        if (utms.utm_term)     personProps.first_utm_term     = utms.utm_term;
+        if (referrer)          personProps.first_referrer     = referrer;
+        if (fbclid)            personProps.first_fbclid       = fbclid;
+        personProps.first_landing_page = 'go';
+
+        fire(POSTHOG_API_HOST + '/e/', {
+            api_key: POSTHOG_API_KEY,
+            event: '$identify',
+            distinct_id: bcid,
+            timestamp: nowIso,
+            properties: {
+                $set_once: personProps,
+                $lib: 'web-bouncer',
+                $lib_version: PAGE_VERSION,
+                $geoip_disable: true,
+                page: PAGE_NAME,
+                flow: FLOW_TAG
+            }
+        });
+
+        // ── 6. PostHog: redirected_to_store event ───────────────────────────────
+        // Named for what this page actually does: it sends the user from an ad
+        // click straight to the Microsoft Store. The landing page's Windows CTA
+        // continues to fire `trial_download_started`; keeping the names
+        // distinct makes the two flows easy to compare in PostHog funnels.
+        var eventId = uuid();
+        var eventProps = {
+            page: PAGE_NAME,
+            flow: FLOW_TAG,
+            source: 'bouncer',
+            platform: platform,
+            url: pageUrl,
+            ms_store_url: destination,
+            page_version: PAGE_VERSION,
+            event_id: eventId
+        };
+        if (window.CueMicrosoftStore) {
+            var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUTMs);
+            if (cid) eventProps.ms_store_cid = cid;
+        }
+        if (referrer) eventProps.referrer = referrer;
+        if (fbclid)   eventProps.fbclid = fbclid;
+        if (utms.utm_source)   eventProps.utm_source   = utms.utm_source;
+        if (utms.utm_medium)   eventProps.utm_medium   = utms.utm_medium;
+        if (utms.utm_campaign) eventProps.utm_campaign = utms.utm_campaign;
+        if (utms.utm_content)  eventProps.utm_content  = utms.utm_content;
+        if (utms.utm_term)     eventProps.utm_term     = utms.utm_term;
+
+        fire(POSTHOG_API_HOST + '/e/', {
+            api_key: POSTHOG_API_KEY,
+            event: 'redirected_to_store',
+            distinct_id: bcid,
+            timestamp: nowIso,
+            properties: Object.assign({
+                $lib: 'web-bouncer',
+                $lib_version: PAGE_VERSION,
+                $geoip_disable: true
+            }, eventProps)
+        });
+
+        // ── 7. Meta StartTrial via worker /capi (server-side) ───────────────────
+        // We skip the Meta Pixel SDK for the same reason we skip the PostHog
+        // SDK — too slow. The worker already accepts CAPI events; pass the
+        // same event_id we put on the PostHog event so Meta can dedupe across
+        // any future client-side fire.
+        fire(WORKER_BASE + '/capi', {
+            event_name: 'StartTrial',
+            event_id: eventId,
+            action_source: 'website',
+            event_source_url: pageUrl,
+            user_data: {
+                fbp: fbp || undefined,
+                fbc: fbc || undefined,
+                fbclid: fbclid || undefined,
+                external_id: bcid,
+                client_user_agent: ua || undefined
+            },
+            custom_data: {
+                value: 0,
+                currency: 'USD',
+                content_name: 'BeatCue',
+                flow: FLOW_TAG,
+                platform: platform,
+                utm_source: utms.utm_source || undefined,
+                utm_medium: utms.utm_medium || undefined,
+                utm_campaign: utms.utm_campaign || undefined,
+                utm_content: utms.utm_content || undefined,
+                utm_term: utms.utm_term || undefined
+            },
+            internal_name: 'redirected_to_store_bouncer'
+        });
+
+        // ── 8. Redirect ─────────────────────────────────────────────────────────
+        // Two safety nets so we always leave:
+        //   • REDIRECT_BUDGET_MS: normal path, gives the beacons a brief moment
+        //     to be handed to the network stack.
+        //   • HARD_REDIRECT_CAP_MS: last-resort fallback in case the budget
+        //     setTimeout itself is starved (rare on mobile under load).
+        var didRedirect = false;
+        function go() {
+            if (didRedirect) return;
+            didRedirect = true;
+            try {
+                window.location.replace(destination);
+            } catch (e) {
+                window.location.href = destination;
+            }
+        }
+        setTimeout(go, REDIRECT_BUDGET_MS);
+        setTimeout(go, HARD_REDIRECT_CAP_MS);
+
+        // Also flush on the first opportunity the browser pauses us (e.g. tab
+        // backgrounded) — protects analytics if the user kills the tab early.
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') go();
+        }, { once: true });
+    })();
+    </script>
+</body>
+</html>
