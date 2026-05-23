@@ -325,7 +325,53 @@
             }
         });
 
-        // ── 6. PostHog: redirected_to_store event ───────────────────────────────
+        // ── 6. PostHog: page_viewed event ───────────────────────────────────────
+        // Mirrors the `page_viewed` event the landing page fires, so cross-page
+        // funnels and "total page views per source" rollups treat the bouncer
+        // as just another page in the schema. PostHog parses $browser / $os /
+        // $device_type server-side from the User-Agent header, so we don't
+        // need to compute them client-side. The $-prefixed URL/referrer
+        // properties are what populate PostHog's default insights and
+        // dashboards.
+        var pageViewProps = {
+            page: PAGE_NAME,
+            flow: FLOW_TAG,
+            platform: platform,
+            url: pageUrl,
+            referrer: referrer || '$direct',
+            page_version: PAGE_VERSION,
+            $current_url: pageUrl,
+            $host: window.location.host,
+            $pathname: window.location.pathname,
+            $referrer: referrer || '$direct',
+            $referring_domain: (function () {
+                try { return referrer ? new URL(referrer).host : '$direct'; }
+                catch (e) { return '$direct'; }
+            })(),
+            $screen_width: window.screen && window.screen.width,
+            $screen_height: window.screen && window.screen.height,
+            $viewport_width: window.innerWidth,
+            $viewport_height: window.innerHeight
+        };
+        if (fbclid)              pageViewProps.fbclid       = fbclid;
+        if (utms.utm_source)     pageViewProps.utm_source   = utms.utm_source;
+        if (utms.utm_medium)     pageViewProps.utm_medium   = utms.utm_medium;
+        if (utms.utm_campaign)   pageViewProps.utm_campaign = utms.utm_campaign;
+        if (utms.utm_content)    pageViewProps.utm_content  = utms.utm_content;
+        if (utms.utm_term)       pageViewProps.utm_term     = utms.utm_term;
+
+        fire(POSTHOG_API_HOST + '/e/', {
+            api_key: POSTHOG_API_KEY,
+            event: 'page_viewed',
+            distinct_id: bcid,
+            timestamp: nowIso,
+            properties: Object.assign({
+                $lib: 'web-bouncer',
+                $lib_version: PAGE_VERSION
+            }, pageViewProps)
+        });
+
+        // ── 7. PostHog: redirected_to_store event ───────────────────────────────
         // Named for what this page actually does: it sends the user from an ad
         // click straight to the Microsoft Store. The landing page's Windows CTA
         // continues to fire `trial_download_started`; keeping the names
@@ -364,7 +410,7 @@
             }, eventProps)
         });
 
-        // ── 7. Meta StartTrial via worker /capi (server-side) ───────────────────
+        // ── 8. Meta StartTrial via worker /capi (server-side) ───────────────────
         // We skip the Meta Pixel SDK for the same reason we skip the PostHog
         // SDK — too slow. The worker already accepts CAPI events; pass the
         // same event_id we put on the PostHog event so Meta can dedupe across
@@ -396,7 +442,7 @@
             internal_name: 'redirected_to_store_bouncer'
         });
 
-        // ── 8. Redirect ─────────────────────────────────────────────────────────
+        // ── 9. Redirect ─────────────────────────────────────────────────────────
         // Two safety nets so we always leave:
         //   • REDIRECT_BUDGET_MS: normal path, gives the beacons a brief moment
         //     to be handed to the network stack.
