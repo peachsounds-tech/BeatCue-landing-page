@@ -294,9 +294,13 @@
         // /e/ matches the path the JS SDK uses, which we know t.beatcue.app
         // already proxies (it's how the landing page sends events today).
         //
-        // Privacy posture: no $ip (server can geo from IP otherwise — we ask it
-        // not to via $geoip_disable), no email, no display name. UTMs are
-        // marketing parameters, not PII.
+        // We do NOT pass $geoip_disable here — server-side IP→country/region
+        // enrichment is what makes the bouncer events useful for ad
+        // attribution ("which countries convert best from the Store ads").
+        // The CAPI worker already receives the IP server-side anyway, so
+        // suppressing PostHog's geo lookup would cost us analytics without
+        // buying any meaningful privacy. No email, no display name, no other
+        // PII is sent — UTMs are marketing parameters, not PII.
         var personProps = { first_seen_flow: FLOW_TAG, first_seen_at: nowIso };
         if (utms.utm_source)   personProps.first_utm_source   = utms.utm_source;
         if (utms.utm_medium)   personProps.first_utm_medium   = utms.utm_medium;
@@ -316,7 +320,6 @@
                 $set_once: personProps,
                 $lib: 'web-bouncer',
                 $lib_version: PAGE_VERSION,
-                $geoip_disable: true,
                 page: PAGE_NAME,
                 flow: FLOW_TAG
             }
@@ -357,8 +360,7 @@
             timestamp: nowIso,
             properties: Object.assign({
                 $lib: 'web-bouncer',
-                $lib_version: PAGE_VERSION,
-                $geoip_disable: true
+                $lib_version: PAGE_VERSION
             }, eventProps)
         });
 
