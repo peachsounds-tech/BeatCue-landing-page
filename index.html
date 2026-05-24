@@ -5050,7 +5050,7 @@
                         <a href="download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
                             Download BeatCue
                         </a>
-                        <p class="plan-note">Recommended: macOS 14+</p>
+                        <p class="plan-note" id="pricingInstallNote">Recommended: macOS 14+</p>
                     </div>
                     <div class="pricing-card">
                         <div class="plan-badge plan-badge--soon">BeatCue Pro</div>
@@ -6193,6 +6193,7 @@
             var windowsIconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block;position:relative;top:-1px"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.39l9.5-1.64V12h-9.5V5.39zM11.5 12.5H21v7.75l-9.5-1.64V12.5z"/></svg>';
 
             var heroNote = document.getElementById('heroInstallNote');
+            var pricingNote = document.getElementById('pricingInstallNote');
             
             // Handle force_mac=true on Windows: disable buttons and show "Coming soon"
             if (blockWindowsDownload) {
@@ -6212,6 +6213,7 @@
                     pricingDownloadBtn.style.cursor = 'not-allowed';
                     pricingDownloadBtn.textContent = 'Windows coming soon';
                 }
+                if (pricingNote) pricingNote.textContent = 'Currently available for macOS only';
                 if (beforeAfterDownloadBtn) {
                     beforeAfterDownloadBtn.removeAttribute('href');
                     beforeAfterDownloadBtn.style.pointerEvents = 'none';
@@ -6229,11 +6231,13 @@
                 }
                 if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.setAttribute('href', storeUrl);
                 if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
-                if (heroNote) heroNote.textContent = 'Free to try \u00b7 Windows 10+ \u00b7 Microsoft Store';
+                if (heroNote) heroNote.textContent = 'Free to try \u00b7 Windows 10+';
+                if (pricingNote) pricingNote.textContent = 'Recommended: Windows 10+';
             } else if (isMac || forcePlatform === 'mac') {
                 if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download BeatCue for macOS';
                 if (heroIcon) heroIcon.innerHTML = appleIconSvg;
                 if (heroNote) heroNote.textContent = 'Free to try \u00b7 macOS 14+';
+                if (pricingNote) pricingNote.textContent = 'Recommended: macOS 14+';
             }
 
             window.trackInitiateCheckout = function() {
