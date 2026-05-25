@@ -318,6 +318,7 @@
             timestamp: nowIso,
             properties: {
                 $set_once: personProps,
+                $set: { store_direct: true },
                 $lib: 'web-bouncer',
                 $lib_version: PAGE_VERSION,
                 page: PAGE_NAME,
@@ -336,6 +337,7 @@
         var pageViewProps = {
             page: PAGE_NAME,
             flow: FLOW_TAG,
+            store_direct: true,
             platform: platform,
             url: pageUrl,
             referrer: referrer || '$direct',
@@ -381,6 +383,7 @@
             page: PAGE_NAME,
             flow: FLOW_TAG,
             source: 'bouncer',
+            store_direct: true,
             platform: platform,
             url: pageUrl,
             ms_store_url: destination,
