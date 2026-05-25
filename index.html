@@ -351,6 +351,7 @@
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
         const CUE_PAGE_VERSION = '1.2.7';
+        window.CUE_PAGE_VERSION = CUE_PAGE_VERSION;
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -422,6 +423,66 @@
         const cueBcid = getOrCreateBcid();
         window.__cue_bcid = cueBcid;
         console.log('📊 BeatCue browser ID (bcid):', cueBcid);
+
+        /**
+         * Fire-and-forget PostHog capture (mirrors /go bouncer).
+         * The SDK may not flush before navigation; keepalive fetch survives unload.
+         */
+        function firePostHogEvent(payload) {
+            try {
+                fetch(POSTHOG_API_HOST + '/e/', {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(Object.assign({ api_key: POSTHOG_API_KEY }, payload))
+                }).catch(function () {});
+            } catch (e) { /* never block the page */ }
+        }
+
+        /**
+         * First-touch person properties on the PostHog identity (bcid).
+         * Same contract as landing-page/go/index.html: $identify + $set_once so
+         * UTMs and landing page version persist even in pre-consent memory mode.
+         */
+        function identifyFirstTouchPerson() {
+            if (window.__cue_first_touch_identified) return;
+            window.__cue_first_touch_identified = true;
+
+            const utms = getUtmProps();
+            const nowIso = new Date().toISOString();
+            const referrer = document.referrer || '';
+            const personProps = {
+                first_seen_flow: 'landing',
+                first_seen_at: nowIso,
+                first_landing_page: 'landing',
+                first_landing_page_version: CUE_PAGE_VERSION
+            };
+            if (utms.utm_source)   personProps.first_utm_source   = utms.utm_source;
+            if (utms.utm_medium)   personProps.first_utm_medium   = utms.utm_medium;
+            if (utms.utm_campaign) personProps.first_utm_campaign = utms.utm_campaign;
+            if (utms.utm_content)  personProps.first_utm_content  = utms.utm_content;
+            if (utms.utm_term)     personProps.first_utm_term     = utms.utm_term;
+            if (referrer)          personProps.first_referrer     = referrer;
+            if (window.__cue_fbclid) personProps.first_fbclid     = window.__cue_fbclid;
+
+            firePostHogEvent({
+                event: '$identify',
+                distinct_id: cueBcid,
+                timestamp: nowIso,
+                properties: {
+                    $set_once: personProps,
+                    $lib: 'web-landing',
+                    $lib_version: CUE_PAGE_VERSION,
+                    page: 'landing',
+                    flow: 'landing'
+                }
+            });
+            console.log('📊 PostHog: first-touch identity ($set_once)', personProps);
+        }
+
+        identifyFirstTouchPerson();
         
         /**
          * Check if user has already consented (used to skip pre-consent mode)
@@ -5726,8 +5787,13 @@
             
             // Only include person properties if user has consented (full mode)
             if (posthogFullyInitialized) {
-                // Set person properties via $set_once (first-touch attribution)
+                // Set person properties via $set_once (first-touch attribution;
+                // also set on load via identifyFirstTouchPerson — keep in sync with /go)
                 const personProps = {
+                    first_seen_flow: 'landing',
+                    first_seen_at: new Date().toISOString(),
+                    first_landing_page: 'landing',
+                    first_landing_page_version: window.CUE_PAGE_VERSION,
                     first_seen_page: 'landing',
                     first_seen_url: window.location.href,
                     user_type: 'standard'
@@ -5737,8 +5803,9 @@
                 if (utms.utm_campaign) personProps.first_utm_campaign = utms.utm_campaign;
                 if (utms.utm_content) personProps.first_utm_content = utms.utm_content;
                 if (utms.utm_term) personProps.first_utm_term = utms.utm_term;
-                personProps.first_visit_date = new Date().toISOString();
+                personProps.first_visit_date = personProps.first_seen_at;
                 if (document.referrer) personProps.first_referrer = document.referrer;
+                if (window.__cue_fbclid) personProps.first_fbclid = window.__cue_fbclid;
                 
                 console.log('Event properties:', eventProps);
                 console.log('Person properties ($set_once):', personProps);
