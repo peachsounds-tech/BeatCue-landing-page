@@ -5838,7 +5838,12 @@
         
         function getMicrosoftStoreUrl() {
             if (window.CueMicrosoftStore) {
-                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps);
+                // Embed the bcid in the Store cid so the desktop app can
+                // claim attribution via WinRT GetAppPurchaseCampaignIdAsync
+                // on first launch without depending on the IP-pairing
+                // loopback (which gets unreliable behind Store install
+                // queues, deferred installs, and cross-device installs).
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps, window.__cue_bcid);
             }
             return 'https://apps.microsoft.com/detail/9nrc99fw338g';
         }
@@ -5884,7 +5889,7 @@
                     ms_store_url: getMicrosoftStoreUrl()
                 };
                 if (window.CueMicrosoftStore) {
-                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps);
+                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps, window.__cue_bcid);
                     if (cid) props.ms_store_cid = cid;
                 }
                 if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;

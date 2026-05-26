@@ -1,32 +1,50 @@
 /**
- * Microsoft Store campaign links (Partner Center cid tracking).
+ * Microsoft Store campaign links (Partner Center cid tracking + per-user
+ * bcid handoff).
  *
- * The Microsoft Store strips all query params except `cid`, which surfaces in
- * Microsoft Partner Center → Acquisitions as the "Campaign ID" column. We pack
- * three UTM fields into that single column so we can break installs down by
- * source, campaign, and ad creative directly in Microsoft's dashboard:
+ * The Microsoft Store strips every URL query param except `cid`, but it then
+ * (a) surfaces that value in Microsoft Partner Center → Acquisitions as the
+ * "Campaign ID" column, and (b) preserves it per Microsoft-account so the
+ * installed app can read it back via the WinRT
+ * `CurrentApp::GetAppPurchaseCampaignIdAsync()` API. We exploit both at once
+ * by encoding TWO things in the cid:
  *
- *     cid = <utm_source>__<utm_campaign>__<utm_content>
+ *     cid = c_<campaign_short>__u_<bcid>
  *
- * Each component is independently sanitized (lowercased, non-alphanumeric runs
- * collapsed to a single underscore, leading/trailing underscores stripped) so
- * the literal "__" sequence is reserved as the component separator. Missing
- * components are skipped — a hit with only utm_campaign produces just
- * "<campaign>", a hit with utm_source + utm_campaign produces
- * "<source>__<campaign>".
+ * — `c_…` is a short, stable campaign label so Partner Center rollups don't
+ *   shatter into one-row-per-user. Derived from utm_campaign (or utm_source,
+ *   or an explicit ?metacampaign= override).
+ * — `u_…` is the page-minted bcid. The desktop app parses this on first
+ *   launch and uses it directly to claim the (fbp/fbc/fbclid/utms) attribution
+ *   payload from the worker, bypassing the IP-coarsened loopback entirely.
+ *   That's the whole point: the cid channel is network-agnostic, survives
+ *   deferred installs, and doesn't NAT-collide. The loopback claim remains
+ *   only as a fallback when cid comes back empty (sporadic Win11 cases,
+ *   non-Store sideloads, missing MS-account association).
  *
- * The total cid is clamped to 100 chars. When the budget is exceeded we
- * truncate from the right (utm_content first), because earlier components are
- * coarser groupings and matter more for clean rollups in Partner Center.
- *
- * An explicit override (?metacampaign=… or ?meta_campaign=… on the page URL)
- * bypasses the UTM composition and is treated as a single opaque value. Useful
- * for manual / non-Meta links.
+ * Either component may be missing — the assembled cid silently omits it. The
+ * whole string is clamped to 100 chars; the bcid is treated as fixed-length
+ * (`bc_` + UUID = 39 chars), so we cap `c_…` first to fit. A bcid that exceeds
+ * the BCID_RE shape is dropped rather than truncated, because a truncated
+ * bcid is worse than no bcid — it would fail the worker's validator and
+ * fingerprint nothing.
  */
 (function (global) {
     var MS_STORE_BASE = 'https://apps.microsoft.com/detail/9nrc99fw338g';
     var MAX_CID_LENGTH = 100;
     var CID_SEPARATOR = '__';
+
+    // Must mirror BCID_RE on the worker + desktop side. Single source of
+    // truth lives there; this is a defensive copy so the page never ships
+    // a malformed bcid into the Microsoft Store URL.
+    var BCID_RE = /^bc_[A-Za-z0-9-]{8,64}$/;
+
+    // Cap the campaign component on its own so a runaway utm_campaign can't
+    // monopolize the 100-char budget and push the bcid out. With the bcid
+    // worst-case at ~67 chars (`bc_` + 64), plus 2× `c_`/`u_` prefixes and
+    // the `__` separator, we want campaign ≤ ~25 chars to keep headroom.
+    // In practice 40 is plenty for things like "fb_xmas25".
+    var MAX_CAMPAIGN_LENGTH = 40;
 
     /**
      * Normalize one UTM-ish value into a single Partner-Center-safe token.
@@ -51,80 +69,132 @@
         return s ? s.slice(0, MAX_CID_LENGTH) : null;
     }
 
-    /**
-     * Join already-sanitized components with the canonical separator while
-     * staying within the cid length budget. Truncates from the tail so the
-     * coarser groupings (source, campaign) survive.
-     */
-    function joinComponents(components) {
-        var parts = [];
-        for (var i = 0; i < components.length; i++) {
-            var p = sanitizeComponent(components[i]);
-            if (p) parts.push(p);
-        }
-        if (parts.length === 0) return null;
+    /** Validate + lowercase the bcid. Returns null on anything malformed so
+     *  the caller can quietly drop the `u_` segment instead of poisoning the
+     *  cid with garbage the desktop side will reject. */
+    function sanitizeBcid(raw) {
+        if (typeof raw !== 'string') return null;
+        var trimmed = raw.trim();
+        if (!trimmed || !BCID_RE.test(trimmed)) return null;
+        // Lowercase keeps round-trip exact with the worker (Cloudflare
+        // crypto helpers and the desktop validator are case-sensitive only
+        // for the `bc_` prefix; the suffix is canonical-lowercase UUIDs).
+        return trimmed.toLowerCase();
+    }
 
-        var joined = parts.join(CID_SEPARATOR);
-        if (joined.length <= MAX_CID_LENGTH) return joined;
-
-        // Over budget: shrink (then drop) the last component until we fit.
-        while (parts.length > 0) {
-            var head = parts.slice(0, parts.length - 1).join(CID_SEPARATOR);
-            var prefixLen = head.length + (head.length ? CID_SEPARATOR.length : 0);
-            var room = MAX_CID_LENGTH - prefixLen;
-            if (room >= 4) {
-                var trimmed = parts[parts.length - 1].slice(0, room).replace(/[_-]+$/, '');
-                if (trimmed) {
-                    parts[parts.length - 1] = trimmed;
-                    return parts.join(CID_SEPARATOR);
-                }
-            }
-            // Not enough room to keep the last component meaningfully — drop it.
-            parts.pop();
-            if (parts.length === 0) return null;
-            if (parts.join(CID_SEPARATOR).length <= MAX_CID_LENGTH) {
-                return parts.join(CID_SEPARATOR);
-            }
-        }
-        return null;
+    /** Pick the most meaningful campaign label out of the available UTMs.
+     *  Prefer utm_campaign (the most marketing-actionable column in Partner
+     *  Center), fall back to utm_source so a bare `?utm_source=newsletter`
+     *  link still produces a rollup bucket. */
+    function deriveCampaignShort(utms) {
+        if (!utms || typeof utms !== 'object') return null;
+        var candidate = utms.utm_campaign || utms.utm_source;
+        var s = sanitizeComponent(candidate);
+        if (!s) return null;
+        return s.slice(0, MAX_CAMPAIGN_LENGTH);
     }
 
     /**
-     * Build the Partner Center cid from the page's UTM context.
+     * Build the Partner Center cid from the page's UTM context + (optional)
+     * bcid. Returns null when there's nothing meaningful to attribute.
+     *
      * @param {function(): object} getUtmProps page-specific UTM reader
+     * @param {string=} bcid current page-minted bcid (window.__cue_bcid)
      */
-    function getMetaCampaignCid(getUtmProps) {
+    function getMetaCampaignCid(getUtmProps, bcid) {
         try {
             var params = new URLSearchParams(global.location.search);
+
+            // Explicit override (?metacampaign=…) bypasses utm composition
+            // entirely and is treated as the campaign label verbatim. Useful
+            // for manual / non-Meta links where the marketer wants a single
+            // pre-agreed bucket name.
             var explicit = params.get('metacampaign') || params.get('meta_campaign');
-            if (explicit) return sanitizeCampaignId(explicit);
 
             var utms = typeof getUtmProps === 'function' ? getUtmProps() : {};
-            return joinComponents([
-                utms.utm_source,
-                utms.utm_campaign,
-                utms.utm_content
-            ]);
+            var campaignShort = explicit
+                ? (sanitizeComponent(explicit) || '').slice(0, MAX_CAMPAIGN_LENGTH) || null
+                : deriveCampaignShort(utms);
+
+            var safeBcid = sanitizeBcid(bcid);
+
+            if (!campaignShort && !safeBcid) return null;
+
+            var parts = [];
+            if (campaignShort) parts.push('c_' + campaignShort);
+            if (safeBcid)      parts.push('u_' + safeBcid);
+
+            var joined = parts.join(CID_SEPARATOR);
+            if (joined.length <= MAX_CID_LENGTH) return joined;
+
+            // Over budget — only the campaign is variable-length, so shrink
+            // it from the tail. Never touch the bcid: a truncated bcid
+            // fingerprints nothing on the worker side.
+            if (campaignShort && safeBcid) {
+                var fixedTail = CID_SEPARATOR + 'u_' + safeBcid;
+                var room = MAX_CID_LENGTH - fixedTail.length - 'c_'.length;
+                if (room >= 4) {
+                    var trimmed = campaignShort.slice(0, room).replace(/[_-]+$/, '');
+                    if (trimmed) return 'c_' + trimmed + fixedTail;
+                }
+                return 'u_' + safeBcid;
+            }
+            return joined.slice(0, MAX_CID_LENGTH);
         } catch (e) {
             return null;
         }
     }
 
-    function buildMicrosoftStoreUrl(getUtmProps) {
+    /**
+     * Build the full Microsoft Store URL with the composed cid. Passing
+     * `bcid` is encouraged for any /download flow — it's what makes the
+     * desktop-side claim deterministic. Omit it only for non-acquisition
+     * links (press / docs / FAQ).
+     *
+     * @param {function(): object} getUtmProps page-specific UTM reader
+     * @param {string=} bcid current page-minted bcid
+     */
+    function buildMicrosoftStoreUrl(getUtmProps, bcid) {
         var url = new URL(MS_STORE_BASE);
-        var cid = getMetaCampaignCid(getUtmProps);
+        var cid = getMetaCampaignCid(getUtmProps, bcid);
         if (cid) url.searchParams.set('cid', cid);
         return url.toString();
+    }
+
+    /**
+     * Inverse of getMetaCampaignCid. Exposed mainly so tests / the desktop
+     * WinRT shim's mock can validate the round-trip without re-deriving the
+     * parser by hand. Returns { campaign, bcid } with either field set to
+     * null when missing. Malformed bcids are surfaced as `null` (not the
+     * raw string) so the caller never gets a value it has to re-validate.
+     */
+    function parseCid(cid) {
+        var out = { campaign: null, bcid: null };
+        if (!cid || typeof cid !== 'string') return out;
+        var parts = cid.split(CID_SEPARATOR);
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            if (p.indexOf('c_') === 0) {
+                out.campaign = p.slice(2) || null;
+            } else if (p.indexOf('u_') === 0) {
+                out.bcid = sanitizeBcid(p.slice(2));
+            }
+        }
+        return out;
     }
 
     global.CueMicrosoftStore = {
         MS_STORE_BASE: MS_STORE_BASE,
         MAX_CID_LENGTH: MAX_CID_LENGTH,
+        MAX_CAMPAIGN_LENGTH: MAX_CAMPAIGN_LENGTH,
         CID_SEPARATOR: CID_SEPARATOR,
+        BCID_RE: BCID_RE,
         sanitizeCampaignId: sanitizeCampaignId,
         sanitizeComponent: sanitizeComponent,
-        joinComponents: joinComponents,
+        sanitizeBcid: sanitizeBcid,
+        deriveCampaignShort: deriveCampaignShort,
         getMetaCampaignCid: getMetaCampaignCid,
-        buildMicrosoftStoreUrl: buildMicrosoftStoreUrl
+        buildMicrosoftStoreUrl: buildMicrosoftStoreUrl,
+        parseCid: parseCid
     };
 })(typeof window !== 'undefined' ? window : globalThis);

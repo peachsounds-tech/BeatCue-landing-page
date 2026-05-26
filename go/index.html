@@ -131,7 +131,8 @@
         var MS_STORE_FALLBACK = 'https://apps.microsoft.com/detail/9nrc99fw338g';
 
         var PAGE_NAME    = 'bouncer';
-        var PAGE_VERSION = '1.0.0';
+        var PAGE_VERSION = 'store_direct';
+        var LIB_VERSION  = '1.0.0';
         var FLOW_TAG     = 'bouncer';
 
         // Budget between dispatching beacons and the redirect. fetch(keepalive)
@@ -222,7 +223,13 @@
         // ── 2. Build destination URL ────────────────────────────────────────────
         function buildStoreUrl() {
             if (window.CueMicrosoftStore && window.CueMicrosoftStore.buildMicrosoftStoreUrl) {
-                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUTMs);
+                // Embed the bcid in the cid so the desktop app can claim
+                // attribution via WinRT GetAppPurchaseCampaignIdAsync on
+                // first launch — strictly better than waiting on the
+                // IP-coarsened /pairings/claim path, which gets fragile
+                // when the Store defers the install or installs across
+                // devices on the same MS account.
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUTMs, bcid);
             }
             return MS_STORE_FALLBACK;
         }
@@ -310,6 +317,8 @@
         if (referrer)          personProps.first_referrer     = referrer;
         if (fbclid)            personProps.first_fbclid       = fbclid;
         personProps.first_landing_page = 'go';
+        personProps.first_landing_page_version = PAGE_VERSION;
+        personProps.store_direct = true;
 
         fire(POSTHOG_API_HOST + '/e/', {
             api_key: POSTHOG_API_KEY,
@@ -318,9 +327,8 @@
             timestamp: nowIso,
             properties: {
                 $set_once: personProps,
-                $set: { store_direct: true },
                 $lib: 'web-bouncer',
-                $lib_version: PAGE_VERSION,
+                $lib_version: LIB_VERSION,
                 page: PAGE_NAME,
                 flow: FLOW_TAG
             }
@@ -369,7 +377,7 @@
             timestamp: nowIso,
             properties: Object.assign({
                 $lib: 'web-bouncer',
-                $lib_version: PAGE_VERSION
+                $lib_version: LIB_VERSION
             }, pageViewProps)
         });
 
@@ -391,7 +399,7 @@
             event_id: eventId
         };
         if (window.CueMicrosoftStore) {
-            var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUTMs);
+            var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUTMs, bcid);
             if (cid) eventProps.ms_store_cid = cid;
         }
         if (referrer) eventProps.referrer = referrer;
@@ -409,7 +417,7 @@
             timestamp: nowIso,
             properties: Object.assign({
                 $lib: 'web-bouncer',
-                $lib_version: PAGE_VERSION
+                $lib_version: LIB_VERSION
             }, eventProps)
         });
 

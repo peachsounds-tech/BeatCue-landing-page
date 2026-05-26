@@ -574,10 +574,20 @@ async function handlePairings(request, env, url) {
         const os = osFamily(ua);
         const ipKey  = await buildClaimKey(coarseIp(request), os);
         const asnKey = await buildAsnKey(request.cf, os);
+        // bcid-keyed mirror. Lets a Windows app that pulled the bcid out of
+        // the Microsoft Store cid (GetAppPurchaseCampaignIdAsync → WinRT)
+        // claim attribution directly, bypassing the IP/ASN heuristic that
+        // gets unreliable behind deferred Store installs, cross-device
+        // installs on the same MS account, or roaming networks.
+        const bcidKey = `pair:bcid:${bcid}`;
 
-        // Cross-key linkage: store the sibling under `_alt` so the claim
-        // path can delete-on-read both copies and avoid a stale fallback
-        // entry leaking to the next install on the same ASN.
+        // Collect every key we wrote so the claim path can delete-on-read
+        // ALL of them atomically. Otherwise a successful bcid lookup would
+        // leave the IP/ASN keys behind to NAT-collide with the next install.
+        const allKeys = [ipKey];
+        if (asnKey && asnKey !== ipKey) allKeys.push(asnKey);
+        allKeys.push(bcidKey);
+
         const payload = {
             bcid,
             fbp:    clampString(body.fbp,    256),
@@ -586,17 +596,17 @@ async function handlePairings(request, env, url) {
             utms:   clampUtms(body.utms),
             ts:     Date.now(),
             os,
-            _alt:   asnKey && asnKey !== ipKey ? asnKey : null,
+            // Sibling keys for delete-on-read fan-out. Replaces the older
+            // `_alt: <single key>` field; we still read that on the claim
+            // side for backward compat with any in-flight payloads written
+            // by the previous worker version.
+            _alts:  allKeys,
         };
 
         const json = JSON.stringify(payload);
-        const writes = [
-            env.PAIRINGS.put(ipKey, json, { expirationTtl: PAIRING_TTL_SECONDS }),
-        ];
-        if (asnKey && asnKey !== ipKey) {
-            writes.push(env.PAIRINGS.put(asnKey, json, { expirationTtl: PAIRING_TTL_SECONDS }));
-        }
-        await Promise.all(writes);
+        await Promise.all(allKeys.map(k =>
+            env.PAIRINGS.put(k, json, { expirationTtl: PAIRING_TTL_SECONDS })
+        ));
 
         // Single-line structured log so `wrangler tail` shows what the
         // worker actually saw for this request — IP family, ASN, OS, key
@@ -610,7 +620,8 @@ async function handlePairings(request, env, url) {
             asn:     (request.cf && request.cf.asn)     || null,
             ip_key:  ipKey,
             asn_key: asnKey,
-            wrote:   writes.length,
+            bcid_key: bcidKey,
+            wrote:   allKeys.length,
         }));
 
         return new Response(JSON.stringify({ ok: true }), {
@@ -621,17 +632,36 @@ async function handlePairings(request, env, url) {
 
     // ── App → claim pending pairing ──────────────────────────────────────────
     if (url.pathname === '/pairings/claim') {
+        // The Windows app can now pre-resolve its own bcid by reading the
+        // Microsoft Store cid via GetAppPurchaseCampaignIdAsync. When it
+        // does, it sends the bcid here and we do a direct KV lookup — no
+        // IP coarsening, no ASN fallback, zero NAT collision risk. The
+        // old IP+ASN lookup remains as the fallback for callers that
+        // don't have a bcid (older app versions, sideloaded installs, or
+        // Store installs where the cid round-trip failed).
+        const requestedBcid = clampString(body && body.bcid, 96);
+        const hasValidBcid = requestedBcid && BCID_RE.test(requestedBcid);
+
         const os = osFamily(request.headers.get('user-agent') || '', body.os);
         const ipKey  = await buildClaimKey(coarseIp(request), os);
         const asnKey = await buildAsnKey(request.cf, os);
+        const bcidKey = hasValidBcid ? `pair:bcid:${requestedBcid}` : null;
 
-        // Try the IP-coarsened key first (zero collision risk within a
-        // /24 + os), then fall back to ASN+country+os. The fallback
-        // catches dual-stack v4/v6 mismatches between page and app — same
-        // network, different IP family, otherwise different hashes.
-        let raw = await env.PAIRINGS.get(ipKey);
-        let hitKey = ipKey;
-        let hitVia = 'ip';
+        let raw = null;
+        let hitKey = null;
+        let hitVia = null;
+
+        if (bcidKey) {
+            raw = await env.PAIRINGS.get(bcidKey);
+            if (raw) { hitKey = bcidKey; hitVia = 'bcid'; }
+        }
+
+        // Fall back to IP-coarsened lookup (primary for legacy callers),
+        // then ASN+country+os for dual-stack v4/v6 mismatches.
+        if (!raw) {
+            raw = await env.PAIRINGS.get(ipKey);
+            if (raw) { hitKey = ipKey; hitVia = 'ip'; }
+        }
         if (!raw && asnKey && asnKey !== ipKey) {
             raw = await env.PAIRINGS.get(asnKey);
             if (raw) { hitKey = asnKey; hitVia = 'asn'; }
@@ -646,6 +676,8 @@ async function handlePairings(request, env, url) {
                 asn:     (request.cf && request.cf.asn)     || null,
                 ip_key:  ipKey,
                 asn_key: asnKey,
+                bcid_key: bcidKey,
+                had_bcid_hint: !!hasValidBcid,
             }));
             return new Response(JSON.stringify({ ok: false, error: 'no_pending_pairing' }), {
                 status: 404,
@@ -653,19 +685,31 @@ async function handlePairings(request, env, url) {
             });
         }
 
-        // Single-shot: delete on read so a second BeatCue install behind the
-        // same NAT doesn't accidentally reuse this user's bcid. Wipe both
-        // copies (primary + ASN fallback) — best-effort, ignore failures.
-        const deletions = [env.PAIRINGS.delete(hitKey)];
         let parsed = null;
         try {
             parsed = JSON.parse(raw);
-            const sibling = parsed && parsed._alt;
-            if (typeof sibling === 'string' && sibling && sibling !== hitKey) {
-                deletions.push(env.PAIRINGS.delete(sibling));
-            }
         } catch (_) { /* tolerate */ }
-        await Promise.all(deletions.map(p => p.catch(() => {})));
+
+        // Delete-on-read fan-out. Prefer the explicit `_alts` array (new
+        // shape); fall back to `_alt` single-string (old shape) so
+        // payloads written by the previous worker version still get
+        // fully cleaned up. Always include the key we actually hit, even
+        // if it isn't in the sibling list (e.g. claim arrived via bcid
+        // for an old-shape payload that doesn't list bcidKey).
+        const deletions = new Set();
+        deletions.add(hitKey);
+        if (parsed) {
+            if (Array.isArray(parsed._alts)) {
+                for (const k of parsed._alts) {
+                    if (typeof k === 'string' && k) deletions.add(k);
+                }
+            } else if (typeof parsed._alt === 'string' && parsed._alt) {
+                deletions.add(parsed._alt);
+            }
+        }
+        await Promise.all(
+            [...deletions].map(k => env.PAIRINGS.delete(k).catch(() => {}))
+        );
 
         // Drop a short-lived breadcrumb so the still-open download page can
         // poll /pairings/claimed/<bcid> and tick its "Start editing"
@@ -680,11 +724,12 @@ async function handlePairings(request, env, url) {
             );
         }
 
-        // Strip internal `_alt` linkage before returning to the desktop —
-        // it's a server-only implementation detail.
+        // Strip internal sibling-key linkage before returning to the
+        // desktop — they're server-only implementation details.
         let responseBody = raw;
-        if (parsed && Object.prototype.hasOwnProperty.call(parsed, '_alt')) {
-            const { _alt, ...rest } = parsed;
+        if (parsed && (Object.prototype.hasOwnProperty.call(parsed, '_alts')
+                    || Object.prototype.hasOwnProperty.call(parsed, '_alt'))) {
+            const { _alts, _alt, ...rest } = parsed;
             responseBody = JSON.stringify(rest);
         }
 
@@ -698,6 +743,7 @@ async function handlePairings(request, env, url) {
             asn:     (request.cf && request.cf.asn)     || null,
             ip_key:  ipKey,
             asn_key: asnKey,
+            bcid_key: bcidKey,
             payload_age_s: parsed && typeof parsed.ts === 'number' ? Math.round((Date.now() - parsed.ts) / 1000) : null,
         }));
 

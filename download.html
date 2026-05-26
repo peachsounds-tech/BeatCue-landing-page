@@ -523,7 +523,11 @@
 
         function getWindowsStoreUrl() {
             if (window.CueMicrosoftStore) {
-                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps);
+                // Pack the bcid into the cid so the desktop app can read it
+                // back via WinRT GetAppPurchaseCampaignIdAsync() on first
+                // launch. The IP-coarsened /pairings/claim path remains a
+                // fallback for installs where the cid round-trip fails.
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps, window.__cue_bcid);
             }
             return DOWNLOAD_URLS.windows;
         }
@@ -680,7 +684,7 @@
             if (platform === 'windows') {
                 props.ms_store_url = getWindowsStoreUrl();
                 if (window.CueMicrosoftStore) {
-                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps);
+                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps, window.__cue_bcid);
                     if (cid) props.ms_store_cid = cid;
                 }
             }
