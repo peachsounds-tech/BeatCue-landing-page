@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download BeatCue (Staging)</title>
+    <meta name="robots" content="noindex, nofollow">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png">
+
+    <!-- Meta Pixel Code (with enhanced matching for better attribution) -->
+    <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    
+    // Helper: Read cookie by name
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? decodeURIComponent(match[2]) : null;
+    }
+    
+    // Helper: Get fbclid from URL or sessionStorage
+    function getFbclid() {
+        var params = new URLSearchParams(window.location.search);
+        var fbclid = params.get('fbclid');
+        if (fbclid) {
+            try { sessionStorage.setItem('cue_fbclid', fbclid); } catch(e) {}
+            return fbclid;
+        }
+        try { return sessionStorage.getItem('cue_fbclid'); } catch(e) { return null; }
+    }
+    
+    // Helper: Build _fbc cookie format if we have fbclid but no _fbc cookie
+    function getFbc() {
+        var fbc = getCookie('_fbc');
+        if (fbc) return fbc;
+        var fbclid = getFbclid();
+        if (fbclid) {
+            return 'fb.1.' + Date.now() + '.' + fbclid;
+        }
+        return null;
+    }
+    
+    // BeatCue browser ID (bcid): mint before Pixel init for advanced matching.
+    function getOrCreateBcid() {
+        var VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+        var mint = function() {
+            return 'bc_' + (crypto.randomUUID
+                ? crypto.randomUUID()
+                : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+        };
+        var normalize = function(raw) {
+            if (!raw || typeof raw !== 'string') return null;
+            var trimmed = raw.trim();
+            if (!trimmed) return null;
+            if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
+            return VALID.test(trimmed) ? trimmed : null;
+        };
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var fromUrl = params.get('bcid') || params.get('ph_id');
+            var b = normalize(sessionStorage.getItem('cue_bcid'))
+                 || normalize(fromUrl)
+                 || mint();
+            sessionStorage.setItem('cue_bcid', b);
+            return b;
+        } catch (e) {
+            return mint();
+        }
+    }
+    window.__cue_getOrCreateBcid = getOrCreateBcid;
+    var cueBcid = getOrCreateBcid();
+    window.__cue_bcid = cueBcid;
+
+    // Store for use in other scripts
+    window.__cue_fbclid = getFbclid();
+    window.__cue_fbp = getCookie('_fbp');
+    window.__cue_fbc = getFbc();
+    
+    // Initialize with fbc/fbp for better matching
+    var initOptions = {};
+    if (window.__cue_fbc) {
+        initOptions.fbc = window.__cue_fbc;
+    }
+    if (window.__cue_fbp) {
+        initOptions.fbp = window.__cue_fbp;
+    }
+    
+    fbq('init', '708429622326201', { external_id: cueBcid }, initOptions);
+    
+    // Track PageView on initial load
+    fbq('track', 'PageView');
+    
+    console.log('📊 Meta Pixel: Initialized', { fbp: window.__cue_fbp, fbc: window.__cue_fbc, fbclid: window.__cue_fbclid });
+    
+    // Handle page restored from bfcache (back-forward cache)
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            fbq('track', 'PageView');
+            console.log('📊 Meta Pixel: PageView re-tracked (from cache)');
+        }
+    });
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+    src="https://www.facebook.com/tr?id=708429622326201&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Meta Pixel Code -->
+
+    <!-- Capture UTMs and Meta Click ID (fbclid) immediately -->
+    <script>
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            var keys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+            var utms = {};
+            keys.forEach(function(k) { var v = params.get(k); if (v) utms[k] = v; });
+            if (Object.keys(utms).length > 0) {
+                window.__cue_initial_utms = utms;
+                try { sessionStorage.setItem('cue_session_utms', JSON.stringify(utms)); } catch(e) {}
+            } else {
+                try {
+                    var stored = sessionStorage.getItem('cue_session_utms');
+                    if (stored) window.__cue_initial_utms = JSON.parse(stored);
+                } catch(e) {}
+            }
+            // Capture fbclid (Meta Click ID) for attribution
+            var fbclid = params.get('fbclid');
+            if (fbclid) {
+                try { sessionStorage.setItem('cue_fbclid', fbclid); } catch(e) {}
+            }
+            window.__cue_initial_url = window.location.href;
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const saved = localStorage.getItem('theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = saved || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+
+    <style>
+        :root {
+            --wave-blue: #4A90D9;
+            --green: #10B981;
+            --green-soft: rgba(16, 185, 129, 0.08);
+            --green-border: rgba(16, 185, 129, 0.18);
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F5F5F7;
+            --text-primary: #1a1a1a;
+            --text-secondary: #555555;
+            --text-muted: #888888;
+            --border-light: rgba(0, 0, 0, 0.07);
+        }
+        [data-theme="dark"] {
+            --bg-primary: #0A0A0F;
+            --bg-secondary: #13131D;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A0A0B0;
+            --text-muted: #6B6B7B;
+            --border-light: rgba(255, 255, 255, 0.07);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Sora', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            padding: 2rem 1rem;
+            color: var(--text-primary); line-height: 1.6;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .container { text-align: center; width: 100%; max-width: 460px; }
+
+        .staging-banner {
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+            border-radius: 10px;
+            padding: 0.65rem 0.85rem;
+            margin-bottom: 1rem;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            text-align: left;
+            line-height: 1.45;
+        }
+        .staging-banner strong { color: #D97706; }
+
+        .dl-icon { width: 180px; height: 180px; margin: 0 auto 1.2rem; animation: float 3s ease-in-out infinite; }
+        .dl-icon img { width: 100%; height: 100%; object-fit: contain; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.3rem; }
+        .dl-subtitle { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.6rem; }
+
+        .dl-card {
+            background: var(--bg-secondary); border: 1px solid var(--border-light);
+            border-radius: 14px; padding: 1.4rem 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .dl-checklist { text-align: left; }
+        .dl-check {
+            display: flex; align-items: center; gap: 0.65rem;
+            padding: 0.55rem 0;
+        }
+        .dl-check + .dl-check { border-top: 1px solid var(--border-light); }
+        .dl-check-box {
+            width: 20px; height: 20px; flex-shrink: 0;
+            border-radius: 6px; border: 1.5px solid var(--border-light);
+            background: var(--bg-primary);
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.35s ease;
+        }
+        .dl-check-box svg { opacity: 0; transform: scale(0.5); transition: all 0.3s ease; }
+        .dl-check.checked .dl-check-box {
+            background: var(--green-soft); border-color: var(--green-border);
+        }
+        .dl-check.checked .dl-check-box svg { opacity: 1; transform: scale(1); }
+        .dl-check.active .dl-check-box {
+            border-color: #F59E0B; background: rgba(245, 158, 11, 0.06);
+        }
+        .dl-check.active .dl-check-box::after {
+            content: ''; width: 8px; height: 8px; border-radius: 50%;
+            background: #F59E0B;
+        }
+        .dl-check.active .dl-check-box svg { display: none; }
+        .dl-check.active .dl-check-label { font-weight: 600; }
+        .dl-check-label {
+            font-size: 0.92rem; line-height: 1.4; color: var(--text-primary);
+            transition: opacity 0.35s ease;
+        }
+        .dl-check.checked .dl-check-label {
+            text-decoration: line-through; color: var(--text-muted); opacity: 0.5;
+        }
+        .dl-check-spinner {
+            width: 16px; height: 16px; flex-shrink: 0;
+            border: 1.5px solid var(--border-light); border-top-color: var(--wave-blue);
+            border-radius: 50%; animation: spin 0.7s linear infinite;
+            display: none;
+        }
+        .dl-check.loading .dl-check-box { display: none; }
+        .dl-check.loading .dl-check-spinner { display: block; }
+
+        .dl-trust { font-size: 0.78rem; color: var(--text-muted); margin-top: 1rem; }
+        .dl-fallback { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem; }
+        .dl-fallback a { color: var(--wave-blue); text-decoration: none; font-weight: 500; cursor: pointer; }
+        .dl-fallback a:hover { text-decoration: underline; }
+
+        .security-tip {
+            text-align: left; padding: 0.75rem 0.9rem;
+            background: var(--bg-secondary); border: 1px solid var(--border-light);
+            border-radius: 12px; margin-bottom: 1rem;
+        }
+        .security-tip-header { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.2rem; }
+        .security-tip-body { font-size: 0.82rem; color: var(--text-muted); line-height: 1.55; }
+        .security-tip-body strong { color: #0078D4; font-weight: 600; }
+
+        @keyframes securityPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0.35); }
+            70%  { box-shadow: 0 0 0 10px rgba(0, 120, 212, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 120, 212, 0); }
+        }
+        .security-tip.attention {
+            border-color: rgba(0, 120, 212, 0.55);
+            animation: securityPulse 1.6s ease-out 2;
+        }
+
+        body.windows-mode .dl-icon { width: 96px; height: 96px; margin-bottom: 0.6rem; }
+        body.windows-mode h1 { font-size: 1.35rem; }
+        body.windows-mode .dl-subtitle { margin-bottom: 1rem; }
+
+        .mobile-transfer-icon { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.85rem; color: var(--text-secondary); opacity: 0.6; }
+        .mobile-cta-heading { font-size: 1.3rem; font-weight: 500; color: var(--text-primary); margin-bottom: 1.25rem; }
+        .mobile-cta-sub { font-size: 1.02rem; color: var(--text-secondary); margin-bottom: 1.25rem; opacity: 0.8; }
+        .mobile-cta-sub.mobile-cta-platform { margin-bottom: 0.45rem; }
+        .mobile-send-actions { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+        .mobile-action-btn { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; padding: 0.8rem 1rem; font-size: 1.1rem; font-weight: 600; font-family: inherit; border-radius: 10px; cursor: pointer; transition: transform 0.15s ease; text-decoration: none; }
+        .mobile-action-primary { background: var(--wave-blue); color: white; border: none; }
+        .mobile-action-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border-light); }
+        .mobile-action-tertiary { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-light); font-weight: 500; }
+        .mobile-action-btn:active { transform: scale(0.97); }
+        .mobile-copy-toast { display: none; margin-top: 0.75rem; padding: 0.6rem 0.9rem; background: var(--green-soft); border: 1px solid var(--green-border); border-radius: 10px; color: var(--green); font-size: 1.02rem; font-weight: 500; }
+        .mobile-copy-toast.show { display: block; }
+        .mobile-cta-footer { margin-top: 1.25rem; font-size: 0.9rem; color: var(--text-secondary); opacity: 0.65; }
+
+        @media (max-width: 480px) {
+            body { padding: 1.5rem 1rem; }
+            h1 { font-size: 1.35rem; }
+            .dl-card { padding: 1.1rem 1.2rem; }
+        }
+    </style>
+    
+    <!-- PostHog - Consent-aware initialization -->
+    <script>
+        // Load PostHog snippet
+        !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="Ii init Di qi Sr Bi Zi Pi capture calculateEventProperties Yi register register_once register_for_session unregister unregister_for_session Xi getFeatureFlag getFeatureFlagPayload getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync Ji identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset setIdentity clearIdentity get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException startExceptionAutocapture stopExceptionAutocapture loadToolbar get_property getSessionProperty Wi Vi createPersonProfile setInternalOrTestUser Gi Fi tn opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing $i debug Tr Ui getPageViewId captureTraceFeedback captureTraceMetric Ri".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+        
+        // Check if user consented on main page (shared consent key)
+        function hasExistingConsent() {
+            try {
+                const data = localStorage.getItem('cue_analytics_consent');
+                if (!data) return false;
+                const consent = JSON.parse(data);
+                if (consent.status !== 'accepted') return false;
+                const daysElapsed = (Date.now() - consent.timestamp) / (1000 * 60 * 60 * 24);
+                return daysElapsed <= 180;
+            } catch (e) {
+                return false;
+            }
+        }
+        
+        const userConsented = hasExistingConsent();
+        const isInternalTester = localStorage.getItem('cue_internal_tester') === 'true';
+
+        // bcid minted in Meta Pixel block above; re-read for PostHog bootstrap.
+        function getOrCreateBcid() {
+            if (window.__cue_getOrCreateBcid) return window.__cue_getOrCreateBcid();
+            if (window.__cue_bcid) return window.__cue_bcid;
+            return 'bc_' + (crypto.randomUUID
+                ? crypto.randomUUID()
+                : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+        }
+        const cueBcid = getOrCreateBcid();
+        window.__cue_bcid = cueBcid;
+
+        // Clean bcid / legacy ph_id from address bar (cosmetic)
+        try {
+            const cleanUrl = new URL(window.location.href);
+            let changed = false;
+            if (cleanUrl.searchParams.has('bcid')) { cleanUrl.searchParams.delete('bcid'); changed = true; }
+            if (cleanUrl.searchParams.has('ph_id')) { cleanUrl.searchParams.delete('ph_id'); changed = true; }
+            if (changed) history.replaceState(null, '', cleanUrl.toString());
+        } catch (e) { /* ignore */ }
+        
+        // Initialize with appropriate persistence based on consent
+        const initConfig = {
+            api_host: 'https://t.beatcue.app',
+            ui_host: 'https://us.posthog.com',
+            persistence: userConsented ? 'localStorage' : 'memory',
+            autocapture: false,
+            capture_pageview: false,
+            person_profiles: userConsented ? 'always' : 'identified_only',
+            ip: userConsented
+        };
+        
+        if (!userConsented) {
+            initConfig.disable_geoip = true;
+        }
+
+        // Bootstrap PostHog with bcid so events match loopback pairing + analytics in the app
+        initConfig.bootstrap = { distinctID: cueBcid };
+        
+        const CUE_PAGE_VERSION = '1.2.0';
+
+        posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
+        posthog.register({ page_version: CUE_PAGE_VERSION });
+        
+        if (isInternalTester) {
+            posthog.register({ is_internal: true });
+            if (userConsented) {
+                posthog.setPersonProperties({ is_internal: true });
+            }
+            console.log('🔧 Internal tester flag detected');
+        }
+        
+        function getUtmProps() {
+            const earlyUtms = window.__cue_initial_utms || {};
+            const urlParams = new URLSearchParams(window.location.search);
+            const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+            const utms = {};
+            utmKeys.forEach(key => {
+                const value = urlParams.get(key) || earlyUtms[key];
+                if (value) utms[key] = value;
+            });
+            return utms;
+        }
+
+        function getBaseEventProps() {
+            const props = { ...getUtmProps() };
+            if (isInternalTester) props.is_internal = true;
+            return props;
+        }
+        
+        // Detect platform (mobile-first to catch iPads reporting as Macintosh)
+        function detectPlatform() {
+            const ua = navigator.userAgent || '';
+            
+            const isIPhone = /iPhone/i.test(ua);
+            const isIPad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+            const isIOS = isIPhone || isIPad;
+            const isAndroidPhone = /Android/i.test(ua) && /Mobile/i.test(ua);
+            const isAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+            
+            if (isIPhone) return 'iphone';
+            if (isIPad) return 'ipad';
+            if (isAndroidPhone) return 'android_phone';
+            if (isAndroidTablet) return 'android_tablet';
+            if (/Windows NT/i.test(ua)) return 'windows';
+            if (/Macintosh/i.test(ua)) return 'macos';
+            if (/CrOS/i.test(ua)) return 'chromeos';
+            if (/Linux/i.test(ua)) return 'linux';
+            return 'unknown';
+        }
+        
+        const detectedPlatform = detectPlatform();
+        
+        // Track page view function
+        function trackPostHogPageView(fromCache = false) {
+            const baseProps = {
+                ...getBaseEventProps(),
+                page: 'download',
+                platform: detectedPlatform,
+                url: window.__cue_initial_url || window.location.href,
+                referrer: document.referrer || 'direct',
+                from_cache: fromCache
+            };
+
+            if (userConsented) {
+                posthog.capture('page_viewed', baseProps);
+                console.log('📊 PostHog: page_viewed tracked (consented, with UTMs)' + (fromCache ? ' [from cache]' : ''));
+            } else {
+                posthog.capture('page_viewed', { ...baseProps, screen_width: window.screen.width, screen_height: window.screen.height });
+                console.log('📊 PostHog: page_viewed tracked (anonymous, with UTMs)' + (fromCache ? ' [from cache]' : ''));
+            }
+        }
+        
+        setTimeout(() => trackPostHogPageView(false), 200);
+        
+        window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                setTimeout(() => trackPostHogPageView(true), 200);
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container">
+
+        <div class="staging-banner" id="stagingBanner">
+            <strong>Staging build</strong> — for attribution / pairing tests only.
+            Not linked from the public site. Production installs are unaffected
+            (<code>latest</code> release is unchanged).
+        </div>
+
+        <div id="supportedContent">
+            <div class="dl-icon">
+                <img src="icon1.png" alt="BeatCue">
+            </div>
+
+            <h1 id="downloadPageTitle">Downloading BeatCue (Staging)</h1>
+            <p class="dl-subtitle" id="dlSubtitle">Attribution test build &middot; not for production users</p>
+
+            <div class="dl-card">
+                <div class="dl-checklist" id="dlChecklist">
+                    <div class="dl-check loading" id="checkDownload">
+                        <div class="dl-check-spinner"></div>
+                        <div class="dl-check-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                        <div class="dl-check-label">Download BeatCue</div>
+                    </div>
+                    <div class="dl-check" id="checkInstall">
+                        <div class="dl-check-spinner"></div>
+                        <div class="dl-check-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                        <div class="dl-check-label" id="checkInstallLabel">Run the installer</div>
+                    </div>
+                    <div class="dl-check" id="checkEdit">
+                        <div class="dl-check-spinner"></div>
+                        <div class="dl-check-box"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                        <div class="dl-check-label">Start editing</div>
+                    </div>
+                </div>
+            </div>
+
+            <p class="dl-fallback" id="dlFallback">
+                Download didn't start? <a href="#" id="manualDownloadLink">Click here</a>
+            </p>
+
+            <div class="security-tip" id="securityTip" style="display: none;">
+                <div class="security-tip-header" id="securityTipHeader"></div>
+                <div class="security-tip-body" id="securityTipBody"></div>
+            </div>
+
+        </div>
+
+        <div id="unsupportedContent" style="display: none;">
+            <div class="dl-icon">
+                <img src="icon1.png" alt="BeatCue">
+            </div>
+            <div class="mobile-transfer-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <p class="mobile-cta-sub mobile-cta-platform">BeatCue runs on macOS & Windows</p>
+            <p class="mobile-cta-heading">Continue on your computer</p>
+            <div class="mobile-send-actions">
+                <button class="mobile-action-btn mobile-action-primary" id="mobileCopyLink">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10.5 1h-7A1.5 1.5 0 0 0 2 2.5v9h1.5v-9h7V1Zm2.25 3H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h7.25a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.75 4Zm0 10.5H5.5v-9h7.25v9Z" fill="currentColor"/></svg>
+                    <span id="mobileCopyText">Open on your computer</span>
+                </button>
+                <a class="mobile-action-btn mobile-action-secondary" href="https://wa.me/?text=Continue%20editing%20with%20BeatCue%20on%20desktop:%20https://beatcue.app/download" target="_blank" id="mobileWhatsApp">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.002 1C4.14 1 1 4.07 1 7.84c0 1.21.33 2.39.95 3.42L1 15l3.87-.98c1 .53 2.13.81 3.13.81C11.86 12.83 15 9.76 15 5.99 15 4.07 14.2 2.38 12.87 1.28A6.9 6.9 0 0 0 8.002 1Zm3.53 9.14c-.15.42-.87.8-1.2.85-.31.05-.7.07-1.13-.07a10.3 10.3 0 0 1-1.02-.38 7.04 7.04 0 0 1-3.05-2.69c-.26-.35-.66-.92-.66-1.78s.42-1.25.57-1.42c.15-.17.33-.21.44-.21h.32c.1 0 .24-.04.37.28.14.33.46 1.13.5 1.21.04.09.07.19.01.3-.05.11-.08.17-.16.27l-.24.28c-.08.09-.17.18-.07.35.1.17.42.7.9 1.13.62.55 1.15.72 1.31.8.16.09.26.07.35-.04.1-.11.42-.48.53-.65.11-.17.22-.14.37-.08.15.06.96.45 1.13.53.16.09.27.13.31.2.04.07.04.42-.11.83Z" fill="currentColor"/></svg>
+                    Send to WhatsApp
+                </a>
+                <a class="mobile-action-btn mobile-action-tertiary" href="mailto:?subject=Try%20BeatCue%20%E2%80%93%20music%20retiming%20for%20video%20editors&body=Continue%20editing%20with%20BeatCue%20on%20desktop%3A%20https%3A%2F%2Fbeatcue.app%2Fdownload" id="mobileEmail">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 3H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1Zm-.5 1.5L8 8.25 2.5 4.5h11ZM2.5 11.5v-6l5.5 4 5.5-4v6h-11Z" fill="currentColor"/></svg>
+                    Send to email
+                </a>
+            </div>
+            <div class="mobile-copy-toast" id="mobileCopyToast">Link copied. Open it on your computer.</div>
+            <p class="mobile-cta-footer">Mac & Windows &middot; Recommended: macOS 14+</p>
+        </div>
+
+    </div>
+
+    <script src="/js/microsoft-store.js"></script>
+    <script>
+        // Stable URL: Release workflow (staging mode) publishes to cue-releases
+        // tag v-staging as a pre-release (never "latest"). Override for one-off
+        // tests: ?pkg=https://github.com/.../beatcue-installer.pkg
+        const STAGING_PKG_DEFAULT =
+            'https://github.com/peachsounds-tech/cue-releases/releases/download/v-staging/beatcue-installer.pkg';
+        const stagingPkgOverride = new URLSearchParams(window.location.search).get('pkg');
+        const stagingMacUrl = stagingPkgOverride || STAGING_PKG_DEFAULT;
+
+        const DOWNLOAD_URLS = {
+            macos: stagingMacUrl,
+            // Staging page is macOS-only for sideload testing; Store builds
+            // can't carry custom attribution builds.
+            windows: 'https://apps.microsoft.com/detail/9nrc99fw338g'
+        };
+
+        function getWindowsStoreUrl() {
+            if (window.CueMicrosoftStore) {
+                // Pack the bcid into the cid so the desktop app can read it
+                // back via WinRT GetAppPurchaseCampaignIdAsync() on first
+                // launch. The IP-coarsened /pairings/claim path remains a
+                // fallback for installs where the cid round-trip fails.
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps, window.__cue_bcid);
+            }
+            return DOWNLOAD_URLS.windows;
+        }
+        
+        const PLATFORM_INFO = {
+            macos: { name: 'macOS' },
+            windows: { name: 'Windows' }
+        };
+
+        // Base URL of the pairing worker (Cloudflare Workers). Stores the
+        // bcid + Meta attribution under a (coarse_ip, os) key so the freshly
+        // installed desktop app can claim it on first launch.
+        // TODO: bind a custom subdomain (e.g. https://api.beatcue.app) and update
+        // here + in Source/PluginProcessor.cpp (kPairingsBase).
+        const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
+
+        // Staging sideload is macOS-only (Store builds can't carry test builds).
+        const forceMac = true;
+
+        // Fire-and-forget: hand the current attribution payload to the worker
+        // so the desktop app can claim it on first launch. Idempotent — repeat
+        // calls just overwrite the same KV entry. Failures are silent because
+        // a missed pairing only costs us a single anonymous app session.
+        function postPairing(platform) {
+            try {
+                var bcid = window.__cue_bcid;
+                if (!bcid) return;
+
+                var payload = {
+                    bcid: bcid,
+                    fbp: window.__cue_fbp || null,
+                    fbc: window.__cue_fbc || null,
+                    fbclid: window.__cue_fbclid || null,
+                    utms: getUtmProps(),
+                    platform: platform
+                };
+
+                fetch(PAIRINGS_BASE + '/pairings', {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).catch(function() {});
+            } catch (e) { /* never block download on a pairing hiccup */ }
+        }
+
+        // Tunable: every 3s we ask the worker if this bcid was claimed by a
+        // freshly launched desktop app. We give up after 10 minutes of wall
+        // time, and pause polling whenever the tab is hidden so we don't
+        // burn battery in the background. Single in-flight request at a time.
+        var PAIRING_POLL_INTERVAL_MS = 3000;
+        var PAIRING_POLL_MAX_MS      = 10 * 60 * 1000;
+
+        var pairingPoll = {
+            timer:    null,
+            inflight: false,
+            startedAt: 0,
+            bcid:     null,
+            done:     false,
+        };
+
+        function markPairedInChecklist() {
+            // Successful pairing implies installer ran AND app launched, so
+            // collapse the middle "active" state into a check too.
+            var install = document.getElementById('checkInstall');
+            if (install) {
+                install.classList.remove('active', 'loading');
+                install.classList.add('checked');
+            }
+            var edit = document.getElementById('checkEdit');
+            if (edit) {
+                edit.classList.remove('active', 'loading');
+                edit.classList.add('checked');
+            }
+        }
+
+        function stopPairingPoll() {
+            if (pairingPoll.timer) {
+                clearInterval(pairingPoll.timer);
+                pairingPoll.timer = null;
+            }
+        }
+
+        function checkPairingOnce() {
+            if (pairingPoll.done || pairingPoll.inflight) return;
+            if (Date.now() - pairingPoll.startedAt > PAIRING_POLL_MAX_MS) {
+                pairingPoll.done = true;
+                stopPairingPoll();
+                return;
+            }
+            if (document.hidden) return; // resume on visibilitychange
+            if (!pairingPoll.bcid) return;
+
+            pairingPoll.inflight = true;
+            fetch(PAIRINGS_BASE + '/pairings/claimed/' + encodeURIComponent(pairingPoll.bcid), {
+                method: 'GET',
+                mode: 'cors',
+                credentials: 'omit',
+                cache: 'no-store',
+            })
+                .then(function(r) {
+                    if (r.status === 200) return r.json();
+                    return null;
+                })
+                .then(function(json) {
+                    if (json && json.ok) {
+                        pairingPoll.done = true;
+                        stopPairingPoll();
+                        markPairedInChecklist();
+                        if (typeof posthog !== 'undefined' && posthog.capture) {
+                            posthog.capture('pairing_observed_in_page', {
+                                ...getBaseEventProps(),
+                                bcid: pairingPoll.bcid,
+                                latency_ms: Date.now() - pairingPoll.startedAt,
+                            });
+                        }
+                    }
+                })
+                .catch(function() { /* network blip — try again next tick */ })
+                .finally(function() { pairingPoll.inflight = false; });
+        }
+
+        function startPairingPoll() {
+            if (pairingPoll.timer || pairingPoll.done) return;
+            var bcid = window.__cue_bcid;
+            if (!bcid) return;
+            pairingPoll.bcid = bcid;
+            pairingPoll.startedAt = Date.now();
+            // First check is immediate so a refresh after pairing already
+            // happened ticks the bullet without waiting a full interval.
+            checkPairingOnce();
+            pairingPoll.timer = setInterval(checkPairingOnce, PAIRING_POLL_INTERVAL_MS);
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) checkPairingOnce();
+        });
+
+        function trackDownload(platform) {
+            if (typeof fbq === 'function') {
+                var eventData = { 
+                    value: '0.00', 
+                    currency: 'USD', 
+                    content_name: 'BeatCue', 
+                    platform: platform 
+                };
+                fbq('track', 'StartTrial', eventData);
+                console.log('📊 Meta Pixel: StartTrial tracked', eventData);
+            }
+            var props = { ...getBaseEventProps(), page: 'download_staging', platform: platform, url: window.location.href, source: 'staging_download_page', staging_pkg_url: DOWNLOAD_URLS[platform] };
+            if (platform === 'windows') {
+                props.ms_store_url = getWindowsStoreUrl();
+                if (window.CueMicrosoftStore) {
+                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps, window.__cue_bcid);
+                    if (cid) props.ms_store_cid = cid;
+                }
+            }
+            if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
+            posthog.capture('trial_download_started', props);
+
+            postPairing(platform);
+            startPairingPoll();
+        }
+
+        function setupUI(platform) {
+            var isSupported = platform === 'macos' || platform === 'windows';
+            
+            // Block Windows downloads if force_mac=true
+            var blockWindowsDownload = forceMac && platform === 'windows';
+
+            if (blockWindowsDownload) {
+                // Show "Windows coming soon" message
+                document.getElementById('supportedContent').style.display = 'block';
+                document.getElementById('unsupportedContent').style.display = 'none';
+                
+                document.getElementById('downloadPageTitle').textContent = 'Windows Coming Soon';
+                document.getElementById('dlSubtitle').textContent = 'BeatCue is currently available for macOS only';
+                
+                // Hide the checklist
+                var checklist = document.getElementById('dlChecklist');
+                if (checklist) checklist.style.display = 'none';
+                
+                // Hide fallback link
+                var fallback = document.getElementById('dlFallback');
+                if (fallback) fallback.style.display = 'none';
+                
+                var securityTipEl = document.getElementById('securityTip');
+                if (securityTipEl) {
+                    securityTipEl.style.display = '';
+                    document.getElementById('securityTipHeader').innerHTML = '🪟 Windows version in development';
+                    document.getElementById('securityTipBody').innerHTML = 'We\'re working on bringing BeatCue to Windows.<br>In the meantime, BeatCue is available for <strong>macOS 14+</strong>.';
+                }
+                
+            } else if (isSupported) {
+                document.getElementById('supportedContent').style.display = 'block';
+                document.getElementById('unsupportedContent').style.display = 'none';
+
+                var otherPlatform = platform === 'macos' ? 'windows' : 'macos';
+                var otherInfo = PLATFORM_INFO[otherPlatform];
+
+                var manualLink = document.getElementById('manualDownloadLink');
+                manualLink.href = platform === 'windows' ? getWindowsStoreUrl() : DOWNLOAD_URLS[platform];
+                manualLink.addEventListener('click', function() {
+                    trackDownload(platform);
+                });
+
+
+                if (platform === 'windows') {
+                    document.body.classList.add('windows-mode');
+
+                    // Windows users get a fast same-tab redirect to the
+                    // Microsoft Store (see init() below). This copy is for
+                    // the brief flash before the redirect lands.
+                    document.getElementById('downloadPageTitle').textContent = 'Opening the Microsoft Store…';
+                    document.getElementById('dlSubtitle').textContent = 'Tap Get to install BeatCue \u00b7 Free to use';
+
+                    var securityTipEl = document.getElementById('securityTip');
+                    if (securityTipEl) securityTipEl.style.display = '';
+                    document.getElementById('securityTipHeader').innerHTML = '🎉 You\'re almost in!';
+                    document.getElementById('securityTipBody').innerHTML = 'Redirecting you to the <strong>Microsoft Store</strong>…<br>Tap <strong>"Get"</strong> (or <strong>"Install"</strong>) to add BeatCue to your PC.';
+                }
+                
+            } else {
+                document.getElementById('supportedContent').style.display = 'none';
+                document.getElementById('unsupportedContent').style.display = 'block';
+            }
+        }
+        
+        function init() {
+            var platform = detectedPlatform;
+            setupUI(platform);
+            
+            // Block Windows downloads if force_mac=true
+            var blockWindowsDownload = forceMac && platform === 'windows';
+
+            if ((platform === 'macos' || platform === 'windows') && !blockWindowsDownload) {
+                if (platform === 'windows') {
+                    // Windows ships via the Microsoft Store. Fire the same
+                    // pixel + PostHog + pairing flow we use for macOS, then
+                    // do a same-tab top-level redirect to the Store. The
+                    // pairing POST uses keepalive:true so it survives the
+                    // navigation. The ~1.5s pause lets the "Opening the
+                    // Microsoft Store…" copy read as intentional rather
+                    // than an instant pop. No popup, no blocker.
+                    trackDownload('windows');
+                    setTimeout(function() {
+                        window.location.href = getWindowsStoreUrl();
+                    }, 1500);
+                    return;
+                }
+
+                setTimeout(function() {
+                    var a = document.createElement('a');
+                    a.href = DOWNLOAD_URLS[platform];
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    trackDownload(platform);
+
+                    setTimeout(function() {
+                        var chk = document.getElementById('checkDownload');
+                        if (chk) { chk.classList.remove('loading'); chk.classList.add('checked'); }
+
+                        document.getElementById('downloadPageTitle').textContent = 'Downloading BeatCue (Staging)';
+                        document.getElementById('dlSubtitle').textContent = 'Attribution test build \u00b7 not for production users';
+
+                        var installItem = document.getElementById('checkInstall');
+                        if (installItem) installItem.classList.add('active');
+                        var installLabel = document.getElementById('checkInstallLabel');
+                        if (installLabel) installLabel.innerHTML = 'Run <strong>beatcue-installer.pkg</strong>';
+                    }, 1500);
+                }, 400);
+            }
+
+            var mobileCopyBtn = document.getElementById('mobileCopyLink');
+            var mobileCopyToast = document.getElementById('mobileCopyToast');
+            var mobileWhatsApp = document.getElementById('mobileWhatsApp');
+            var mobileEmailBtn = document.getElementById('mobileEmail');
+
+            function trackSendToComputer(method) {
+                if (typeof fbq === 'function') {
+                    fbq('track', 'Lead', { content_name: 'BeatCue Send to Desktop', content_category: method });
+                }
+                if (typeof posthog !== 'undefined' && posthog.capture) {
+                    posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: platform, source: 'download_page' });
+                }
+            }
+
+            if (mobileCopyBtn) {
+                mobileCopyBtn.addEventListener('click', function() {
+                    var copyText = document.getElementById('mobileCopyText');
+                    navigator.clipboard.writeText('https://beatcue.app/download').then(function() {
+                        mobileCopyToast.classList.add('show');
+                        copyText.textContent = 'Copied!';
+                        setTimeout(function() { mobileCopyToast.classList.remove('show'); copyText.textContent = 'Open on your computer'; }, 6000);
+                        trackSendToComputer('copy');
+                    });
+                });
+            }
+            if (mobileWhatsApp) { mobileWhatsApp.addEventListener('click', function() { trackSendToComputer('whatsapp'); }); }
+            if (mobileEmailBtn) { mobileEmailBtn.addEventListener('click', function() { trackSendToComputer('email'); }); }
+        }
+        
+        init();
+    </script>
+</body>
+</html>
