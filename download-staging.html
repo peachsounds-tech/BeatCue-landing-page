@@ -425,6 +425,7 @@
         }
         
         const detectedPlatform = detectPlatform();
+        window.__cue_detectedPlatform = detectedPlatform;
         
         // Track page view function
         function trackPostHogPageView(fromCache = false) {
@@ -551,8 +552,32 @@
             windows: stagingWinUrl
         };
 
-        function getStagingDownloadUrl(platform) {
-            return DOWNLOAD_URLS[platform];
+        function detectDownloadPlatform() {
+            if (window.__cue_detectedPlatform) return window.__cue_detectedPlatform;
+            var ua = navigator.userAgent || '';
+            if (/iPhone/i.test(ua)) return 'iphone';
+            if (/iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) return 'ipad';
+            if (/Android/i.test(ua) && /Mobile/i.test(ua)) return 'android_phone';
+            if (/Android/i.test(ua) && !/Mobile/i.test(ua)) return 'android_tablet';
+            if (/Windows NT/i.test(ua)) return 'windows';
+            if (/Macintosh/i.test(ua)) return 'macos';
+            if (/CrOS/i.test(ua)) return 'chromeos';
+            if (/Linux/i.test(ua)) return 'linux';
+            return 'unknown';
+        }
+
+        function safeBaseEventProps() {
+            try {
+                if (typeof getBaseEventProps === 'function') return getBaseEventProps();
+            } catch (e) { /* head script may not have run */ }
+            return {};
+        }
+
+        function safeUtmProps() {
+            try {
+                if (typeof getUtmProps === 'function') return getUtmProps();
+            } catch (e) { /* head script may not have run */ }
+            return {};
         }
         
         const PLATFORM_INFO = {
@@ -586,16 +611,26 @@
             }, 1500);
         }
 
-        // GitHub release assets ignore synthetic <a click> in some browsers;
-        // top-level navigation is the most reliable sideload trigger. Pairing
-        // POST uses keepalive:true so it survives the navigation.
-        function triggerStagingDownload(platform) {
+        function getStagingDownloadUrl(platform) {
+            return DOWNLOAD_URLS[platform];
+        }
+
+        function startInstallerDownload(platform) {
             var url = getStagingDownloadUrl(platform);
-            trackDownload(platform);
             markDownloadUi(platform);
-            setTimeout(function() {
-                window.location.href = url;
-            }, 400);
+
+            var a = document.createElement('a');
+            a.href = url;
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            try {
+                trackDownload(platform);
+            } catch (e) {
+                console.warn('Staging analytics failed (download still started):', e);
+            }
         }
 
         // Fire-and-forget: hand the current attribution payload to the worker
@@ -612,7 +647,7 @@
                     fbp: window.__cue_fbp || null,
                     fbc: window.__cue_fbc || null,
                     fbclid: window.__cue_fbclid || null,
-                    utms: getUtmProps(),
+                    utms: safeUtmProps(),
                     platform: platform
                 };
 
@@ -730,9 +765,11 @@
                 fbq('track', 'StartTrial', eventData);
                 console.log('📊 Meta Pixel: StartTrial tracked', eventData);
             }
-            var props = { ...getBaseEventProps(), page: 'download_staging', platform: platform, url: window.location.href, source: 'staging_download_page', staging_download_url: getStagingDownloadUrl(platform) };
+            var props = { ...safeBaseEventProps(), page: 'download_staging', platform: platform, url: window.location.href, source: 'staging_download_page', staging_download_url: getStagingDownloadUrl(platform) };
             if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
-            posthog.capture('trial_download_started', props);
+            if (typeof posthog !== 'undefined' && posthog.capture) {
+                posthog.capture('trial_download_started', props);
+            }
 
             postPairing(platform);
             startPairingPoll();
@@ -746,10 +783,10 @@
                 document.getElementById('unsupportedContent').style.display = 'none';
 
                 var manualLink = document.getElementById('manualDownloadLink');
-                manualLink.href = getStagingDownloadUrl(platform);
-                manualLink.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    triggerStagingDownload(platform);
+                var downloadUrl = getStagingDownloadUrl(platform);
+                manualLink.href = downloadUrl;
+                manualLink.addEventListener('click', function() {
+                    try { trackDownload(platform); } catch (e) {}
                 });
 
                 if (platform === 'windows') {
@@ -770,12 +807,12 @@
         }
         
         function init() {
-            var platform = detectedPlatform;
+            var platform = detectDownloadPlatform();
             setupUI(platform);
 
             if (platform === 'macos' || platform === 'windows') {
                 setTimeout(function() {
-                    triggerStagingDownload(platform);
+                    startInstallerDownload(platform);
                 }, 400);
             }
 
