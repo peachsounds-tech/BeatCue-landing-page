@@ -615,22 +615,58 @@
             return DOWNLOAD_URLS[platform];
         }
 
+        function showStagingError(message) {
+            var banner = document.getElementById('stagingBanner');
+            if (!banner) return;
+            banner.innerHTML = '<strong>Staging download unavailable</strong> — ' + message;
+            banner.style.background = 'rgba(239, 68, 68, 0.1)';
+            banner.style.borderColor = 'rgba(239, 68, 68, 0.35)';
+        }
+
         function startInstallerDownload(platform) {
             var url = getStagingDownloadUrl(platform);
-            markDownloadUi(platform);
+            var assetName = platform === 'windows' ? 'beatcue-installer.exe' : 'beatcue-installer.pkg';
 
-            var a = document.createElement('a');
-            a.href = url;
-            a.rel = 'noopener';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            fetch('https://api.github.com/repos/peachsounds-tech/cue-releases/releases/tags/v-staging')
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(release) {
+                    var assets = (release && release.assets) || [];
+                    var found = assets.some(function(a) { return a.name === assetName; });
+                    if (!found) {
+                        showStagingError(
+                            assetName + ' is not on v-staging yet. '
+                            + 'Run the Release workflow (staging mode) on feature/meta-capi-attribution, '
+                            + 'or use the manual link once CI finishes.'
+                        );
+                        return;
+                    }
 
-            try {
-                trackDownload(platform);
-            } catch (e) {
-                console.warn('Staging analytics failed (download still started):', e);
-            }
+                    markDownloadUi(platform);
+
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.rel = 'noopener';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    try {
+                        trackDownload(platform);
+                    } catch (e) {
+                        console.warn('Staging analytics failed (download still started):', e);
+                    }
+                })
+                .catch(function() {
+                    // If GitHub API is unreachable, still attempt the download.
+                    markDownloadUi(platform);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.rel = 'noopener';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    try { trackDownload(platform); } catch (e) {}
+                });
         }
 
         // Fire-and-forget: hand the current attribution payload to the worker
