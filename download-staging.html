@@ -534,32 +534,25 @@
 
     </div>
 
-    <script src="/js/microsoft-store.js"></script>
     <script>
         // Stable URL: Release workflow (staging mode) publishes to cue-releases
         // tag v-staging as a pre-release (never "latest"). Override for one-off
         // tests: ?pkg=https://github.com/.../beatcue-installer.pkg
         const STAGING_PKG_DEFAULT =
             'https://github.com/peachsounds-tech/cue-releases/releases/download/v-staging/beatcue-installer.pkg';
-        const stagingPkgOverride = new URLSearchParams(window.location.search).get('pkg');
-        const stagingMacUrl = stagingPkgOverride || STAGING_PKG_DEFAULT;
+        const STAGING_EXE_DEFAULT =
+            'https://github.com/peachsounds-tech/cue-releases/releases/download/v-staging/beatcue-installer.exe';
+        const stagingParams = new URLSearchParams(window.location.search);
+        const stagingMacUrl = stagingParams.get('pkg') || STAGING_PKG_DEFAULT;
+        const stagingWinUrl = stagingParams.get('exe') || STAGING_EXE_DEFAULT;
 
         const DOWNLOAD_URLS = {
             macos: stagingMacUrl,
-            // Staging page is macOS-only for sideload testing; Store builds
-            // can't carry custom attribution builds.
-            windows: 'https://apps.microsoft.com/detail/9nrc99fw338g'
+            windows: stagingWinUrl
         };
 
-        function getWindowsStoreUrl() {
-            if (window.CueMicrosoftStore) {
-                // Pack the bcid into the cid so the desktop app can read it
-                // back via WinRT GetAppPurchaseCampaignIdAsync() on first
-                // launch. The IP-coarsened /pairings/claim path remains a
-                // fallback for installs where the cid round-trip fails.
-                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps, window.__cue_bcid);
-            }
-            return DOWNLOAD_URLS.windows;
+        function getStagingDownloadUrl(platform) {
+            return DOWNLOAD_URLS[platform];
         }
         
         const PLATFORM_INFO = {
@@ -574,8 +567,36 @@
         // here + in Source/PluginProcessor.cpp (kPairingsBase).
         const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
 
-        // Staging sideload is macOS-only (Store builds can't carry test builds).
-        const forceMac = true;
+        function markDownloadUi(platform) {
+            setTimeout(function() {
+                var chk = document.getElementById('checkDownload');
+                if (chk) { chk.classList.remove('loading'); chk.classList.add('checked'); }
+
+                document.getElementById('downloadPageTitle').textContent = 'Downloading BeatCue (Staging)';
+                document.getElementById('dlSubtitle').textContent = 'Attribution test build \u00b7 not for production users';
+
+                var installItem = document.getElementById('checkInstall');
+                if (installItem) installItem.classList.add('active');
+                var installLabel = document.getElementById('checkInstallLabel');
+                if (installLabel) {
+                    installLabel.innerHTML = platform === 'windows'
+                        ? 'Run <strong>beatcue-installer.exe</strong>'
+                        : 'Run <strong>beatcue-installer.pkg</strong>';
+                }
+            }, 1500);
+        }
+
+        // GitHub release assets ignore synthetic <a click> in some browsers;
+        // top-level navigation is the most reliable sideload trigger. Pairing
+        // POST uses keepalive:true so it survives the navigation.
+        function triggerStagingDownload(platform) {
+            var url = getStagingDownloadUrl(platform);
+            trackDownload(platform);
+            markDownloadUi(platform);
+            setTimeout(function() {
+                window.location.href = url;
+            }, 400);
+        }
 
         // Fire-and-forget: hand the current attribution payload to the worker
         // so the desktop app can claim it on first launch. Idempotent — repeat
@@ -709,14 +730,7 @@
                 fbq('track', 'StartTrial', eventData);
                 console.log('📊 Meta Pixel: StartTrial tracked', eventData);
             }
-            var props = { ...getBaseEventProps(), page: 'download_staging', platform: platform, url: window.location.href, source: 'staging_download_page', staging_pkg_url: DOWNLOAD_URLS[platform] };
-            if (platform === 'windows') {
-                props.ms_store_url = getWindowsStoreUrl();
-                if (window.CueMicrosoftStore) {
-                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps, window.__cue_bcid);
-                    if (cid) props.ms_store_cid = cid;
-                }
-            }
+            var props = { ...getBaseEventProps(), page: 'download_staging', platform: platform, url: window.location.href, source: 'staging_download_page', staging_download_url: getStagingDownloadUrl(platform) };
             if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
             posthog.capture('trial_download_started', props);
 
@@ -726,60 +740,27 @@
 
         function setupUI(platform) {
             var isSupported = platform === 'macos' || platform === 'windows';
-            
-            // Block Windows downloads if force_mac=true
-            var blockWindowsDownload = forceMac && platform === 'windows';
 
-            if (blockWindowsDownload) {
-                // Show "Windows coming soon" message
+            if (isSupported) {
                 document.getElementById('supportedContent').style.display = 'block';
                 document.getElementById('unsupportedContent').style.display = 'none';
-                
-                document.getElementById('downloadPageTitle').textContent = 'Windows Coming Soon';
-                document.getElementById('dlSubtitle').textContent = 'BeatCue is currently available for macOS only';
-                
-                // Hide the checklist
-                var checklist = document.getElementById('dlChecklist');
-                if (checklist) checklist.style.display = 'none';
-                
-                // Hide fallback link
-                var fallback = document.getElementById('dlFallback');
-                if (fallback) fallback.style.display = 'none';
-                
-                var securityTipEl = document.getElementById('securityTip');
-                if (securityTipEl) {
-                    securityTipEl.style.display = '';
-                    document.getElementById('securityTipHeader').innerHTML = '🪟 Windows version in development';
-                    document.getElementById('securityTipBody').innerHTML = 'We\'re working on bringing BeatCue to Windows.<br>In the meantime, BeatCue is available for <strong>macOS 14+</strong>.';
-                }
-                
-            } else if (isSupported) {
-                document.getElementById('supportedContent').style.display = 'block';
-                document.getElementById('unsupportedContent').style.display = 'none';
-
-                var otherPlatform = platform === 'macos' ? 'windows' : 'macos';
-                var otherInfo = PLATFORM_INFO[otherPlatform];
 
                 var manualLink = document.getElementById('manualDownloadLink');
-                manualLink.href = platform === 'windows' ? getWindowsStoreUrl() : DOWNLOAD_URLS[platform];
-                manualLink.addEventListener('click', function() {
-                    trackDownload(platform);
+                manualLink.href = getStagingDownloadUrl(platform);
+                manualLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    triggerStagingDownload(platform);
                 });
-
 
                 if (platform === 'windows') {
                     document.body.classList.add('windows-mode');
-
-                    // Windows users get a fast same-tab redirect to the
-                    // Microsoft Store (see init() below). This copy is for
-                    // the brief flash before the redirect lands.
-                    document.getElementById('downloadPageTitle').textContent = 'Opening the Microsoft Store…';
-                    document.getElementById('dlSubtitle').textContent = 'Tap Get to install BeatCue \u00b7 Free to use';
+                    document.getElementById('downloadPageTitle').textContent = 'Downloading BeatCue (Staging)';
+                    document.getElementById('dlSubtitle').textContent = 'Windows sideload \u00b7 attribution test build';
 
                     var securityTipEl = document.getElementById('securityTip');
                     if (securityTipEl) securityTipEl.style.display = '';
-                    document.getElementById('securityTipHeader').innerHTML = '🎉 You\'re almost in!';
-                    document.getElementById('securityTipBody').innerHTML = 'Redirecting you to the <strong>Microsoft Store</strong>…<br>Tap <strong>"Get"</strong> (or <strong>"Install"</strong>) to add BeatCue to your PC.';
+                    document.getElementById('securityTipHeader').innerHTML = 'Staging installer';
+                    document.getElementById('securityTipBody').innerHTML = 'This is a <strong>test build</strong>, not the Microsoft Store version.<br>Windows may show SmartScreen — choose <strong>Run anyway</strong> if prompted.';
                 }
                 
             } else {
@@ -791,47 +772,10 @@
         function init() {
             var platform = detectedPlatform;
             setupUI(platform);
-            
-            // Block Windows downloads if force_mac=true
-            var blockWindowsDownload = forceMac && platform === 'windows';
 
-            if ((platform === 'macos' || platform === 'windows') && !blockWindowsDownload) {
-                if (platform === 'windows') {
-                    // Windows ships via the Microsoft Store. Fire the same
-                    // pixel + PostHog + pairing flow we use for macOS, then
-                    // do a same-tab top-level redirect to the Store. The
-                    // pairing POST uses keepalive:true so it survives the
-                    // navigation. The ~1.5s pause lets the "Opening the
-                    // Microsoft Store…" copy read as intentional rather
-                    // than an instant pop. No popup, no blocker.
-                    trackDownload('windows');
-                    setTimeout(function() {
-                        window.location.href = getWindowsStoreUrl();
-                    }, 1500);
-                    return;
-                }
-
+            if (platform === 'macos' || platform === 'windows') {
                 setTimeout(function() {
-                    var a = document.createElement('a');
-                    a.href = DOWNLOAD_URLS[platform];
-                    a.style.display = 'none';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    trackDownload(platform);
-
-                    setTimeout(function() {
-                        var chk = document.getElementById('checkDownload');
-                        if (chk) { chk.classList.remove('loading'); chk.classList.add('checked'); }
-
-                        document.getElementById('downloadPageTitle').textContent = 'Downloading BeatCue (Staging)';
-                        document.getElementById('dlSubtitle').textContent = 'Attribution test build \u00b7 not for production users';
-
-                        var installItem = document.getElementById('checkInstall');
-                        if (installItem) installItem.classList.add('active');
-                        var installLabel = document.getElementById('checkInstallLabel');
-                        if (installLabel) installLabel.innerHTML = 'Run <strong>beatcue-installer.pkg</strong>';
-                    }, 1500);
+                    triggerStagingDownload(platform);
                 }, 400);
             }
 
