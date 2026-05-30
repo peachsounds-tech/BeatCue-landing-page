@@ -50,6 +50,38 @@
         return null;
     }
     
+    // BeatCue browser ID (bcid): mint before Pixel init so advanced matching
+    // can pass external_id. Idempotent — safe to call again from PostHog block.
+    function getOrCreateBcid() {
+        var VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+        var mint = function() {
+            return 'bc_' + (crypto.randomUUID
+                ? crypto.randomUUID()
+                : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+        };
+        var normalize = function(raw) {
+            if (!raw || typeof raw !== 'string') return null;
+            var trimmed = raw.trim();
+            if (!trimmed) return null;
+            if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
+            return VALID.test(trimmed) ? trimmed : null;
+        };
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var fromUrl = params.get('bcid') || params.get('ph_id');
+            var b = normalize(sessionStorage.getItem('cue_bcid'))
+                 || normalize(fromUrl)
+                 || mint();
+            sessionStorage.setItem('cue_bcid', b);
+            return b;
+        } catch (e) {
+            return mint();
+        }
+    }
+    window.__cue_getOrCreateBcid = getOrCreateBcid;
+    var cueBcid = getOrCreateBcid();
+    window.__cue_bcid = cueBcid;
+
     // Store fbclid globally for use in other scripts
     window.__cue_fbclid = getFbclid();
     window.__cue_fbp = getCookie('_fbp');
@@ -64,7 +96,7 @@
         initOptions.fbp = window.__cue_fbp;
     }
     
-    fbq('init', '708429622326201', {}, initOptions);
+    fbq('init', '708429622326201', { external_id: cueBcid }, initOptions);
     fbq('track', 'PageView');
     
     console.log('📊 Meta Pixel: Initialized', { fbp: window.__cue_fbp, fbc: window.__cue_fbc, fbclid: window.__cue_fbclid });
@@ -390,35 +422,13 @@
         // Load PostHog snippet (runs immediately)
         !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="Ii init Di qi Sr Bi Zi Pi capture calculateEventProperties Yi register register_once register_for_session unregister unregister_for_session Xi getFeatureFlag getFeatureFlagPayload getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync Ji identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset setIdentity clearIdentity get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException startExceptionAutocapture stopExceptionAutocapture loadToolbar get_property getSessionProperty Wi Vi createPersonProfile setInternalOrTestUser Gi Fi tn opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing $i debug Tr Ui getPageViewId captureTraceFeedback captureTraceMetric Ri".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
 
-        // BeatCue browser ID (bcid): session-scoped, used for PostHog + loopback
-        // pairing with the desktop app. Must be created BEFORE PostHog init so we
-        // can bootstrap PostHog with the same distinct_id the pairing worker sees.
-        // Mirrors download.html's logic so the bcid is consistent across pages.
+        // bcid minted in Meta Pixel block above; re-read for PostHog bootstrap.
         function getOrCreateBcid() {
-            const VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
-            const mint = function() {
-                return 'bc_' + (crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : (Date.now() + '-' + Math.random().toString(36).slice(2)));
-            };
-            const normalize = function(raw) {
-                if (!raw || typeof raw !== 'string') return null;
-                var trimmed = raw.trim();
-                if (!trimmed) return null;
-                if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
-                return VALID.test(trimmed) ? trimmed : null;
-            };
-            try {
-                const params = new URLSearchParams(window.location.search);
-                const fromUrl = params.get('bcid') || params.get('ph_id');
-                let b = normalize(sessionStorage.getItem('cue_bcid'))
-                     || normalize(fromUrl)
-                     || mint();
-                sessionStorage.setItem('cue_bcid', b);
-                return b;
-            } catch (e) {
-                return mint();
-            }
+            if (window.__cue_getOrCreateBcid) return window.__cue_getOrCreateBcid();
+            if (window.__cue_bcid) return window.__cue_bcid;
+            return 'bc_' + (crypto.randomUUID
+                ? crypto.randomUUID()
+                : (Date.now() + '-' + Math.random().toString(36).slice(2)));
         }
         const cueBcid = getOrCreateBcid();
         window.__cue_bcid = cueBcid;
@@ -6313,18 +6323,54 @@
             }
 
             window.trackInitiateCheckout = function() {
+                const eventID = (crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : String(Date.now()) + Math.random().toString(36).slice(2));
+
+                // Pixel side — pass eventID so CAPI can dedupe.
                 if (typeof fbq === 'function') {
                     fbq('track', 'InitiateCheckout', {
                         content_name: 'BeatCue Pro',
                         value: 9.00,
                         currency: 'USD'
-                    });
+                    }, { eventID: eventID });
                 }
+
+                // CAPI side via worker — keepalive so it survives the new-tab nav.
+                try {
+                    fetch(PAIRINGS_BASE + '/capi', {
+                        method: 'POST',
+                        mode: 'cors',
+                        credentials: 'omit',
+                        keepalive: true,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            event_name: 'InitiateCheckout',
+                            event_id: eventID,
+                            event_source_url: window.location.href,
+                            action_source: 'website',
+                            user_data: {
+                                fbp:    window.__cue_fbp    || null,
+                                fbc:    window.__cue_fbc    || null,
+                                fbclid: window.__cue_fbclid || null,
+                                external_id: window.__cue_bcid || null
+                            },
+                            custom_data: {
+                                content_name: 'BeatCue Pro',
+                                value: 9.00,
+                                currency: 'USD'
+                            },
+                            internal_name: 'lemonsqueezy_buy_click'
+                        })
+                    }).catch(function() {});
+                } catch (e) { /* never block the click */ }
+
                 if (typeof posthog !== 'undefined' && posthog.capture) {
                     posthog.capture('checkout_started', {
                         ...getBaseEventProps(),
                         plan: 'cue_pro',
-                        source: 'pricing_section'
+                        source: 'pricing_section',
+                        meta_event_id: eventID
                     });
                 }
             };

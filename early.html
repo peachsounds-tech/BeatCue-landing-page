@@ -50,6 +50,36 @@
         return null;
     }
     
+    // BeatCue browser ID (bcid): mint before Pixel init for advanced matching.
+    function getOrCreateBcid() {
+        var VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+        var mint = function() {
+            return 'bc_' + (crypto.randomUUID
+                ? crypto.randomUUID()
+                : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+        };
+        var normalize = function(raw) {
+            if (!raw || typeof raw !== 'string') return null;
+            var trimmed = raw.trim();
+            if (!trimmed) return null;
+            if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
+            return VALID.test(trimmed) ? trimmed : null;
+        };
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var fromUrl = params.get('bcid') || params.get('ph_id');
+            var b = normalize(sessionStorage.getItem('cue_bcid'))
+                 || normalize(fromUrl)
+                 || mint();
+            sessionStorage.setItem('cue_bcid', b);
+            return b;
+        } catch (e) {
+            return mint();
+        }
+    }
+    var cueBcid = getOrCreateBcid();
+    window.__cue_bcid = cueBcid;
+
     // Store for use in other scripts
     window.__cue_fbclid = getFbclid();
     window.__cue_fbp = getCookie('_fbp');
@@ -64,7 +94,7 @@
         initOptions.fbp = window.__cue_fbp;
     }
     
-    fbq('init', '708429622326201', {}, initOptions);
+    fbq('init', '708429622326201', { external_id: cueBcid }, initOptions);
     fbq('track', 'PageView');
     
     console.log('📊 Meta Pixel: Initialized', { fbp: window.__cue_fbp, fbc: window.__cue_fbc, fbclid: window.__cue_fbclid });

@@ -35,9 +35,9 @@ const PAIRINGS_ALLOWED_ORIGINS = new Set([
 ]);
 
 /** How long a pending pairing record lingers before KV evicts it.
- *  30 minutes covers most install flows (download → run installer → first
- *  launch). Longer windows raise the chance of NAT misattribution. */
-const PAIRING_TTL_SECONDS = 30 * 60;
+ *  24 hours covers most install funnels (download → installer cooldown →
+ *  first launch). Longer windows raise the chance of NAT misattribution. */
+const PAIRING_TTL_SECONDS = 24 * 60 * 60;
 
 /** How long a "claimed:<bcid>" marker survives so the download page can
  *  notice the desktop app paired and tick the launch checklist item. The
@@ -84,6 +84,7 @@ const CAPI_STANDARD_EVENTS = new Set([
 const CAPI_CUSTOM_EVENTS = new Set([
     'app_launched',
     'cut_played',
+    'export_intent',
     'activation_started',
     // Keep this list in sync with MetaCapiClient call sites in the desktop app.
 ]);
@@ -949,22 +950,23 @@ async function handleCapi(request, env, url) {
     const uaOverride = clampString(ud.client_user_agent, 512);
     const uaHeader = request.headers.get('user-agent');
 
-    // bcid is treated as a quasi-PII identifier — Meta wants external_id
-    // hashed. Validate shape first so we never push a malformed token into
-    // the matching pool.
-    let externalIdHashed;
-    const rawExternalId = clampString(ud.external_id, 96);
-    if (rawExternalId) {
-        if (!BCID_RE.test(rawExternalId) && !isHexSha256(rawExternalId)) {
+    // bcid / external_id — Meta wants these hashed. Accept a single string
+    // or an array of strings (app sends [local_install_id, web_bcid] post-pair).
+    const externalIdsRaw = Array.isArray(ud.external_id)
+        ? ud.external_id
+        : (ud.external_id ? [ud.external_id] : []);
+    const externalIdsHashed = [];
+    for (const raw of externalIdsRaw) {
+        const v = clampString(raw, 96);
+        if (!v) continue;
+        if (!BCID_RE.test(v) && !isHexSha256(v)) {
             console.log(JSON.stringify({
                 evt: 'capi_bad_external_id',
-                preview: rawExternalId.slice(0, 16),
+                preview: v.slice(0, 16),
             }));
-        } else {
-            externalIdHashed = isHexSha256(rawExternalId)
-                ? rawExternalId
-                : await sha256LowerHex(rawExternalId);
+            continue;
         }
+        externalIdsHashed.push(isHexSha256(v) ? v : await sha256LowerHex(v));
     }
 
     // em: prefer pre-hashed value, fall back to hashing em_raw. Either way
@@ -992,13 +994,17 @@ async function handleCapi(request, env, url) {
     // fbclid is normally only used to synthesize an _fbc value when absent;
     // we forward it as-is when present and let Meta's matching do the rest.
     // It's not a documented user_data key, so stash under custom_data.
-    if (externalIdHashed) userData.external_id = externalIdHashed;
+    if (externalIdsHashed.length === 1) {
+        userData.external_id = externalIdsHashed[0];
+    } else if (externalIdsHashed.length > 1) {
+        userData.external_id = externalIdsHashed;
+    }
     if (emHashed)         userData.em          = [emHashed];
 
     // Meta requires AT LEAST one user_data identifier beyond IP/UA, otherwise
     // the event is dropped from matching. IP+UA alone counts at lower
     // confidence, so we accept it but log so we can spot anonymous sends.
-    const hasStrongMatch = !!(fbp || fbc || externalIdHashed || emHashed);
+    const hasStrongMatch = !!(fbp || fbc || externalIdsHashed.length > 0 || emHashed);
 
     // ── Build custom_data ────────────────────────────────────────────────────
     const cdIn = (body.custom_data && typeof body.custom_data === 'object') ? body.custom_data : {};
@@ -1071,7 +1077,7 @@ async function handleCapi(request, env, url) {
         fbtrace_id: fbtraceId,
         had_fbp: !!fbp,
         had_fbc: !!fbc,
-        had_external_id: !!externalIdHashed,
+        external_id_count: externalIdsHashed.length,
         had_em: !!emHashed,
         strong_match: hasStrongMatch,
         test_mode: !!env.META_TEST_EVENT_CODE,
