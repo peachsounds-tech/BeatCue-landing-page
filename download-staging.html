@@ -627,7 +627,17 @@
             var url = getStagingDownloadUrl(platform);
             var assetName = platform === 'windows' ? 'beatcue-installer.exe' : 'beatcue-installer.pkg';
 
-            fetch('https://api.github.com/repos/peachsounds-tech/cue-releases/releases/tags/v-staging')
+            function navigate() {
+                markDownloadUi(platform);
+                try { trackDownload(platform); } catch (e) { console.warn('Staging analytics failed:', e); }
+                // Top-level navigation is the most reliable trigger for a
+                // cross-origin download response. Synthetic <a>.click() after
+                // an async fetch can be blocked because it's no longer in the
+                // user-gesture window.
+                window.location.href = url;
+            }
+
+            fetch('https://api.github.com/repos/peachsounds-tech/cue-releases/releases/tags/v-staging', { cache: 'no-store' })
                 .then(function(r) { return r.ok ? r.json() : null; })
                 .then(function(release) {
                     var assets = (release && release.assets) || [];
@@ -640,32 +650,11 @@
                         );
                         return;
                     }
-
-                    markDownloadUi(platform);
-
-                    var a = document.createElement('a');
-                    a.href = url;
-                    a.rel = 'noopener';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-
-                    try {
-                        trackDownload(platform);
-                    } catch (e) {
-                        console.warn('Staging analytics failed (download still started):', e);
-                    }
+                    navigate();
                 })
                 .catch(function() {
-                    // If GitHub API is unreachable, still attempt the download.
-                    markDownloadUi(platform);
-                    var a = document.createElement('a');
-                    a.href = url;
-                    a.rel = 'noopener';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    try { trackDownload(platform); } catch (e) {}
+                    // GitHub API rate-limited or unreachable — try the download anyway.
+                    navigate();
                 });
         }
 
@@ -821,8 +810,13 @@
                 var manualLink = document.getElementById('manualDownloadLink');
                 var downloadUrl = getStagingDownloadUrl(platform);
                 manualLink.href = downloadUrl;
-                manualLink.addEventListener('click', function() {
-                    try { trackDownload(platform); } catch (e) {}
+                manualLink.addEventListener('click', function(e) {
+                    // Use top-level navigation explicitly so the click is
+                    // resilient even if href somehow didn't get set, and so
+                    // we never fall back to the placeholder "#" target.
+                    e.preventDefault();
+                    try { trackDownload(platform); } catch (err) {}
+                    window.location.href = downloadUrl;
                 });
 
                 if (platform === 'windows') {
