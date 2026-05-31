@@ -6329,7 +6329,7 @@
 
                 // Pixel side — pass eventID so CAPI can dedupe.
                 if (typeof fbq === 'function') {
-                    fbq('track', 'InitiateCheckout', {
+                    fbq('trackCustom', 'checkout_clicked', {
                         content_name: 'BeatCue Pro',
                         value: 9.00,
                         currency: 'USD'
@@ -6345,7 +6345,7 @@
                         keepalive: true,
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            event_name: 'InitiateCheckout',
+                            event_name: 'checkout_clicked',
                             event_id: eventID,
                             event_source_url: window.location.href,
                             action_source: 'website',

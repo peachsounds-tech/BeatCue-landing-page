@@ -84,8 +84,15 @@ const CAPI_STANDARD_EVENTS = new Set([
 const CAPI_CUSTOM_EVENTS = new Set([
     'app_launched',
     'cut_played',
+    'new_project_created',
     'export_intent',
-    'activation_started',
+    'activation_started',     // was Meta-standard "AddPaymentInfo"
+    'activation_finished',    // was Meta-standard "Subscribe"
+    'checkout_clicked',       // was Meta-standard "InitiateCheckout"
+    'send_to_desktop_clicked',// was Meta-standard "Lead"
+    // NOTE: download-page Pixel still fires "StartTrial" (standard) — kept
+    // as-is because existing campaigns optimize against it. Don't add a
+    // custom mirror here unless we also flip the Pixel call.
     // Keep this list in sync with MetaCapiClient call sites in the desktop app.
 ]);
 

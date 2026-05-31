@@ -853,7 +853,7 @@
 
             function trackSendToComputer(method) {
                 if (typeof fbq === 'function') {
-                    fbq('track', 'Lead', { content_name: 'BeatCue Send to Desktop', content_category: method });
+                    fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });
                 }
                 if (typeof posthog !== 'undefined' && posthog.capture) {
                     posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: platform, source: 'download_page' });
