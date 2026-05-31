@@ -822,7 +822,7 @@ async function handleClaimedStatus(request, env, url) {
 // ─── Meta Conversions API handler ─────────────────────────────────────────────
 
 /** Lower-case + trim + sha256 → 64-char lowercase hex. Matches Meta's
- *  prescribed normalization for `em`, `ph`, `external_id`, etc. */
+ *  prescribed normalization for `em`, `ph`, etc. (PII only — not external_id). */
 async function sha256LowerHex(s) {
     if (typeof s !== 'string') return null;
     const normalized = s.trim().toLowerCase();
@@ -855,7 +855,7 @@ function isHexSha256(s) {
  *                                 cross-checking against PostHog),
  *     user_data: {
  *       fbp, fbc, fbclid     (cookies / click ID),
- *       external_id          (bcid; worker hashes before forwarding),
+ *       external_id          (raw bcid; forwarded as-is to match Pixel),
  *       em_raw               (plaintext email; worker hashes),
  *       em_hashed            (already-hashed email; preferred over em_raw),
  *       client_user_agent    (override; falls back to request UA header)
@@ -864,8 +864,8 @@ function isHexSha256(s) {
  *   }
  *
  * The worker injects `client_ip_address` from `cf-connecting-ip`, falls back
- * to the request's UA if no override is given, hashes anything Meta requires
- * to be hashed, and forwards a single-event `data:[…]` payload to
+ * to the request's UA if no override is given, hashes PII (email) only,
+ * and forwards a single-event `data:[…]` payload to
  * https://graph.facebook.com/<v>/<pixel_id>/events.
  *
  * Returns the Graph API status + a trimmed body so the caller can log
@@ -957,23 +957,24 @@ async function handleCapi(request, env, url) {
     const uaOverride = clampString(ud.client_user_agent, 512);
     const uaHeader = request.headers.get('user-agent');
 
-    // bcid / external_id — Meta wants these hashed. Accept a single string
-    // or an array of strings (app sends [local_install_id, web_bcid] post-pair).
+    // bcid / external_id — forward raw (same as landing-page Pixel Advanced
+    // Matching). Meta does not require hashing for external_id. Accept a single
+    // string or an array (app sends [local_install_id, web_bcid] post-pair).
     const externalIdsRaw = Array.isArray(ud.external_id)
         ? ud.external_id
         : (ud.external_id ? [ud.external_id] : []);
-    const externalIdsHashed = [];
+    const externalIds = [];
     for (const raw of externalIdsRaw) {
         const v = clampString(raw, 96);
         if (!v) continue;
-        if (!BCID_RE.test(v) && !isHexSha256(v)) {
+        if (!BCID_RE.test(v)) {
             console.log(JSON.stringify({
                 evt: 'capi_bad_external_id',
                 preview: v.slice(0, 16),
             }));
             continue;
         }
-        externalIdsHashed.push(isHexSha256(v) ? v : await sha256LowerHex(v));
+        externalIds.push(v);
     }
 
     // em: prefer pre-hashed value, fall back to hashing em_raw. Either way
@@ -1001,17 +1002,17 @@ async function handleCapi(request, env, url) {
     // fbclid is normally only used to synthesize an _fbc value when absent;
     // we forward it as-is when present and let Meta's matching do the rest.
     // It's not a documented user_data key, so stash under custom_data.
-    if (externalIdsHashed.length === 1) {
-        userData.external_id = externalIdsHashed[0];
-    } else if (externalIdsHashed.length > 1) {
-        userData.external_id = externalIdsHashed;
+    if (externalIds.length === 1) {
+        userData.external_id = externalIds[0];
+    } else if (externalIds.length > 1) {
+        userData.external_id = externalIds;
     }
     if (emHashed)         userData.em          = [emHashed];
 
     // Meta requires AT LEAST one user_data identifier beyond IP/UA, otherwise
     // the event is dropped from matching. IP+UA alone counts at lower
     // confidence, so we accept it but log so we can spot anonymous sends.
-    const hasStrongMatch = !!(fbp || fbc || externalIdsHashed.length > 0 || emHashed);
+    const hasStrongMatch = !!(fbp || fbc || externalIds.length > 0 || emHashed);
 
     // ── Build custom_data ────────────────────────────────────────────────────
     const cdIn = (body.custom_data && typeof body.custom_data === 'object') ? body.custom_data : {};
