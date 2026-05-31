@@ -321,6 +321,11 @@
         const isInternalTester = localStorage.getItem('cue_internal_tester') === 'true';
 
         // bcid minted in Meta Pixel block above; re-read for PostHog bootstrap.
+        // NOTE: must use `var` (not `const`/`let`) — the Meta Pixel block already
+        // declared `var cueBcid` at script top-level. `const` here would clash
+        // with the existing global lexical binding and throw a parse-time
+        // SyntaxError that silently drops this whole <script> tag, taking
+        // PostHog init / page_viewed tracking down with it.
         function getOrCreateBcid() {
             if (window.__cue_getOrCreateBcid) return window.__cue_getOrCreateBcid();
             if (window.__cue_bcid) return window.__cue_bcid;
@@ -328,7 +333,7 @@
                 ? crypto.randomUUID()
                 : (Date.now() + '-' + Math.random().toString(36).slice(2)));
         }
-        const cueBcid = getOrCreateBcid();
+        var cueBcid = getOrCreateBcid();
         window.__cue_bcid = cueBcid;
 
         // Clean bcid / legacy ph_id from address bar (cosmetic)
