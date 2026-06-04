@@ -49,7 +49,44 @@
         }
         return null;
     }
-    
+
+    // Helper: Read or mint _fbp synchronously and persist it as a first-party
+    // cookie. fbevents.js loads async (line ~16) and writes _fbp itself only
+    // after fbq('init') runs — but we capture the cookie value into globals on
+    // the very next line and again at CTA-click time, both potentially BEFORE
+    // the Pixel has had a chance to set the cookie. For first-time visitors
+    // arriving from a Meta ad, that race made fbp ship as `null` to the worker
+    // (and from there to CAPI), which collapsed the Browser-ID match rate to
+    // ~4–10% in Events Manager while everything else (IP/UA/external_id) was
+    // at 100%. Pre-creating the cookie ourselves in Meta's documented format
+    // (`fb.<subdomainIndex>.<creationTimeMs>.<randomNumber>`) closes the race
+    // and is what the Pixel itself would have written; when fbevents.js later
+    // initializes it sees the existing cookie and reuses the same value, so
+    // browser-side and server-side events stay aligned for Meta dedup.
+    function getOrCreateFbp() {
+        var existing = getCookie('_fbp');
+        if (existing) return existing;
+        var fbp = 'fb.1.' + Date.now() + '.' + Math.floor(Math.random() * 1e10);
+        try {
+            var host = location.hostname || '';
+            var attrs = '_fbp=' + fbp
+                + '; max-age=' + (90 * 24 * 3600)
+                + '; path=/'
+                + '; SameSite=Lax'
+                + (location.protocol === 'https:' ? '; Secure' : '');
+            // Pin to the apex (e.g. .beatcue.app) so any subdomain reads the
+            // same cookie. Skip the domain attribute on localhost, IPs, and
+            // single-label hosts where it would just make the browser drop it.
+            if (host.indexOf('.') !== -1 && !/^\d+(\.\d+)+$/.test(host)) {
+                var root = host.split('.').slice(-2).join('.');
+                document.cookie = attrs + '; domain=.' + root;
+            } else {
+                document.cookie = attrs;
+            }
+        } catch (e) { /* cookie write may fail under strict policies — fbp still returned in-memory */ }
+        return fbp;
+    }
+
     // BeatCue browser ID (bcid): mint before Pixel init so advanced matching
     // can pass external_id. Idempotent — safe to call again from PostHog block.
     function getOrCreateBcid() {
@@ -84,7 +121,10 @@
 
     // Store fbclid globally for use in other scripts
     window.__cue_fbclid = getFbclid();
-    window.__cue_fbp = getCookie('_fbp');
+    // Pre-create _fbp before fbq('init') so the Pixel adopts our value and
+    // the cached global is never the stale `null` we used to ship to the
+    // worker on first-visit Meta ad clicks.
+    window.__cue_fbp = getOrCreateFbp();
     window.__cue_fbc = getFbc();
     
     // Initialize with external_id for better matching
@@ -5867,6 +5907,12 @@
 
         function postWindowsStorePairing(bcid) {
             try {
+                // Re-read at click time as a safety net. By now fbevents.js has
+                // typically had seconds to initialize and write _fbp, and our
+                // own pre-created cookie is also persisted. The cached globals
+                // remain a fallback for environments that disallow cookie reads.
+                var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
+                var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
                 fetch(PAIRINGS_BASE + '/pairings', {
                     method: 'POST',
                     mode: 'cors',
@@ -5875,8 +5921,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         bcid: bcid,
-                        fbp: window.__cue_fbp || null,
-                        fbc: window.__cue_fbc || null,
+                        fbp: freshFbp,
+                        fbc: freshFbc,
                         fbclid: window.__cue_fbclid || null,
                         utms: (typeof getUtmProps === 'function') ? getUtmProps() : {},
                         platform: 'windows'
@@ -6343,6 +6389,9 @@
 
                 // CAPI side via worker — keepalive so it survives the new-tab nav.
                 try {
+                    // Read live cookies first; fall back to page-load globals.
+                    var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
+                    var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
                     fetch(PAIRINGS_BASE + '/capi', {
                         method: 'POST',
                         mode: 'cors',
@@ -6355,8 +6404,8 @@
                             event_source_url: window.location.href,
                             action_source: 'website',
                             user_data: {
-                                fbp:    window.__cue_fbp    || null,
-                                fbc:    window.__cue_fbc    || null,
+                                fbp:    freshFbp,
+                                fbc:    freshFbc,
                                 fbclid: window.__cue_fbclid || null,
                                 external_id: window.__cue_bcid || null
                             },

@@ -177,6 +177,42 @@
             return null;
         }
 
+        // Read or mint _fbp synchronously and persist it as a first-party
+        // cookie on the apex (.beatcue.app). The bouncer deliberately doesn't
+        // load fbevents.js (see "No SDKs" rule above), so the only way the
+        // _fbp cookie can exist on a paid-ad first-touch click is if the user
+        // happened to visit a Pixel-bearing page (index.html / download.html)
+        // earlier — which is rare for ad traffic. Without minting we ship
+        // `fbp: null` to the worker on virtually every first-touch click, and
+        // the desktop app's CAPI events inherit that null. By creating a
+        // value here in Meta's documented format
+        // (`fb.<subdomainIndex>.<creationTimeMs>.<randomNumber>`) we get a
+        // valid Browser ID for the worker payload, AND if the user later
+        // lands on a Pixel-bearing page on the same apex the Pixel will
+        // adopt the existing cookie value rather than minting its own —
+        // keeping browser-side and server-side events on the same fbp for
+        // Meta dedup.
+        function getOrCreateFbp() {
+            var existing = getCookie('_fbp');
+            if (existing) return existing;
+            var fbp = 'fb.1.' + Date.now() + '.' + Math.floor(Math.random() * 1e10);
+            try {
+                var host = location.hostname || '';
+                var attrs = '_fbp=' + fbp
+                    + '; max-age=' + (90 * 24 * 3600)
+                    + '; path=/'
+                    + '; SameSite=Lax'
+                    + (location.protocol === 'https:' ? '; Secure' : '');
+                if (host.indexOf('.') !== -1 && !/^\d+(\.\d+)+$/.test(host)) {
+                    var root = host.split('.').slice(-2).join('.');
+                    document.cookie = attrs + '; domain=.' + root;
+                } else {
+                    document.cookie = attrs;
+                }
+            } catch (e) { /* cookie write may fail; we still return the in-memory value */ }
+            return fbp;
+        }
+
         // bcid: must match the page-side mint and the desktop /pairings/claim
         // contract exactly (regex /^bc_[A-Za-z0-9-]{8,64}$/). Mirror the helper
         // in landing-page/index.html so a user visiting both pages keeps the
@@ -209,7 +245,9 @@
 
         var utms    = getUTMs();
         var fbclid  = getFbclid();
-        var fbp     = getCookie('_fbp');
+        // Mint _fbp if absent — see getOrCreateFbp() above for why this is the
+        // critical fix on the bouncer (no Pixel = no cookie writer otherwise).
+        var fbp     = getOrCreateFbp();
         var fbc     = getFbc(fbclid);
         var bcid    = getOrCreateBcid();
         var nowIso  = new Date().toISOString();
@@ -281,8 +319,9 @@
 
         // ── 4. POST /pairings — desktop app handshake ───────────────────────────
         // Worker stores { bcid, fbp, fbc, fbclid, utms } keyed on
-        // sha256(coarse_ip + os) for ~30 min. The desktop app POSTs /pairings/claim
-        // from the same NAT on first launch and gets the payload back.
+        // sha256(coarse_ip + os) for ~24 hours (PAIRING_TTL_SECONDS in the worker).
+        // The desktop app POSTs /pairings/claim from the same NAT on first
+        // launch and gets the payload back.
         // utms travel on the wire but the C++ PairingClient does not consume
         // them — first-touch UTM attribution lives on the PostHog person record
         // we create below, not on the desktop side.

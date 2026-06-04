@@ -51,6 +51,37 @@
         }
         return null;
     }
+
+    // Helper: Read or mint _fbp synchronously and persist it as a first-party
+    // cookie on the apex (.beatcue.app). Closes a race where fbevents.js (loaded
+    // async above) had not yet written the _fbp cookie at the time we cached
+    // the value into globals — first-time visitors arriving here from a Meta
+    // ad would ship `fbp: null` to the worker, collapsing Browser-ID match
+    // rate in Events Manager. Pre-creating the cookie in Meta's documented
+    // format (`fb.<subdomainIndex>.<creationTimeMs>.<randomNumber>`) is what
+    // the Pixel itself would have written; when fbevents.js initializes it
+    // sees the existing cookie and reuses the same value, keeping browser-side
+    // and server-side events aligned for Meta dedup.
+    function getOrCreateFbp() {
+        var existing = getCookie('_fbp');
+        if (existing) return existing;
+        var fbp = 'fb.1.' + Date.now() + '.' + Math.floor(Math.random() * 1e10);
+        try {
+            var host = location.hostname || '';
+            var attrs = '_fbp=' + fbp
+                + '; max-age=' + (90 * 24 * 3600)
+                + '; path=/'
+                + '; SameSite=Lax'
+                + (location.protocol === 'https:' ? '; Secure' : '');
+            if (host.indexOf('.') !== -1 && !/^\d+(\.\d+)+$/.test(host)) {
+                var root = host.split('.').slice(-2).join('.');
+                document.cookie = attrs + '; domain=.' + root;
+            } else {
+                document.cookie = attrs;
+            }
+        } catch (e) { /* cookie write may fail under strict policies — fbp still returned in-memory */ }
+        return fbp;
+    }
     
     // BeatCue browser ID (bcid): mint before Pixel init for advanced matching.
     function getOrCreateBcid() {
@@ -85,7 +116,10 @@
 
     // Store for use in other scripts
     window.__cue_fbclid = getFbclid();
-    window.__cue_fbp = getCookie('_fbp');
+    // Pre-create _fbp before fbq('init') so the Pixel adopts our value and
+    // the cached global is never the stale `null` we used to ship to the
+    // worker on first-visit Meta ad clicks.
+    window.__cue_fbp = getOrCreateFbp();
     window.__cue_fbc = getFbc();
     
     // Initialize with fbc/fbp for better matching
@@ -567,10 +601,18 @@
                 var bcid = window.__cue_bcid;
                 if (!bcid) return;
 
+                // Re-read at click time as a safety net. By now fbevents.js
+                // has typically had seconds to initialize and write _fbp,
+                // and our own pre-created cookie is also persisted. The
+                // cached globals remain a fallback for environments that
+                // disallow cookie reads.
+                var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
+                var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
+
                 var payload = {
                     bcid: bcid,
-                    fbp: window.__cue_fbp || null,
-                    fbc: window.__cue_fbc || null,
+                    fbp: freshFbp,
+                    fbc: freshFbc,
                     fbclid: window.__cue_fbclid || null,
                     utms: getUtmProps(),
                     platform: platform

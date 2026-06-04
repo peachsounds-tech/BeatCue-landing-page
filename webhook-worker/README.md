@@ -34,7 +34,7 @@ A single Cloudflare Worker with three responsibilities:
 
 2. User clicks "Download" button
    → page POSTs /pairings { bcid, fbp, fbc, fbclid, utms }
-   → worker stores it in KV under sha256(coarse_ip + os)[:24], TTL 30 min
+   → worker stores it in KV under sha256(coarse_ip + os)[:24], TTL 24 hours
 
 3. User runs the installer
 
@@ -46,8 +46,8 @@ A single Cloudflare Worker with three responsibilities:
 
 Failure modes:
 - Different network between download and launch (VPN dropped) → 404, app stays anonymous
-- Two BeatCue installs from same NAT in same 15-min window → second one wins,
-  first user stays anonymous (acceptable — rare)
+- Two BeatCue installs from same NAT within the 24h TTL window → second one wins,
+  first user stays anonymous (acceptable — rare at current install volume)
 ```
 
 ## Setup Instructions

@@ -455,8 +455,9 @@ async function buildClaimKey(ip, os) {
  *  the two requests, so the claim misses. ASN+country is independent of
  *  IP family and stays stable across the small download → first-launch
  *  window. Cross-user collision risk: two BeatCue downloads + first
- *  launches, same ASN+country+OS, both within ~30 minutes — accepted given
- *  current install volume. Returns null when Cloudflare didn't populate
+ *  launches, same ASN+country+OS, both within the 24h PAIRING_TTL_SECONDS
+ *  window — accepted given current install volume. Returns null when
+ *  Cloudflare didn't populate
  *  request.cf (local dev / pathological edge cases) so callers can skip
  *  the fallback gracefully. */
 async function buildAsnKey(cf, os) {
