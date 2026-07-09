@@ -4636,6 +4636,11 @@
             overflow: hidden;
             background: #000;
         }
+
+        .ba-stage.is-unlocked .ba-scene,
+        .ba-stage.is-unlocked .ba-ui {
+            cursor: pointer;
+        }
         .ba-scene-video,
         .ba-ui-video {
             position: absolute;
@@ -5067,7 +5072,7 @@
             </header>
 
             <div class="ba-stage" id="baStage" data-side="before" data-pair="jump">
-                <div class="ba-scene">
+                <div class="ba-scene" id="baScene">
                     <video class="ba-scene-video" id="baSceneVideo" loop muted playsinline preload="auto"></video>
 
                     <!-- Emotional caption overlaid on bottom of scene -->
@@ -5077,7 +5082,7 @@
                 </div>
 
                 <!-- The companion panel: BeatCue UI showing the cue + waveform -->
-                <div class="ba-ui">
+                <div class="ba-ui" id="baUi">
                     <video class="ba-ui-video ba-ui-video--before" id="baUiVideoBefore" loop muted playsinline preload="auto" data-side="before"></video>
                     <video class="ba-ui-video ba-ui-video--after is-active" id="baUiVideoAfter" loop muted playsinline preload="auto" data-side="after"></video>
                 </div>
@@ -5269,15 +5274,14 @@
             <div id="ctaDesktop">
                 <div class="pricing-cards">
                     <div class="pricing-card pricing-card--primary">
-                        <div class="plan-badge">BeatCue</div>
+                        <div class="plan-badge">Free</div>
                         <div class="plan-price">
                             <span class="price">$0</span>
                         </div>
                         <p class="plan-description">Everything you need to retime your music.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
-                            <li>Unlimited projects</li>
-                            <li class="feature-limited">Limited track analysis</li>
+                            <li>Retime 5 tracks per month</li>
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
                         <a href="/download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
@@ -5286,7 +5290,7 @@
                         <p class="plan-note" id="pricingInstallNote">Recommended: macOS 14+</p>
                     </div>
                     <div class="pricing-card">
-                        <div class="plan-badge plan-badge--soon">BeatCue Pro</div>
+                        <div class="plan-badge plan-badge--soon">Pro</div>
                         <div class="plan-price">
                             <span class="price">$9</span>
                             <span class="period">/month</span>
@@ -5294,8 +5298,7 @@
                         <p class="plan-description">For professionals who need unlimited precision.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
-                            <li>Unlimited projects</li>
-                            <li>Unlimited track analysis</li>
+                            <li>Retime unlimited tracks</li>
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
                         <a href="https://beatcue.lemonsqueezy.com/checkout/buy/5585ea8e-18e3-4608-ab13-fb9bac5f36c4" class="btn btn-primary btn-large" target="_blank" onclick="trackInitiateCheckout()">
@@ -5326,6 +5329,15 @@
 
     <script src="/js/microsoft-store.js"></script>
     <script>
+
+        function trackLandingInteraction(eventName, extraProps) {
+            if (typeof posthog === 'undefined' || !posthog.capture) return;
+            posthog.capture(eventName, {
+                ...(typeof posthogFullyInitialized !== 'undefined' && posthogFullyInitialized ? getBaseEventProps() : {}),
+                page: 'landing_v2',
+                ...(extraProps || {})
+            });
+        }
         
         // Video sound toggle
         const heroVideo = document.getElementById('heroVideo');
@@ -5390,6 +5402,8 @@
                 after:  document.getElementById('baAudioAfter'),
             };
             const overlay = document.getElementById('baOverlay');
+            const sceneArea = document.getElementById('baScene');
+            const uiArea = document.getElementById('baUi');
             const progressFill = document.getElementById('baProgressFill');
             const phase = document.getElementById('baPhase');
             const phaseText = phase && phase.querySelector('.ba-phase-text');
@@ -5417,6 +5431,7 @@
                 pair: scenarioOrder[0] || 'jump',
                 side: 'before',    // we always START on BEFORE so the contrast is felt
                 unlocked: false,   // becomes true after the first user click
+                userPaused: false, // true when the viewer explicitly paused playback
                 playing: false,
                 cycling: false,    // gates re-entrancy on the ended boundary
                 rafId: null,
@@ -5497,6 +5512,15 @@
                 stage.dataset.pair = pair;
             }
 
+            function baContext() {
+                const cfg = pairs[state.pair] || {};
+                return {
+                    scenario: state.pair,
+                    scenario_label: cfg.label || state.pair,
+                    side: state.side
+                };
+            }
+
             function updateCaptionForCurrent() {
                 const cfg = pairs[state.pair];
                 if (!cfg) return;
@@ -5530,6 +5554,7 @@
                 [sceneVideo, uiVideos.before, uiVideos.after, audios.before, audios.after].forEach((el) => {
                     try { el.currentTime = 0; } catch (e) {}
                 });
+                state.userPaused = false;
                 playAll();
             }
 
@@ -5600,20 +5625,29 @@
 
             // ---------- manual interactions ----------
             // Ghost A/B flip — no seek, just swap volume + opacity.
-            function applyManualSide(side) {
+            function applyManualSide(side, source) {
                 if (side === state.side) return;
+                const fromSide = state.side;
                 state.side = side;
                 setActiveAb(side);
                 setPhase(side);
                 applyUiOpacity();
                 applyAudioLevels();
                 updateCaptionForCurrent();
+                trackLandingInteraction('before_after_side_changed', {
+                    ...baContext(),
+                    from_side: fromSide,
+                    to_side: side,
+                    source: source || 'ab_toggle'
+                });
             }
 
             // Jump to a different scenario (dot click). Always restarts on BEFORE
             // so the user feels the full contrast for that moment.
-            function jumpToScenario(pair) {
+            function jumpToScenario(pair, source) {
                 if (!pairs[pair] || pair === state.pair) return;
+                const fromPair = state.pair;
+                const fromLabel = pairs[fromPair] && pairs[fromPair].label;
                 state.pair = pair;
                 state.side = 'before';
                 setActiveDot(pair);
@@ -5623,6 +5657,13 @@
                 updateCaptionForCurrent();
                 applyUiOpacity();
                 applyAudioLevels();
+                trackLandingInteraction('before_after_scenario_changed', {
+                    from_scenario: fromPair,
+                    from_scenario_label: fromLabel || fromPair,
+                    to_scenario: pair,
+                    to_scenario_label: pairs[pair].label || pair,
+                    source: source || 'scenario_dot'
+                });
                 const a = activeAudio();
                 const start = () => {
                     a.removeEventListener('canplay', start);
@@ -5631,30 +5672,72 @@
                 if (a.readyState >= 2) start(); else a.addEventListener('canplay', start);
             }
 
-            function unlockAudioFirstTime() {
+            function unlockAudioFirstTime(source) {
                 if (state.unlocked) return;
                 state.unlocked = true;
+                state.userPaused = false;
+                stage.classList.add('is-unlocked');
                 overlay.classList.add('is-hidden');
                 applyAudioLevels();
-                restartAndPlay();   // start the very first cycle cleanly
+                restartAndPlay();
+                trackLandingInteraction('before_after_play_started', {
+                    ...baContext(),
+                    source: source || 'overlay'
+                });
+            }
+
+            function togglePlayback(source) {
+                if (!state.unlocked) return;
+                if (state.playing) {
+                    state.userPaused = true;
+                    pauseAll();
+                    trackLandingInteraction('before_after_play_paused', {
+                        ...baContext(),
+                        source: source || 'video_click'
+                    });
+                } else {
+                    state.userPaused = false;
+                    playAll();
+                    trackLandingInteraction('before_after_play_resumed', {
+                        ...baContext(),
+                        source: source || 'video_click'
+                    });
+                }
+            }
+
+            function handleVideoAreaClick(source) {
+                if (!state.unlocked) {
+                    unlockAudioFirstTime(source);
+                    return;
+                }
+                togglePlayback(source);
             }
 
             abBtns.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    unlockAudioFirstTime();
-                    applyManualSide(btn.dataset.side);
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    unlockAudioFirstTime('ab_toggle');
+                    applyManualSide(btn.dataset.side, 'ab_toggle');
                 });
             });
 
             dotBtns.forEach((btn) => {
-                btn.addEventListener('click', () => {
-                    unlockAudioFirstTime();
-                    jumpToScenario(btn.dataset.pair);
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    unlockAudioFirstTime('scenario_dot');
+                    jumpToScenario(btn.dataset.pair, 'scenario_dot');
                 });
             });
 
             overlay.addEventListener('click', () => {
-                unlockAudioFirstTime();
+                unlockAudioFirstTime('overlay');
+            });
+
+            [sceneArea, uiArea].forEach((area) => {
+                if (!area) return;
+                area.addEventListener('click', () => {
+                    handleVideoAreaClick('video_click');
+                });
             });
 
             // Pause when the section scrolls out of view — saves bandwidth and
@@ -5665,7 +5748,7 @@
                     entries.forEach((entry) => {
                         if (!entry.isIntersecting && state.playing) {
                             pauseAll();
-                        } else if (entry.isIntersecting && state.unlocked && !state.playing) {
+                        } else if (entry.isIntersecting && state.unlocked && !state.playing && !state.userPaused) {
                             playAll();
                         }
                     });
@@ -5789,6 +5872,7 @@
         soundToggle.addEventListener('click', () => {
             if (heroVideo.muted) {
                 unmuteVideo(heroVideo, soundToggle);
+                trackLandingInteraction('hero_demo_unmuted');
             } else {
                 muteVideo(heroVideo, soundToggle);
             }
