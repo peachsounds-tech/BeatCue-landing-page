@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'AW-18317916073');
+
+      // Distinct from a plain download.html visit (mobile rejection).
+      // Point Google Ads optimization / conversion at THIS URL only.
+      var params = new URLSearchParams(window.location.search);
+      gtag('event', 'trial_download_started', {
+        platform: params.get('platform') || 'unknown',
+        source: params.get('source') || 'download_page'
+      });
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Download started – BeatCue</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0a0a0b;
+            color: #e8e8ea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            text-align: center;
+            padding: 1.5rem;
+        }
+        a { color: #6ea8ff; }
+    </style>
+</head>
+<body>
+    <div>
+        <p>Download started.</p>
+        <p><a href="/download.html">Back to download</a></p>
+    </div>
+</body>
+</html>

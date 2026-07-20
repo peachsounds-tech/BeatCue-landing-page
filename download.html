@@ -730,6 +730,65 @@
             if (!document.hidden) checkPairingOnce();
         });
 
+        // Google Ads: only count real macOS downloads / Windows Store redirects.
+        // Mobile "continue on your computer" visits must NOT hit this URL.
+        // Point Ads optimization at https://beatcue.app/download-converted.html
+        // (not download.html). Optional: paste your event conversion send_to
+        // label below once you create a "Download started" conversion action.
+        var GOOGLE_ADS_DOWNLOAD_SEND_TO = ''; // e.g. 'AW-18317916073/AbCdEfGhIjKlMnOp'
+
+        function fireGoogleAdsDownloadConversion(platform) {
+            if (window.__cue_gads_download_fired) return;
+            window.__cue_gads_download_fired = true;
+
+            if (typeof gtag === 'function') {
+                gtag('event', 'trial_download_started', {
+                    platform: platform,
+                    source: 'download_page'
+                });
+                if (GOOGLE_ADS_DOWNLOAD_SEND_TO) {
+                    gtag('event', 'conversion', {
+                        send_to: GOOGLE_ADS_DOWNLOAD_SEND_TO,
+                        value: 0.0,
+                        currency: 'USD'
+                    });
+                }
+            }
+
+            // URL-based Ads goals: load conversion URL only after a real download.
+            try {
+                var iframe = document.createElement('iframe');
+                iframe.src = '/download-converted.html?platform=' + encodeURIComponent(platform) + '&source=download_page';
+                iframe.width = 0;
+                iframe.height = 0;
+                iframe.setAttribute('aria-hidden', 'true');
+                iframe.style.cssText = 'display:none;visibility:hidden;position:absolute;left:-9999px;border:0;';
+                document.body.appendChild(iframe);
+            } catch (e) { /* never block download for analytics */ }
+
+            console.log('📊 Google Ads: download conversion fired', { platform: platform });
+        }
+
+        function trackMobileDownloadBlocked(platform) {
+            if (window.__cue_gads_mobile_blocked_fired) return;
+            window.__cue_gads_mobile_blocked_fired = true;
+            if (typeof gtag === 'function') {
+                gtag('event', 'mobile_download_blocked', {
+                    platform: platform,
+                    source: 'download_page'
+                });
+            }
+            if (typeof posthog !== 'undefined' && posthog.capture) {
+                posthog.capture('mobile_download_blocked', {
+                    ...getBaseEventProps(),
+                    page: 'download',
+                    platform: platform,
+                    source: 'download_page'
+                });
+            }
+            console.log('📊 Google Ads: mobile download blocked (not a conversion)', { platform: platform });
+        }
+
         function trackDownload(platform) {
             if (typeof fbq === 'function') {
                 var eventData = { 
@@ -741,6 +800,9 @@
                 fbq('track', 'StartTrial', eventData);
                 console.log('📊 Meta Pixel: StartTrial tracked', eventData);
             }
+
+            fireGoogleAdsDownloadConversion(platform);
+
             var props = { ...getBaseEventProps(), page: 'download', platform: platform, url: window.location.href, source: 'free_trial_page' };
             if (platform === 'windows') {
                 props.ms_store_url = getWindowsStoreUrl();
@@ -817,6 +879,7 @@
             } else {
                 document.getElementById('supportedContent').style.display = 'none';
                 document.getElementById('unsupportedContent').style.display = 'block';
+                trackMobileDownloadBlocked(platform);
             }
         }
         
