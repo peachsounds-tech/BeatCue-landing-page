@@ -5168,8 +5168,8 @@
                         <p class="plan-description">Everything you need to retime your music.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
-                            <li>Unlimited projects</li>
-                            <li class="feature-limited">Limited exports</li>
+                            <li class="feature-limited">10 projects per month</li>
+                            <li>Unlimited exports</li>
                             <li>macOS & Windows</li>
                         </ul>
                         <a href="download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
@@ -5180,7 +5180,7 @@
                     <div class="pricing-card">
                         <div class="plan-badge plan-badge--soon">BeatCue Pro</div>
                         <div class="plan-price">
-                            <span class="price">$9</span>
+                            <span class="price">$12</span>
                             <span class="period">/month</span>
                         </div>
                         <p class="plan-description">For professionals who need unlimited precision.</p>
@@ -6174,7 +6174,7 @@
                     posthog.capture('checkout_started', {
                         ...getBaseEventProps(),
                         plan: 'pro',
-                        price: 3.99,
+                        price: 12.00,
                         currency: 'USD',
                         billing_period: 'monthly',
                         source: 'landing_page',
@@ -6382,6 +6382,12 @@
                 if (pricingNote) pricingNote.textContent = 'Recommended: macOS 14+';
             }
 
+            // Optional: paste your Google Ads "Begin checkout" conversion
+            // label here (from Ads > Goals > Conversions) to also fire a
+            // Google Ads conversion on this CTA. Leave blank to only send the
+            // gtag event.
+            var GOOGLE_ADS_CHECKOUT_SEND_TO = ''; // e.g. 'AW-18317916073/AbCdEfGhIjKlMnOp'
+
             window.trackInitiateCheckout = function() {
                 const eventID = (crypto.randomUUID
                     ? crypto.randomUUID()
@@ -6391,7 +6397,7 @@
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'checkout_clicked', {
                         content_name: 'BeatCue Pro',
-                        value: 9.00,
+                        value: 12.00,
                         currency: 'USD'
                     }, { eventID: eventID });
                 }
@@ -6420,7 +6426,7 @@
                             },
                             custom_data: {
                                 content_name: 'BeatCue Pro',
-                                value: 9.00,
+                                value: 12.00,
                                 currency: 'USD'
                             },
                             internal_name: 'lemonsqueezy_buy_click'
@@ -6435,6 +6441,25 @@
                         source: 'pricing_section',
                         meta_event_id: eventID
                     });
+                }
+
+                // Google side — gtag event (+ optional Google Ads conversion).
+                if (typeof gtag === 'function') {
+                    gtag('event', 'checkout_clicked', {
+                        plan: 'cue_pro',
+                        source: 'pricing_section',
+                        value: 12.00,
+                        currency: 'USD',
+                        transaction_id: eventID
+                    });
+                    if (GOOGLE_ADS_CHECKOUT_SEND_TO) {
+                        gtag('event', 'conversion', {
+                            send_to: GOOGLE_ADS_CHECKOUT_SEND_TO,
+                            value: 12.00,
+                            currency: 'USD',
+                            transaction_id: eventID
+                        });
+                    }
                 }
             };
 

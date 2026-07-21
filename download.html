@@ -809,6 +809,11 @@
         // label below once you create a "Download started" conversion action.
         var GOOGLE_ADS_DOWNLOAD_SEND_TO = ''; // e.g. 'AW-18317916073/AbCdEfGhIjKlMnOp'
 
+        // Google Ads: "Send to computer" conversion (mobile handoff CTA).
+        // Create a conversion action in Google Ads, then paste its send_to
+        // label below (format: 'AW-18317916073/AbCdEfGhIjKlMnOp').
+        var GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO = 'AW-18317916073/1x2-COL5tNQcEKnv1J5E';
+
         function fireGoogleAdsDownloadConversion(platform) {
             if (window.__cue_gads_download_fired) return;
             window.__cue_gads_download_fired = true;
@@ -1020,6 +1025,18 @@
             function trackSendToComputer(method) {
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });
+                    fbq('trackCustom', 'send_to_computer', { content_name: 'BeatCue Send to Computer', content_category: method });
+                }
+                if (typeof gtag === 'function') {
+                    gtag('event', 'send_to_desktop', { method: method, platform: platform, source: 'download_page' });
+                    if (GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO && !window.__cue_gads_send_to_desktop_fired) {
+                        window.__cue_gads_send_to_desktop_fired = true;
+                        gtag('event', 'conversion', {
+                            send_to: GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO,
+                            value: 1.0,
+                            currency: 'ILS'
+                        });
+                    }
                 }
                 if (typeof posthog !== 'undefined' && posthog.capture) {
                     posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: platform, source: 'download_page' });
