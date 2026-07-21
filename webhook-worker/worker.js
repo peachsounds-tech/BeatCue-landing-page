@@ -602,6 +602,12 @@ async function handlePairings(request, env, url) {
             fbp:    clampString(body.fbp,    256),
             fbc:    clampString(body.fbc,    256),
             fbclid: clampString(body.fbclid, 256),
+            // Google Ads click IDs — mirror the Meta fields so the desktop app
+            // can attribute the install to a Google click captured on the
+            // web download page (or forwarded from a mobile hand-off link).
+            gclid:  clampString(body.gclid,  256),
+            gbraid: clampString(body.gbraid, 256),
+            wbraid: clampString(body.wbraid, 256),
             utms:   clampUtms(body.utms),
             ts:     Date.now(),
             os,

@@ -459,7 +459,25 @@
         }
         
         const detectedPlatform = detectPlatform();
-        
+
+        // Normalize the granular detectPlatform() result into an acquisition
+        // bucket: ios / android / windows / mac. Because the bcid (PostHog
+        // distinct_id) is shared across the mobile→desktop hand-off, storing
+        // this as a $set_once person property locks in the FIRST platform the
+        // user was acquired on — a phone ad click stays "ios"/"android" even
+        // though the download later completes on their computer.
+        function getAcquisitionPlatform() {
+            switch (detectedPlatform) {
+                case 'iphone':
+                case 'ipad':          return 'ios';
+                case 'android_phone':
+                case 'android_tablet':return 'android';
+                case 'windows':       return 'windows';
+                case 'macos':         return 'mac';
+                default:              return detectedPlatform; // chromeos/linux/unknown
+            }
+        }
+
         // Track page view function
         function trackPostHogPageView(fromCache = false) {
             const baseProps = {
@@ -468,7 +486,11 @@
                 platform: detectedPlatform,
                 url: window.__cue_initial_url || window.location.href,
                 referrer: document.referrer || 'direct',
-                from_cache: fromCache
+                from_cache: fromCache,
+                // First-touch acquisition platform. $set_once means PostHog only
+                // writes it if the person doesn't already have one, so the
+                // acquisition device wins over any later desktop hand-off visit.
+                $set_once: { first_platform: getAcquisitionPlatform() }
             };
 
             if (userConsented) {
@@ -543,18 +565,10 @@
             <p class="mobile-cta-sub mobile-cta-platform">BeatCue runs on macOS & Windows</p>
             <p class="mobile-cta-heading">Continue on your computer</p>
             <div class="mobile-send-actions">
-                <button class="mobile-action-btn mobile-action-primary" id="mobileCopyLink">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10.5 1h-7A1.5 1.5 0 0 0 2 2.5v9h1.5v-9h7V1Zm2.25 3H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16h7.25a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.75 4Zm0 10.5H5.5v-9h7.25v9Z" fill="currentColor"/></svg>
-                    <span id="mobileCopyText">Open on your computer</span>
+                <button class="mobile-action-btn mobile-action-primary" id="mobileShareBtn" type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    <span id="mobileShareText">Share download link</span>
                 </button>
-                <a class="mobile-action-btn mobile-action-secondary" href="https://wa.me/?text=Continue%20editing%20with%20BeatCue%20on%20desktop:%20https://beatcue.app/download" target="_blank" id="mobileWhatsApp">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8.002 1C4.14 1 1 4.07 1 7.84c0 1.21.33 2.39.95 3.42L1 15l3.87-.98c1 .53 2.13.81 3.13.81C11.86 12.83 15 9.76 15 5.99 15 4.07 14.2 2.38 12.87 1.28A6.9 6.9 0 0 0 8.002 1Zm3.53 9.14c-.15.42-.87.8-1.2.85-.31.05-.7.07-1.13-.07a10.3 10.3 0 0 1-1.02-.38 7.04 7.04 0 0 1-3.05-2.69c-.26-.35-.66-.92-.66-1.78s.42-1.25.57-1.42c.15-.17.33-.21.44-.21h.32c.1 0 .24-.04.37.28.14.33.46 1.13.5 1.21.04.09.07.19.01.3-.05.11-.08.17-.16.27l-.24.28c-.08.09-.17.18-.07.35.1.17.42.7.9 1.13.62.55 1.15.72 1.31.8.16.09.26.07.35-.04.1-.11.42-.48.53-.65.11-.17.22-.14.37-.08.15.06.96.45 1.13.53.16.09.27.13.31.2.04.07.04.42-.11.83Z" fill="currentColor"/></svg>
-                    Send to WhatsApp
-                </a>
-                <a class="mobile-action-btn mobile-action-tertiary" href="mailto:?subject=Try%20BeatCue%20%E2%80%93%20music%20retiming%20for%20video%20editors&body=Continue%20editing%20with%20BeatCue%20on%20desktop%3A%20https%3A%2F%2Fbeatcue.app%2Fdownload" id="mobileEmail">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 3H2a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1Zm-.5 1.5L8 8.25 2.5 4.5h11ZM2.5 11.5v-6l5.5 4 5.5-4v6h-11Z" fill="currentColor"/></svg>
-                    Send to email
-                </a>
             </div>
             <div class="mobile-copy-toast" id="mobileCopyToast">Link copied. Open it on your computer.</div>
             <p class="mobile-cta-footer">Mac & Windows &middot; Recommended: macOS 14+</p>
@@ -618,11 +632,16 @@
                 var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
                 var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
 
+                var googleClickIds = getGoogleClickIds();
+
                 var payload = {
                     bcid: bcid,
                     fbp: freshFbp,
                     fbc: freshFbc,
                     fbclid: window.__cue_fbclid || null,
+                    gclid: googleClickIds.gclid || null,
+                    gbraid: googleClickIds.gbraid || null,
+                    wbraid: googleClickIds.wbraid || null,
                     utms: getUtmProps(),
                     platform: platform
                 };
@@ -730,6 +749,59 @@
             if (!document.hidden) checkPairingOnce();
         });
 
+        // Collect Google click IDs, preferring (1) the current URL, then
+        // (2) the original landing URL, then (3) Google's first-party _gcl
+        // cookies. Used both to attribute the conversion page and to seed the
+        // mobile→desktop hand-off link so a phone ad click can be credited to
+        // the download that happens later on the user's computer.
+        function getGoogleClickIds() {
+            var out = {};
+            var sources = [window.location.search];
+            if (window.__cue_initial_url) {
+                try { sources.push(new URL(window.__cue_initial_url).search); } catch (e) {}
+            }
+            function fromCookie(cookieName) {
+                try {
+                    var m = document.cookie.match(new RegExp('(?:^|; )' + cookieName + '=([^;]+)'));
+                    if (!m) return null;
+                    // _gcl_aw / _gcl_gb look like GCL.<ts>.<id>
+                    var parts = decodeURIComponent(m[1]).split('.');
+                    return parts.length >= 3 ? parts.slice(2).join('.') : null;
+                } catch (e) { return null; }
+            }
+            var cookieFallback = {
+                gclid:  fromCookie('_gcl_aw'),
+                gbraid: fromCookie('_gcl_gb'),
+                wbraid: fromCookie('_gcl_gb')
+            };
+            ['gclid', 'gbraid', 'wbraid'].forEach(function (key) {
+                var val = null;
+                for (var i = 0; i < sources.length; i++) {
+                    val = new URLSearchParams(sources[i]).get(key);
+                    if (val) break;
+                }
+                if (!val) val = cookieFallback[key];
+                if (val) out[key] = val;
+            });
+            return out;
+        }
+
+        // Build the URL a mobile user hands off to their computer (WhatsApp /
+        // copy / email). Carries the same bcid plus the ad click IDs so the
+        // desktop page adopts them: bcid is reused as-is by getOrCreateBcid(),
+        // fbclid is turned back into _fbc by getFbc(), and gclid rides through
+        // to the Google Ads conversion + the pairing record for the app.
+        function buildDesktopHandoffUrl() {
+            var u = new URL('https://beatcue.app/download');
+            if (window.__cue_bcid)   u.searchParams.set('bcid', window.__cue_bcid);
+            if (window.__cue_fbclid) u.searchParams.set('fbclid', window.__cue_fbclid);
+            var g = getGoogleClickIds();
+            Object.keys(g).forEach(function (k) { u.searchParams.set(k, g[k]); });
+            var utms = getUtmProps();
+            Object.keys(utms).forEach(function (k) { if (utms[k]) u.searchParams.set(k, utms[k]); });
+            return u.toString();
+        }
+
         // Google Ads: only count real macOS downloads / Windows Store redirects.
         // Mobile "continue on your computer" visits must NOT hit this URL.
         // Point Ads optimization at https://beatcue.app/download-converted.html
@@ -756,9 +828,20 @@
             }
 
             // URL-based Ads goals: load conversion URL only after a real download.
+            // Forward Google click IDs so download-converted.html can attribute
+            // the conversion (page-load goals / Tag Assistant expect gclid here).
             try {
+                var convUrl = new URL('/download-converted.html', window.location.origin);
+                convUrl.searchParams.set('platform', platform);
+                convUrl.searchParams.set('source', 'download_page');
+
+                var clickIds = getGoogleClickIds();
+                Object.keys(clickIds).forEach(function (key) {
+                    convUrl.searchParams.set(key, clickIds[key]);
+                });
+
                 var iframe = document.createElement('iframe');
-                iframe.src = '/download-converted.html?platform=' + encodeURIComponent(platform) + '&source=download_page';
+                iframe.src = convUrl.pathname + convUrl.search;
                 iframe.width = 0;
                 iframe.height = 0;
                 iframe.setAttribute('aria-hidden', 'true');
@@ -930,10 +1013,9 @@
                 }, 400);
             }
 
-            var mobileCopyBtn = document.getElementById('mobileCopyLink');
+            var mobileShareBtn = document.getElementById('mobileShareBtn');
+            var mobileShareText = document.getElementById('mobileShareText');
             var mobileCopyToast = document.getElementById('mobileCopyToast');
-            var mobileWhatsApp = document.getElementById('mobileWhatsApp');
-            var mobileEmailBtn = document.getElementById('mobileEmail');
 
             function trackSendToComputer(method) {
                 if (typeof fbq === 'function') {
@@ -944,19 +1026,48 @@
                 }
             }
 
-            if (mobileCopyBtn) {
-                mobileCopyBtn.addEventListener('click', function() {
-                    var copyText = document.getElementById('mobileCopyText');
-                    navigator.clipboard.writeText('https://beatcue.app/download').then(function() {
-                        mobileCopyToast.classList.add('show');
-                        copyText.textContent = 'Copied!';
-                        setTimeout(function() { mobileCopyToast.classList.remove('show'); copyText.textContent = 'Open on your computer'; }, 6000);
-                        trackSendToComputer('copy');
-                    });
+            function copyHandoffLink() {
+                var url = buildDesktopHandoffUrl();
+                return navigator.clipboard.writeText(url).then(function() {
+                    if (mobileCopyToast) mobileCopyToast.classList.add('show');
+                    if (mobileShareText) {
+                        mobileShareText.textContent = 'Link copied!';
+                        setTimeout(function() {
+                            if (mobileCopyToast) mobileCopyToast.classList.remove('show');
+                            mobileShareText.textContent = 'Share download link';
+                        }, 6000);
+                    }
+                    trackSendToComputer('copy');
                 });
             }
-            if (mobileWhatsApp) { mobileWhatsApp.addEventListener('click', function() { trackSendToComputer('whatsapp'); }); }
-            if (mobileEmailBtn) { mobileEmailBtn.addEventListener('click', function() { trackSendToComputer('email'); }); }
+
+            if (mobileShareBtn) {
+                // Prefer the OS share sheet when available (iOS/Android);
+                // fall back to clipboard copy on desktop or unsupported browsers.
+                if (!navigator.share) {
+                    mobileShareText.textContent = 'Copy download link';
+                }
+
+                mobileShareBtn.addEventListener('click', function() {
+                    var url = buildDesktopHandoffUrl();
+                    if (navigator.share) {
+                        // Share the URL only — including `text` makes most
+                        // targets concatenate "text url" into one string.
+                        navigator.share({
+                            title: 'BeatCue',
+                            url: url
+                        }).then(function() {
+                            trackSendToComputer('native_share');
+                        }).catch(function(err) {
+                            // User cancelled the sheet — don't treat as failure.
+                            if (err && err.name === 'AbortError') return;
+                            copyHandoffLink().catch(function() {});
+                        });
+                    } else {
+                        copyHandoffLink().catch(function() {});
+                    }
+                });
+            }
         }
         
         init();

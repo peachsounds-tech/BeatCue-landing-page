@@ -25,11 +25,17 @@
 
         const params = new URLSearchParams(window.location.search);
         const email = params.get('email');
-        const redirectUrl = email
-            ? PRODUCT_URL + '?checkout[email]=' + encodeURIComponent(email)
-            : PRODUCT_URL;
+        const redirect = new URL(PRODUCT_URL);
+        if (email) redirect.searchParams.set('checkout[email]', email);
+        // Keep Google/Meta click IDs on the checkout URL so attribution can
+        // survive the hop off beatcue.app (and so gtag on this page sees them
+        // before navigation).
+        ['gclid', 'gbraid', 'wbraid', 'fbclid'].forEach(function (k) {
+            const v = params.get(k);
+            if (v) redirect.searchParams.set(k, v);
+        });
 
-        window.location.replace(redirectUrl);
+        window.location.replace(redirect.toString());
     </script>
     <noscript>
         <meta http-equiv="refresh" content="0;url=https://beatcue.lemonsqueezy.com/checkout/buy/5585ea8e-18e3-4608-ab13-fb9bac5f36c4">

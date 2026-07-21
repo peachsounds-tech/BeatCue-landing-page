@@ -20,14 +20,24 @@
         (function() {
             const path = window.location.pathname;
             const match = path.match(/^\/for\/([^\/]+)\/?$/);
-            
+            const incoming = new URLSearchParams(window.location.search);
+
+            function withClickIds(url) {
+                const u = new URL(url, window.location.origin);
+                ['gclid', 'gbraid', 'wbraid', 'fbclid'].forEach(function (k) {
+                    const v = incoming.get(k);
+                    if (v) u.searchParams.set(k, v);
+                });
+                return u.pathname + u.search;
+            }
+
             if (match) {
                 const creatorName = match[1];
                 const targetUrl = '/creator_access/?utm_source=Youtube&utm_medium=private_link&utm_campaign=creator_access&utm_content=' + encodeURIComponent(creatorName);
-                window.location.replace(targetUrl);
+                window.location.replace(withClickIds(targetUrl));
             } else {
                 // No creator specified, redirect to main creator access
-                window.location.replace('/creator_access/');
+                window.location.replace(withClickIds('/creator_access/'));
             }
         })();
     </script>

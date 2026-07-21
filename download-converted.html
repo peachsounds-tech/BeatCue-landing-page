@@ -8,11 +8,22 @@
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'AW-18317916073');
-
       // Distinct from a plain download.html visit (mobile rejection).
       // Point Google Ads optimization / conversion at THIS URL only.
+      // Parent download.html forwards gclid/gbraid/wbraid in the query string
+      // so this page-load conversion can attribute the original ad click.
       var params = new URLSearchParams(window.location.search);
+      var gtagConfig = {};
+      if (params.get('gclid') || params.get('gbraid') || params.get('wbraid')) {
+        // Ensure click IDs from the iframe URL are treated as first-party
+        // click data for this conversion hit.
+        gtagConfig = {
+          page_location: window.location.href,
+          page_title: 'Download started – BeatCue'
+        };
+      }
+      gtag('config', 'AW-18317916073', gtagConfig);
+
       gtag('event', 'trial_download_started', {
         platform: params.get('platform') || 'unknown',
         source: params.get('source') || 'download_page'

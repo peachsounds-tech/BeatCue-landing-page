@@ -61,6 +61,16 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Extensionless clean URLs: GitHub Pages serves "/download" from
+  // "download.html". Mirror that locally so hand-off links like
+  // beatcue.app/download work when tested against this dev server.
+  if (!fs.existsSync(fullPath) && !path.extname(fullPath)) {
+    const htmlCandidate = fullPath + '.html';
+    if (fs.existsSync(htmlCandidate)) {
+      fullPath = htmlCandidate;
+    }
+  }
+
   // Check if file exists
   fs.access(fullPath, fs.constants.F_OK, (err) => {
     if (err) {

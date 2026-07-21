@@ -286,7 +286,10 @@
         // anything by passing the captured query string through.
         function buildMacDownloadUrl() {
             var u = new URL('/download.html', window.location.origin);
-            ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'].forEach(function (k) {
+            // Preserve ad click IDs through the redirect (Google Ads GCLID +
+            // Privacy Sandbox IDs, Meta fbclid, and UTMs).
+            ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+             'gclid', 'gbraid', 'wbraid', 'fbclid'].forEach(function (k) {
                 var v = params.get(k);
                 if (v) u.searchParams.set(k, v);
             });
