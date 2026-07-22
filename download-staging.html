@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -415,7 +416,7 @@
         // Bootstrap PostHog with bcid so events match loopback pairing + analytics in the app
         initConfig.bootstrap = { distinctID: cueBcid };
         
-        const CUE_PAGE_VERSION = '1.2.0';
+        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
 
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         posthog.register({ page_version: CUE_PAGE_VERSION });

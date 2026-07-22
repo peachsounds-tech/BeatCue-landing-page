@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -406,7 +407,7 @@
         // Bootstrap PostHog with bcid so events match loopback pairing + analytics in the app
         initConfig.bootstrap = { distinctID: cueBcid };
         
-        const CUE_PAGE_VERSION = '1.2.0';
+        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
 
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         posthog.register({ page_version: CUE_PAGE_VERSION });
@@ -809,11 +810,6 @@
         // label below once you create a "Download started" conversion action.
         var GOOGLE_ADS_DOWNLOAD_SEND_TO = ''; // e.g. 'AW-18317916073/AbCdEfGhIjKlMnOp'
 
-        // Google Ads: "Send to computer" conversion (mobile handoff CTA).
-        // Create a conversion action in Google Ads, then paste its send_to
-        // label below (format: 'AW-18317916073/AbCdEfGhIjKlMnOp').
-        var GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO = 'AW-18317916073/1x2-COL5tNQcEKnv1J5E';
-
         function fireGoogleAdsDownloadConversion(platform) {
             if (window.__cue_gads_download_fired) return;
             window.__cue_gads_download_fired = true;
@@ -1022,26 +1018,12 @@
             var mobileShareText = document.getElementById('mobileShareText');
             var mobileCopyToast = document.getElementById('mobileCopyToast');
 
-            function trackSendToComputer(method) {
-                if (typeof fbq === 'function') {
-                    fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });
-                    fbq('trackCustom', 'send_to_computer', { content_name: 'BeatCue Send to Computer', content_category: method });
-                }
-                if (typeof gtag === 'function') {
-                    gtag('event', 'send_to_desktop', { method: method, platform: platform, source: 'download_page' });
-                    if (GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO && !window.__cue_gads_send_to_desktop_fired) {
-                        window.__cue_gads_send_to_desktop_fired = true;
-                        gtag('event', 'conversion', {
-                            send_to: GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO,
-                            value: 1.0,
-                            currency: 'ILS'
-                        });
-                    }
-                }
-                if (typeof posthog !== 'undefined' && posthog.capture) {
-                    posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: platform, source: 'download_page' });
-                }
-            }
+            // Send-to-computer analytics (Meta Pixel, Google Ads conversion,
+            // PostHog) now fire from the landing page (index.html), where the
+            // mobile share CTA lives — collapsing the old 2-hop flow into 1.
+            // Left as a no-op so a direct /download mobile visit can still
+            // copy/share the hand-off link without double-counting conversions.
+            function trackSendToComputer(method) { /* events moved to index.html */ }
 
             function copyHandoffLink() {
                 var url = buildDesktopHandoffUrl();

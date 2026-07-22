@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -294,7 +295,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '1.0.0';
+        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
 
         // Track initialization states
         let posthogPreConsentInitialized = false;

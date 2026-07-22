@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -391,8 +392,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '2.0.0';
-        window.CUE_PAGE_VERSION = CUE_PAGE_VERSION;
+        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -5311,7 +5311,8 @@
                         <p class="plan-description">Everything you need to retime your music.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
-                            <li>Retime 5 tracks per month</li>
+                            <li>10 projects per month</li>
+                            <li>Unlimited exports</li>
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
                         <a href="/download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
@@ -5322,13 +5323,14 @@
                     <div class="pricing-card">
                         <div class="plan-badge plan-badge--soon">Pro</div>
                         <div class="plan-price">
-                            <span class="price">$9</span>
+                            <span class="price">$12</span>
                             <span class="period">/month</span>
                         </div>
                         <p class="plan-description">For professionals who need unlimited precision.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
-                            <li>Retime unlimited tracks</li>
+                            <li>Unlimited projects</li>
+                            <li>Unlimited exports</li>
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
                         <a href="https://beatcue.lemonsqueezy.com/checkout/buy/5585ea8e-18e3-4608-ab13-fb9bac5f36c4" class="btn btn-primary btn-large" target="_blank" onclick="trackInitiateCheckout()">
@@ -6390,7 +6392,7 @@
                     posthog.capture('checkout_started', {
                         ...getBaseEventProps(),
                         plan: 'pro',
-                        price: 3.99,
+                        price: 12.00,
                         currency: 'USD',
                         billing_period: 'monthly',
                         source: 'landing_page',
@@ -6539,8 +6541,14 @@
             // Check if we should block Windows downloads (force_mac=true and user is on Windows)
             const blockWindowsDownload = forceMac && isWindows;
 
-            // Attach identity-preserving click handler to all download buttons (only if not blocked)
-            if (!blockWindowsDownload) {
+            // Mobile / non-desktop visitors: instead of linking to the download
+            // page (old 2-hop flow), turn the CTAs into a "share download link"
+            // hand-off so they continue on their computer — 1 hop.
+            const useMobileHandoff = forceNonDesktop || (!forcePlatform && !isDesktop);
+
+            // Attach identity-preserving click handler to all download buttons
+            // (desktop only — on mobile these become the share hand-off CTA).
+            if (!blockWindowsDownload && !useMobileHandoff) {
                 if (heroDownloadBtn) heroDownloadBtn.addEventListener('click', trackTrialDownloadClick);
                 if (pricingDownloadBtn) pricingDownloadBtn.addEventListener('click', trackTrialDownloadClick);
                 if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.addEventListener('click', trackTrialDownloadClick);
@@ -6552,6 +6560,141 @@
 
             var heroNote = document.getElementById('heroInstallNote');
             var pricingNote = document.getElementById('pricingInstallNote');
+
+            // =====================================================
+            // MOBILE -> DESKTOP HAND-OFF (share download link)
+            // Same 1-hop flow as the main landing page.
+            // =====================================================
+            var GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO = 'AW-18317916073/1x2-COL5tNQcEKnv1J5E';
+            var SHARE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>';
+
+            function getGoogleClickIds() {
+                var out = {};
+                var sources = [window.location.search];
+                if (window.__cue_initial_url) {
+                    try { sources.push(new URL(window.__cue_initial_url).search); } catch (e) {}
+                }
+                function fromCookie(cookieName) {
+                    try {
+                        var m = document.cookie.match(new RegExp('(?:^|; )' + cookieName + '=([^;]+)'));
+                        if (!m) return null;
+                        var parts = decodeURIComponent(m[1]).split('.');
+                        return parts.length >= 3 ? parts.slice(2).join('.') : null;
+                    } catch (e) { return null; }
+                }
+                var cookieFallback = {
+                    gclid:  fromCookie('_gcl_aw'),
+                    gbraid: fromCookie('_gcl_gb'),
+                    wbraid: fromCookie('_gcl_gb')
+                };
+                ['gclid', 'gbraid', 'wbraid'].forEach(function (key) {
+                    var val = null;
+                    for (var i = 0; i < sources.length; i++) {
+                        val = new URLSearchParams(sources[i]).get(key);
+                        if (val) break;
+                    }
+                    if (!val) val = cookieFallback[key];
+                    if (val) out[key] = val;
+                });
+                return out;
+            }
+
+            function buildDesktopHandoffUrl() {
+                var u = new URL('https://beatcue.app/download');
+                if (window.__cue_bcid)   u.searchParams.set('bcid', window.__cue_bcid);
+                if (window.__cue_fbclid) u.searchParams.set('fbclid', window.__cue_fbclid);
+                var g = getGoogleClickIds();
+                Object.keys(g).forEach(function (k) { u.searchParams.set(k, g[k]); });
+                var utms = getUtmProps();
+                Object.keys(utms).forEach(function (k) { if (utms[k]) u.searchParams.set(k, utms[k]); });
+                return u.toString();
+            }
+
+            function trackSendToComputer(method) {
+                if (typeof fbq === 'function') {
+                    fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });
+                    fbq('trackCustom', 'send_to_computer', { content_name: 'BeatCue Send to Computer', content_category: method });
+                }
+                if (typeof gtag === 'function') {
+                    gtag('event', 'send_to_desktop', { method: method, platform: detectedDevice, source: 'landing_page_v2' });
+                    if (GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO && !window.__cue_gads_send_to_desktop_fired) {
+                        window.__cue_gads_send_to_desktop_fired = true;
+                        gtag('event', 'conversion', {
+                            send_to: GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO,
+                            value: 1.0,
+                            currency: 'ILS'
+                        });
+                    }
+                }
+                if (typeof posthog !== 'undefined' && posthog.capture) {
+                    posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: detectedDevice, source: 'landing_page_v2' });
+                }
+            }
+
+            function copyHandoffLink(url, labelEl, defaultText) {
+                if (!navigator.clipboard) return;
+                navigator.clipboard.writeText(url).then(function () {
+                    labelEl.textContent = 'Link copied!';
+                    setTimeout(function () { labelEl.textContent = defaultText; }, 4000);
+                    trackSendToComputer('copy');
+                }).catch(function () {});
+            }
+
+            function wireShareCta(btn, labelEl, iconEl) {
+                if (!btn) return;
+                var defaultText = 'Send to desktop';
+
+                if (!labelEl || labelEl === btn) {
+                    btn.innerHTML = '<span class="share-cta-icon" aria-hidden="true">' + SHARE_ICON_SVG + '</span><span class="share-cta-label">' + defaultText + '</span>';
+                    labelEl = btn.querySelector('.share-cta-label');
+                } else {
+                    if (iconEl) iconEl.innerHTML = SHARE_ICON_SVG;
+                    else {
+                        var iconSpan = document.createElement('span');
+                        iconSpan.className = 'share-cta-icon';
+                        iconSpan.setAttribute('aria-hidden', 'true');
+                        iconSpan.innerHTML = SHARE_ICON_SVG;
+                        btn.insertBefore(iconSpan, labelEl);
+                    }
+                    labelEl.textContent = defaultText;
+                }
+
+                btn.removeAttribute('href');
+                btn.removeAttribute('target');
+                btn.style.cursor = 'pointer';
+                btn.style.display = 'inline-flex';
+                btn.style.alignItems = 'center';
+                btn.style.gap = '0.5rem';
+                btn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    var url = buildDesktopHandoffUrl();
+                    if (navigator.share) {
+                        navigator.share({ title: 'BeatCue', url: url })
+                            .then(function () { trackSendToComputer('native_share'); })
+                            .catch(function (err) {
+                                if (err && err.name === 'AbortError') return;
+                                copyHandoffLink(url, labelEl, defaultText);
+                            });
+                    } else {
+                        copyHandoffLink(url, labelEl, defaultText);
+                    }
+                });
+            }
+
+            function setupMobileHandoffCtas() {
+                var noteHtml = 'Continue on desktop \u00b7 <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin';
+                wireShareCta(
+                    heroDownloadBtn,
+                    document.getElementById('heroDownloadLabel') || heroDownloadBtn,
+                    document.getElementById('heroDownloadIcon')
+                );
+                wireShareCta(pricingDownloadBtn, pricingDownloadBtn);
+                wireShareCta(beforeAfterDownloadBtn, beforeAfterDownloadBtn);
+                if (heroNote) heroNote.innerHTML = noteHtml;
+                if (pricingNote) pricingNote.innerHTML = noteHtml;
+                var baSub = document.querySelector('.ba-cta-sub');
+                if (baSub) baSub.innerHTML = noteHtml;
+            }
 
             function formatHeroInstallNote(platformSuffix) {
                 return 'Free to try \u00b7 <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin \u00b7 ' + platformSuffix;
@@ -6583,6 +6726,8 @@
                     beforeAfterDownloadBtn.style.cursor = 'not-allowed';
                     beforeAfterDownloadBtn.textContent = 'Windows coming soon';
                 }
+            } else if (useMobileHandoff) {
+                setupMobileHandoffCtas();
             } else if (isWindows || forcePlatform === 'windows') {
                 // All download CTAs go straight to the Microsoft Store on Windows.
                 var storeUrl = getMicrosoftStoreUrl();
@@ -6611,7 +6756,7 @@
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'checkout_clicked', {
                         content_name: 'BeatCue Pro',
-                        value: 9.00,
+                        value: 12.00,
                         currency: 'USD'
                     }, { eventID: eventID });
                 }
@@ -6637,7 +6782,7 @@
                             },
                             custom_data: {
                                 content_name: 'BeatCue Pro',
-                                value: 9.00,
+                                value: 12.00,
                                 currency: 'USD'
                             },
                             internal_name: 'lemonsqueezy_buy_click'
