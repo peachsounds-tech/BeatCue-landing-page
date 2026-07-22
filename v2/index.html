@@ -2343,6 +2343,38 @@
             opacity: 0.8;
         }
 
+        .mobile-handoff-sub {
+            display: block;
+        }
+
+        .mobile-handoff-platforms {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0.35rem 0.55rem;
+            width: 100%;
+            margin-top: 0.45rem;
+            text-align: center;
+        }
+
+        .mobile-handoff-platform {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .mobile-handoff-platform svg {
+            display: block;
+            flex-shrink: 0;
+            opacity: 0.9;
+        }
+
+        .mobile-handoff-sep {
+            opacity: 0.55;
+        }
+
+
         .mobile-send-actions {
             display: flex;
             flex-direction: column;
@@ -6642,7 +6674,7 @@
 
             function wireShareCta(btn, labelEl, iconEl) {
                 if (!btn) return;
-                var defaultText = 'Send to desktop';
+                var defaultText = 'Continue on Desktop';
 
                 if (!labelEl || labelEl === btn) {
                     btn.innerHTML = '<span class="share-cta-icon" aria-hidden="true">' + SHARE_ICON_SVG + '</span><span class="share-cta-label">' + defaultText + '</span>';
@@ -6682,7 +6714,18 @@
             }
 
             function setupMobileHandoffCtas() {
-                var noteHtml = 'Continue on desktop \u00b7 <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin';
+                var subtitle = 'Send the link to yourself and download it on your editing computer.';
+                var appleSmall = appleIconSvg.replace('width="18"', 'width="14"').replace('height="18"', 'height="14"');
+                var windowsSmall = windowsIconSvg.replace('width="18"', 'width="14"').replace('height="18"', 'height="14"');
+                var supportHtml =
+                    '<span class="mobile-handoff-platform"><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin</span>' +
+                    '<span class="mobile-handoff-sep">\u00b7</span>' +
+                    '<span class="mobile-handoff-platform">' + appleSmall + ' macOS</span>' +
+                    '<span class="mobile-handoff-sep">\u00b7</span>' +
+                    '<span class="mobile-handoff-platform">' + windowsSmall + ' Windows</span>';
+                var noteHtml =
+                    '<span class="mobile-handoff-sub">' + subtitle + '</span>' +
+                    '<span class="mobile-handoff-platforms">' + supportHtml + '</span>';
                 wireShareCta(
                     heroDownloadBtn,
                     document.getElementById('heroDownloadLabel') || heroDownloadBtn,
