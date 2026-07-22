@@ -803,11 +803,13 @@
             return u.toString();
         }
 
-        // Google Ads: only count real macOS downloads / Windows Store redirects.
-        // Mobile "continue on your computer" visits must NOT hit this URL.
-        // Point Ads optimization at https://beatcue.app/download-converted.html
-        // (not download.html). Optional: paste your event conversion send_to
-        // label below once you create a "Download started" conversion action.
+        // Google Ads: fire on real desktop download CTAs only (macOS auto-
+        // download / Windows Store redirect / manual download link). Mobile
+        // visitors do not call this — they hit trackMobileDownloadBlocked /
+        // the share hand-off instead. Uses the page's gtag (AW-18317916073)
+        // directly; no download-converted.html hop.
+        // Optional: paste an event conversion send_to label below once you
+        // create a "Download started" conversion action in Google Ads.
         var GOOGLE_ADS_DOWNLOAD_SEND_TO = ''; // e.g. 'AW-18317916073/AbCdEfGhIjKlMnOp'
 
         function fireGoogleAdsDownloadConversion(platform) {
@@ -827,28 +829,6 @@
                     });
                 }
             }
-
-            // URL-based Ads goals: load conversion URL only after a real download.
-            // Forward Google click IDs so download-converted.html can attribute
-            // the conversion (page-load goals / Tag Assistant expect gclid here).
-            try {
-                var convUrl = new URL('/download-converted.html', window.location.origin);
-                convUrl.searchParams.set('platform', platform);
-                convUrl.searchParams.set('source', 'download_page');
-
-                var clickIds = getGoogleClickIds();
-                Object.keys(clickIds).forEach(function (key) {
-                    convUrl.searchParams.set(key, clickIds[key]);
-                });
-
-                var iframe = document.createElement('iframe');
-                iframe.src = convUrl.pathname + convUrl.search;
-                iframe.width = 0;
-                iframe.height = 0;
-                iframe.setAttribute('aria-hidden', 'true');
-                iframe.style.cssText = 'display:none;visibility:hidden;position:absolute;left:-9999px;border:0;';
-                document.body.appendChild(iframe);
-            } catch (e) { /* never block download for analytics */ }
 
             console.log('📊 Google Ads: download conversion fired', { platform: platform });
         }

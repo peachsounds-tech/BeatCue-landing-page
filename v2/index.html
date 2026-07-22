@@ -6199,6 +6199,15 @@
                     platform: 'windows'
                 });
             }
+            // Google Ads: fire on the landing-page Windows CTA (these users
+            // never hit download.html — they go straight to the Store).
+            if (typeof gtag === 'function' && !window.__cue_gads_download_fired) {
+                window.__cue_gads_download_fired = true;
+                gtag('event', 'trial_download_started', {
+                    platform: 'windows',
+                    source: 'landing_v2_to_store'
+                });
+            }
             if (typeof posthog !== 'undefined' && posthog.capture) {
                 var props = {
                     ...(typeof getBaseEventProps === 'function' ? getBaseEventProps() : {}),
