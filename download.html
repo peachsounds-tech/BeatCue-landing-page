@@ -808,9 +808,8 @@
         // visitors do not call this — they hit trackMobileDownloadBlocked /
         // the share hand-off instead. Uses the page's gtag (AW-18317916073)
         // directly; no download-converted.html hop.
-        // Optional: paste an event conversion send_to label below once you
-        // create a "Download started" conversion action in Google Ads.
-        var GOOGLE_ADS_DOWNLOAD_SEND_TO = ''; // e.g. 'AW-18317916073/AbCdEfGhIjKlMnOp'
+        // Google Ads "Request quote" conversion — fires on desktop download CTA.
+        var GOOGLE_ADS_DOWNLOAD_SEND_TO = 'AW-18317916073/H-gBCKTHnNUcEKnv1J5E';
 
         function fireGoogleAdsDownloadConversion(platform) {
             if (window.__cue_gads_download_fired) return;
@@ -824,8 +823,8 @@
                 if (GOOGLE_ADS_DOWNLOAD_SEND_TO) {
                     gtag('event', 'conversion', {
                         send_to: GOOGLE_ADS_DOWNLOAD_SEND_TO,
-                        value: 0.0,
-                        currency: 'USD'
+                        value: 1.0,
+                        currency: 'ILS'
                     });
                 }
             }
