@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <script src="/js/page-version.js"></script>
+    <script>window.CUE_PAGE_VERSION = '4.0.0';</script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -432,7 +433,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
+        const CUE_PAGE_VERSION = '4.0.0';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -461,7 +462,7 @@
         }
 
         function getBaseEventProps() {
-            const props = { ...getUtmProps() };
+            const props = { ...getUtmProps(), page_version: CUE_PAGE_VERSION };
             if (isInternalTester) {
                 props.is_internal = true;
             }
@@ -5983,7 +5984,8 @@
             // Build event properties (only include non-null values)
             const eventProps = {
                 url: window.location.href,
-                page: 'landing_v2'
+                page: 'landing_v2',
+                page_version: CUE_PAGE_VERSION
             };
             
             if (utms.utm_source) eventProps.utm_source = utms.utm_source;
@@ -6029,6 +6031,7 @@
                 // Pre-consent mode: track event with UTMs but no person properties
                 var anonProps = {
                     page: 'landing_v2',
+                    page_version: CUE_PAGE_VERSION,
                     url: window.__cue_initial_url || window.location.href,
                     referrer: document.referrer || 'direct',
                     screen_width: window.screen.width,
