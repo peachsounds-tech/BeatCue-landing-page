@@ -116,9 +116,16 @@
         try {
             var params = new URLSearchParams(window.location.search);
             var fromUrl = params.get('bcid') || params.get('ph_id');
-            var b = normalize(sessionStorage.getItem('cue_bcid'))
-                 || normalize(fromUrl)
+            // localStorage, not sessionStorage: sessionStorage is scoped to a
+            // single tab, so a buyer who opened checkout in a new tab minted a
+            // fresh bcid and PostHog bootstrapped them as a brand-new person.
+            // An explicit ?bcid= still wins so an app-initiated handoff can
+            // adopt the identity the plugin already knows.
+            var b = normalize(fromUrl)
+                 || normalize(localStorage.getItem('cue_bcid'))
+                 || normalize(sessionStorage.getItem('cue_bcid'))
                  || mint();
+            localStorage.setItem('cue_bcid', b);
             sessionStorage.setItem('cue_bcid', b);
             return b;
         } catch (e) {
@@ -6420,9 +6427,36 @@
             });
         }
         
+        // Carry the bcid into the checkout so the purchase webhook can key the
+        // order on the buyer rather than only on their email hash. Done at load
+        // time, not in the click handler, so the href is already correct
+        // whenever the browser reads it — a handler that rewrites href during
+        // onclick races the navigation.
+        (function carryBcidIntoCheckoutLinks() {
+            if (!window.__cue_bcid) return;
+            var links = document.querySelectorAll(
+                'a[href*="lemonsqueezy.com/checkout"], a[href*="/get"]');
+            Array.prototype.forEach.call(links, function (a) {
+                try {
+                    var u = new URL(a.getAttribute('href'), window.location.origin);
+                    if (u.hostname.indexOf('lemonsqueezy.com') !== -1)
+                        u.searchParams.set('checkout[custom][bcid]', window.__cue_bcid);
+                    else
+                        u.searchParams.set('bcid', window.__cue_bcid);
+                    a.setAttribute('href', u.toString());
+                } catch (e) { /* leave the CTA working even if URL parsing fails */ }
+            });
+        })();
+
         // ============================================
-        // CHECKOUT TRACKING
-        // Pass PostHog distinct_id to Lemon Squeezy for user aliasing
+        // CHECKOUT TRACKING — DEAD CODE, DO NOT REVIVE
+        // No element on this page carries `.lemonsqueezy-button`, so none of
+        // this has ever executed. Both jobs it was meant to do now live
+        // elsewhere: the bcid goes onto the checkout href in
+        // carryBcidIntoCheckoutLinks() just above, and `checkout_started` is
+        // fired by trackInitiateCheckout(). Adding the class back would
+        // double-fire `checkout_started`. Delete this block rather than wiring
+        // it up.
         // ============================================
         
         const checkoutBtn = document.querySelector('.lemonsqueezy-button');
