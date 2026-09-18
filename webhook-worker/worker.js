@@ -379,6 +379,19 @@ async function mergeUsers(oldAnonymousId, newIdentifiedId) {
 }
 
 /**
+ * Pull the bcid out of wherever Lemon Squeezy put the checkout custom data.
+ * Returns null when the checkout carried no identity, in which case callers fall
+ * back to the hashed email and the order has to be merged in afterwards.
+ */
+function extractBcid(data) {
+    const attrs = data.data?.attributes;
+    return data.meta?.custom_data?.bcid
+        || attrs?.custom_data?.bcid
+        || attrs?.first_order_item?.custom_data?.bcid
+        || null;
+}
+
+/**
  * Handle order_created event (for one-time purchases or lead magnets)
  */
 async function handleOrderCreated(data) {
@@ -409,12 +422,26 @@ async function handleOrderCreated(data) {
         || firstOrderItemCustomData.posthog_id 
         || null;
     
+    // The bcid is the identity the plugin and the landing page both already key
+    // on. When the checkout carried one we can record the order straight onto
+    // that person, which removes the merge step instead of capturing against a
+    // hashed email and depending on a later $create_alias landing.
+    const bcid = extractBcid(data);
+    
+    // Who the order gets recorded against.
+    const distinctId = bcid || hashedEmail;
+    
     console.log('=== Extracted Values ===');
     console.log('hashedEmail:', hashedEmail);
     console.log('posthogId:', posthogId);
+    console.log('bcid:', bcid);
+    console.log('recording order against:', distinctId);
     
-    // Step 1: If we have the anonymous PostHog ID, merge it with the hashed email
-    if (posthogId && posthogId !== hashedEmail) {
+    // Step 1: Merge only when we fell back to the hashed email. A bcid means the
+    // events already land on the buyer and there is nothing to reconcile.
+    if (bcid) {
+        console.log('bcid present - attributing directly, no merge required');
+    } else if (posthogId && posthogId !== hashedEmail) {
         console.log('Merging users: connecting OLD anonymous ID to NEW hashed email...');
         console.log(`  OLD (anonymous): ${posthogId}`);
         console.log(`  NEW (identified): ${hashedEmail}`);
@@ -424,7 +451,7 @@ async function handleOrderCreated(data) {
         console.log('Merge result:', mergeSuccess ? 'SUCCESS' : 'FAILED');
         
     } else if (!posthogId) {
-        console.log('No posthog_id found in any custom_data location - cannot merge');
+        console.log('No bcid or posthog_id in any custom_data location - cannot merge');
     }
     
     // Step 2: Send checkout_completed event (using hashed email as distinct_id)
@@ -439,12 +466,16 @@ async function handleOrderCreated(data) {
         // Include anonymous PostHog ID for reference
         anonymous_posthog_id: posthogId,
         // Include hashed email for verification
-        hashed_email: hashedEmail
+        hashed_email: hashedEmail,
+        // Which identity the order was attributed to, so a bcid-less order is
+        // visible as such rather than silently looking the same as a good one.
+        bcid: bcid,
+        attributed_via: bcid ? 'bcid' : (posthogId ? 'posthog_id_merge' : 'hashed_email_only')
     };
     
-    console.log('Sending checkout_completed to PostHog with distinct_id:', hashedEmail);
+    console.log('Sending checkout_completed to PostHog with distinct_id:', distinctId);
     
-    const success = await sendToPostHog('checkout_completed', hashedEmail, properties);
+    const success = await sendToPostHog('checkout_completed', distinctId, properties);
     
     if (success) {
         console.log('PostHog checkout_completed event sent successfully');
@@ -462,7 +493,7 @@ async function handleOrderCreated(data) {
         body: JSON.stringify({
             api_key: POSTHOG_API_KEY,
             event: '$set',
-            distinct_id: hashedEmail,
+            distinct_id: distinctId,
             properties: {
                 $set: {
                     user_type: isEarlyAccess ? 'early_access' : 'standard',
@@ -486,16 +517,18 @@ async function handleSubscriptionCreated(data) {
     if (!email) return;
     
     const hashedEmail = await hashEmail(email);
+    const bcid = extractBcid(data);
     
     const properties = {
         subscription_id: data.data?.id,
         status: subscription?.status,
         product_name: subscription?.product_name,
         variant_name: subscription?.variant_name,
-        hashed_email: hashedEmail
+        hashed_email: hashedEmail,
+        bcid: bcid
     };
     
-    await sendToPostHog('subscription_created', hashedEmail, properties);
+    await sendToPostHog('subscription_created', bcid || hashedEmail, properties);
 }
 
 /**
@@ -508,15 +541,17 @@ async function handleLicenseKeyCreated(data) {
     if (!email) return;
     
     const hashedEmail = await hashEmail(email);
+    const bcid = extractBcid(data);
     
     const properties = {
         license_id: data.data?.id,
         license_key: license?.key,  // The actual license key
         status: license?.status,
-        hashed_email: hashedEmail
+        hashed_email: hashedEmail,
+        bcid: bcid
     };
     
-    await sendToPostHog('license_key_created', hashedEmail, properties);
+    await sendToPostHog('license_key_created', bcid || hashedEmail, properties);
 }
 
 // ─── Pairing helpers ──────────────────────────────────────────────────────────
