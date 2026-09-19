@@ -22,6 +22,14 @@
         // After launch: point to the paid checkout URL
         // ============================================
         const PRODUCT_URL = 'https://beatcue.lemonsqueezy.com/checkout/buy/f2c36877-ec5f-45c4-ad3f-d17a9863c3ca';
+        const POSTHOG_API_KEY  = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
+        const POSTHOG_API_HOST = 'https://t.beatcue.app';
+
+        // Budget before leaving, matching /go: fetch(keepalive) survives unload,
+        // but a brief in-process window helps browsers actually hand the request
+        // to the network stack. Second timer in case the first is starved.
+        const REDIRECT_BUDGET_MS = 300;
+        const HARD_REDIRECT_CAP_MS = 1500;
 
         const params = new URLSearchParams(window.location.search);
         const email = params.get('email');
@@ -35,7 +43,73 @@
             if (v) redirect.searchParams.set(k, v);
         });
 
-        window.location.replace(redirect.toString());
+        // Resolve the bcid the same way the landing page does, so a checkout
+        // opened from the plugin (which passes ?bcid=) or from a browser that
+        // has already seen the site keeps one identity through to the webhook.
+        // Kept in sync with getOrCreateBcid() in ../index.html.
+        const bcid = (function () {
+            const VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+            const normalize = function (raw) {
+                if (!raw || typeof raw !== 'string') return null;
+                let trimmed = raw.trim();
+                if (!trimmed) return null;
+                if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
+                return VALID.test(trimmed) ? trimmed : null;
+            };
+            try {
+                return normalize(params.get('bcid') || params.get('ph_id'))
+                    || normalize(localStorage.getItem('cue_bcid'))
+                    || normalize(sessionStorage.getItem('cue_bcid'));
+            } catch (e) {
+                return null;
+            }
+        })();
+        // Deliberately not minted here. A fresh id would only create another
+        // orphan person; absent is more honest than invented.
+        if (bcid) redirect.searchParams.set('checkout[custom][bcid]', bcid);
+
+        // This page used to be completely silent, which is why purchases could
+        // appear with no preceding click anywhere in analytics. No SDK: the
+        // PostHog snippet is async and will not flush before location.replace().
+        try {
+            fetch(POSTHOG_API_HOST + '/e/', {
+                method: 'POST',
+                mode: 'cors',
+                credentials: 'omit',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_key: POSTHOG_API_KEY,
+                    event: 'checkout_started',
+                    distinct_id: bcid || ('anon_get_' + Date.now()),
+                    timestamp: new Date().toISOString(),
+                    properties: {
+                        $lib: 'web-get',
+                        $lib_version: '1.0.0',
+                        $current_url: window.location.href,
+                        $pathname: window.location.pathname,
+                        $referrer: document.referrer || '$direct',
+                        page: 'get',
+                        source: 'get_redirect',
+                        plan: 'cue_pro',
+                        had_bcid: !!bcid,
+                        from_email_param: !!email
+                    }
+                })
+            }).catch(function () {});
+        } catch (e) { /* never block the redirect on analytics */ }
+
+        let didRedirect = false;
+        function go() {
+            if (didRedirect) return;
+            didRedirect = true;
+            window.location.replace(redirect.toString());
+        }
+        setTimeout(go, REDIRECT_BUDGET_MS);
+        setTimeout(go, HARD_REDIRECT_CAP_MS);
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') go();
+        }, { once: true });
     </script>
     <noscript>
         <meta http-equiv="refresh" content="0;url=https://beatcue.lemonsqueezy.com/checkout/buy/f2c36877-ec5f-45c4-ad3f-d17a9863c3ca">
