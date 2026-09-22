@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="/js/page-version.js"></script>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'AW-18317916073');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Choose your plan — BeatCue</title>
+    <meta name="description" content="Upgrade to BeatCue Pro or Studios. Unlimited projects, billed monthly or yearly.">
+    <link rel="icon" type="image/png" href="/favicon.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://assets.lemonsqueezy.com/lemon.js" defer></script>
+
+    <style>
+        :root {
+            --peach-orange: #FF6B35;
+            --peach-orange-dark: #E55A28;
+            --wave-blue: #4A90D9;
+            --wave-blue-dark: #3A7BC4;
+
+            --bg-primary: #FFFFFF;
+            --bg-secondary: #F5F5F7;
+            --bg-tertiary: #EAEAEC;
+
+            --bg-card: #2D2D3A;
+
+            --text-primary: #1a1a1a;
+            --text-secondary: #555555;
+            --text-muted: #888888;
+
+            --text-on-card: #FFFFFF;
+            --text-on-card-secondary: #A0A0B0;
+
+            --border-card: rgba(255, 255, 255, 0.05);
+            --early-access-green: #10B981;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(160deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 3rem 1.5rem 4rem;
+        }
+
+        .plans-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 2.5rem;
+        }
+        .plans-brand img { width: 34px; height: 34px; border-radius: 8px; }
+        .plans-brand span { font-size: 1.25rem; font-weight: 700; }
+
+        .plans-header { text-align: center; max-width: 640px; margin-bottom: 1.75rem; }
+        .plans-header h1 { font-size: 2.25rem; font-weight: 700; margin-bottom: 0.75rem; }
+        .plans-header p { font-size: 1rem; color: var(--text-secondary); }
+
+        /* ============================================
+           BILLING PERIOD TOGGLE
+        ============================================ */
+        .billing-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.3rem;
+            margin-bottom: 2.25rem;
+            background: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(0, 0, 0, 0.07);
+            border-radius: 50px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .billing-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.35rem;
+            border: none;
+            border-radius: 50px;
+            background: transparent;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .billing-option:hover { color: var(--text-primary); }
+        .billing-option.is-active {
+            background: var(--bg-card);
+            color: var(--text-on-card);
+            box-shadow: 0 2px 10px rgba(45, 45, 58, 0.25);
+        }
+        .billing-save {
+            background: var(--early-access-green);
+            color: #FFFFFF;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            padding: 0.2rem 0.55rem;
+            border-radius: 50px;
+            white-space: nowrap;
+        }
+
+        /* ============================================
+           PRICING CARDS (mirrors landing .pricing-card)
+        ============================================ */
+        .pricing-cards {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 820px;
+            flex-wrap: wrap;
+        }
+
+        .pricing-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 16px;
+            padding: 1.75rem;
+            position: relative;
+            flex: 0 1 380px;
+            max-width: 380px;
+            min-width: 280px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .pricing-card:hover { transform: translateY(-4px); }
+
+        .pricing-card--primary { padding: 2rem; }
+        .pricing-card--primary:hover { box-shadow: 0 12px 40px rgba(74, 144, 217, 0.15); }
+
+        .plan-badge {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--wave-blue);
+            color: white;
+            padding: 0.35rem 1.25rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            box-shadow: 0 4px 12px rgba(74, 144, 217, 0.3);
+            white-space: nowrap;
+            z-index: 10;
+        }
+        .plan-badge--soon { background: var(--wave-blue-dark); }
+
+        .pricing-card--pro::before,
+        .pricing-card--studios::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            border-radius: 16px 16px 0 0;
+        }
+        .pricing-card--pro::before { background: var(--wave-blue); }
+        .pricing-card--pro .plan-badge {
+            background: var(--wave-blue);
+            box-shadow: 0 4px 12px rgba(74, 144, 217, 0.35);
+        }
+        .pricing-card--pro .plan-price .price {
+            background: var(--wave-blue);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .pricing-card--pro:hover { box-shadow: 0 12px 40px rgba(74, 144, 217, 0.15); }
+
+        .pricing-card--studios::before { background: var(--peach-orange); }
+        .pricing-card--studios .plan-badge {
+            background: var(--peach-orange);
+            color: white;
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+        }
+        .pricing-card--studios .plan-price .price {
+            background: var(--peach-orange);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .pricing-card--studios:hover { box-shadow: 0 12px 40px rgba(255, 107, 53, 0.18); }
+        .pricing-card--studios .btn-team {
+            background: var(--peach-orange);
+            color: white;
+            border: none;
+            box-shadow: 0 2px 10px rgba(255, 107, 53, 0.3);
+        }
+        .pricing-card--studios .btn-team:hover {
+            background: var(--peach-orange-dark);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 18px rgba(255, 107, 53, 0.45);
+            transform: translateY(-2px);
+        }
+
+        .plan-price { margin-bottom: 0.75rem; }
+        .plan-price .price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: var(--wave-blue);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .plan-price .period { color: var(--text-on-card-secondary); font-size: 0.9rem; margin-left: 0.25rem; }
+
+        .plan-description { color: var(--text-on-card-secondary); margin-bottom: 1rem; font-size: 0.9rem; }
+
+        .plan-features { list-style: none; margin: 1.25rem 0; text-align: left; }
+        .plan-features li {
+            padding: 0.5rem 0;
+            color: var(--text-on-card-secondary);
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border-card);
+        }
+        .plan-features li:last-child { border-bottom: none; }
+        .plan-features li::before { content: '✓ '; color: var(--early-access-green); font-weight: 600; }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 52px;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 1.05rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+        .btn-primary {
+            background: var(--wave-blue);
+            color: white;
+            box-shadow: 0 2px 10px rgba(74, 144, 217, 0.25);
+        }
+        .btn-primary:hover { background: var(--wave-blue-dark); transform: translateY(-2px); box-shadow: 0 4px 18px rgba(74, 144, 217, 0.35); }
+        .btn-team {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-on-card);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .btn-team:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); transform: translateY(-2px); }
+
+        .plan-note { margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-on-card-secondary); text-align: center; }
+
+        .plans-secure {
+            margin-top: 2.25rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .plans-secure svg { width: 13px; height: 13px; opacity: 0.7; }
+
+        .plans-back { margin-top: 1.25rem; font-size: 0.85rem; }
+        .plans-back a { color: var(--text-muted); text-decoration: none; }
+        .plans-back a:hover { color: var(--text-secondary); text-decoration: underline; }
+
+        @media (max-width: 520px) {
+            .plans-header h1 { font-size: 1.85rem; }
+            .pricing-card { padding: 1.5rem; }
+            .billing-option { padding: 0.55rem 1rem; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="plans-brand">
+        <img src="/icon.png" alt="BeatCue">
+        <span>BeatCue</span>
+    </div>
+
+    <div class="plans-header">
+        <h1>Choose your plan</h1>
+        <p>Unlimited projects, all editing features, and every future update. Cancel anytime.</p>
+    </div>
+
+    <!-- Prices, periods, notes and checkout hrefs inside the cards below are
+         all rewritten by applyBilling(); the markup ships the yearly values so
+         the page reads correctly before the script runs. -->
+    <div class="billing-toggle" role="group" aria-label="Billing period">
+        <button type="button" class="billing-option" data-billing="monthly" aria-pressed="false">Monthly</button>
+        <button type="button" class="billing-option is-active" data-billing="yearly" aria-pressed="true">
+            Yearly
+            <span class="billing-save">Save 17%</span>
+        </button>
+    </div>
+
+    <div class="pricing-cards">
+        <div class="pricing-card pricing-card--primary pricing-card--pro" data-plan-card="pro">
+            <div class="plan-badge">Pro</div>
+            <div class="plan-price">
+                <span class="price">$199</span>
+                <span class="period">/ year</span>
+            </div>
+            <p class="plan-description">Unlimited projects and a license that covers client work.</p>
+            <ul class="plan-features">
+                <li>All editing features</li>
+                <li>Unlimited projects</li>
+                <li>1 seat</li>
+                <li>Licensed for client work</li>
+                <li>Unlimited exports</li>
+                <li>Premiere Pro plugin · macOS &amp; Windows</li>
+            </ul>
+            <a href="https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810?embed=1&media=0&desc=0&discount=0"
+               class="btn btn-primary lemonsqueezy-button" id="checkoutPro" data-plan="pro">
+                Get BeatCue Pro
+            </a>
+            <p class="plan-note">Billed annually</p>
+        </div>
+
+        <div class="pricing-card pricing-card--studios" data-plan-card="team">
+            <div class="plan-badge">Studios</div>
+            <div class="plan-price">
+                <span class="price">$1790</span>
+                <span class="period">/ year</span>
+            </div>
+            <p class="plan-description">Ten seats, unlimited projects, one renewal to manage.</p>
+            <ul class="plan-features">
+                <li>All editing features</li>
+                <li>Unlimited projects</li>
+                <li>10 seats</li>
+                <li>Licensed for client work</li>
+                <li>Unlimited exports</li>
+                <li>Premiere Pro plugin · macOS &amp; Windows</li>
+            </ul>
+            <a href="https://beatcue.lemonsqueezy.com/checkout/buy/d30f22ec-659f-46f5-80e7-36922800352e?embed=1&media=0&desc=0&discount=0"
+               class="btn btn-team lemonsqueezy-button" id="checkoutTeam" data-plan="team">
+                Get BeatCue Studios
+            </a>
+            <p class="plan-note">Billed annually · 10 seats</p>
+        </div>
+    </div>
+
+    <div class="plans-secure">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        Secure checkout powered by Lemon Squeezy
+    </div>
+    <div class="plans-back"><a href="/">← Back to BeatCue</a></div>
+
+    <script>
+        // ============================================
+        // Identity + attribution (mirrors landing / get)
+        // ============================================
+        var POSTHOG_API_KEY  = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
+        var POSTHOG_API_HOST = 'https://t.beatcue.app';
+        var PAIRINGS_BASE    = 'https://peachsounds-webhook.sareldu.workers.dev';
+
+        // Each plan carries a separate Lemon Squeezy product per billing period
+        // — there is no period switch on their side, so the toggle swaps the
+        // whole checkout URL rather than a parameter on one.
+        var PLANS = {
+            pro: {
+                content_name: 'BeatCue Pro',
+                yearly: {
+                    price: '$199', period: '/ year', value: 199.00, note: 'Billed annually',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810'
+                },
+                monthly: {
+                    price: '$20', period: '/ month', value: 20.00, note: 'Billed monthly',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/3a61a400-7a58-404c-a0a2-1e8266b46e12'
+                }
+            },
+            team: {
+                content_name: 'BeatCue Studios',
+                yearly: {
+                    price: '$1790', period: '/ year', value: 1790.00, note: 'Billed annually · 10 seats',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/d30f22ec-659f-46f5-80e7-36922800352e'
+                },
+                monthly: {
+                    price: '$179', period: '/ month', value: 179.00, note: 'Billed monthly · 10 seats',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/b04c3075-7576-40b9-a2f7-ab2eba13df59'
+                }
+            }
+        };
+
+        function getCookie(name) {
+            var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+            return match ? decodeURIComponent(match[2]) : null;
+        }
+
+        // Resolve the bcid the same way index.html / get do, so a checkout
+        // opened from the plugin (?bcid=) or a returning browser keeps one
+        // identity all the way through to the webhook.
+        function resolveBcid() {
+            var VALID = /^bc_[A-Za-z0-9-]{8,64}$/;
+            var normalize = function (raw) {
+                if (!raw || typeof raw !== 'string') return null;
+                var trimmed = raw.trim();
+                if (!trimmed) return null;
+                if (!/^bc_/.test(trimmed)) trimmed = 'bc_' + trimmed;
+                return VALID.test(trimmed) ? trimmed : null;
+            };
+            var mint = function () {
+                return 'bc_' + (crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : (Date.now() + '-' + Math.random().toString(36).slice(2)));
+            };
+            try {
+                var p = new URLSearchParams(window.location.search);
+                var b = normalize(p.get('bcid') || p.get('ph_id'))
+                     || normalize(localStorage.getItem('cue_bcid'))
+                     || normalize(sessionStorage.getItem('cue_bcid'))
+                     || mint();
+                localStorage.setItem('cue_bcid', b);
+                sessionStorage.setItem('cue_bcid', b);
+                return b;
+            } catch (e) { return mint(); }
+        }
+
+        var params  = new URLSearchParams(window.location.search);
+        var bcid    = resolveBcid();
+        var hadBcid = !!(params.get('bcid') || params.get('ph_id'));
+        var srcParam = params.get('source') || 'plans';
+        window.__cue_bcid = bcid;
+
+        // ============================================
+        // Meta match keys — URL first, cookie second
+        // ============================================
+        // The plugin puts its own cue_fbp / cue_fbc / cue_fbclid on the /get
+        // link, and /get forwards them here untouched. That ordering is the
+        // whole point: someone who installed from an ad and never opened
+        // beatcue.app reaches this page with no _fbp/_fbc cookie at all, and
+        // Meta discards a conversion whose only identifiers are IP and
+        // user-agent. Preferring the cookie would throw away the one strong
+        // identifier such a visitor has.
+        function writeCookie(name, value, maxAgeSeconds) {
+            if (!value) return;
+            try {
+                var host = location.hostname || '';
+                var attrs = name + '=' + value
+                    + '; max-age=' + maxAgeSeconds
+                    + '; path=/'
+                    + '; SameSite=Lax'
+                    + (location.protocol === 'https:' ? '; Secure' : '');
+                // Pin to the apex so the landing page reads the same value.
+                // Skipped on localhost / IPs, where the browser would drop it.
+                if (host.indexOf('.') !== -1 && !/^\d+(\.\d+)+$/.test(host)) {
+                    document.cookie = attrs + '; domain=.' + host.split('.').slice(-2).join('.');
+                } else {
+                    document.cookie = attrs;
+                }
+            } catch (e) { /* strict cookie policy — the in-memory value still ships */ }
+        }
+
+        var fbclid = params.get('fbclid') || (function () {
+            try { return sessionStorage.getItem('cue_fbclid'); } catch (e) { return null; }
+        })();
+        if (fbclid) { try { sessionStorage.setItem('cue_fbclid', fbclid); } catch (e) {} }
+
+        var fbp = params.get('fbp') || getCookie('_fbp');
+        var fbc = params.get('fbc') || getCookie('_fbc')
+               || (fbclid ? 'fb.1.' + Date.now() + '.' + fbclid : null);
+
+        // Adopt whatever the app handed us so a reload, or a hop back to the
+        // landing page, keeps reporting against the same browser identity.
+        writeCookie('_fbp', fbp, 90 * 24 * 3600);
+        writeCookie('_fbc', fbc, 90 * 24 * 3600);
+
+        var emailParam = params.get('email');
+
+        window.__cue_fbp    = fbp;
+        window.__cue_fbc    = fbc;
+        window.__cue_fbclid = fbclid;
+
+        // Every attribution param the app or an ad click can arrive with. Kept
+        // in one list so the checkout links, PostHog, and CAPI all speak about
+        // the same set instead of drifting apart.
+        var CLICK_IDS = ['gclid', 'gbraid', 'wbraid', 'fbclid', 'ttclid', 'msclkid'];
+        var UTMS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+
+        function attributionProps() {
+            // `source` is the surface, matching the landing pages, so a funnel
+            // can break checkout_started down by page. Where the visitor came
+            // from — the in-app button, /get, an ad — is entry_source.
+            var props = {
+                source: 'plans_page',
+                entry_source: srcParam,
+                billing_period: currentBilling,
+                had_bcid: hadBcid,
+                bcid: bcid,
+                has_fbp: !!fbp,
+                has_fbc: !!fbc,
+                has_email: !!emailParam
+            };
+            CLICK_IDS.concat(UTMS).forEach(function (k) {
+                var v = params.get(k);
+                if (v) props[k] = v;
+            });
+            return props;
+        }
+
+        // Carry email / bcid / click-ids / UTMs onto a checkout link so nothing
+        // the app sent is dropped at the last hop, and the webhook sees the
+        // same bcid the page reported on. Applied every time the toggle swaps
+        // an href, not once at load, or switching period would strip it all.
+        function decorateCheckoutUrl(baseUrl) {
+            try {
+                var u = new URL(baseUrl);
+                u.searchParams.set('embed', '1');
+                u.searchParams.set('media', '0');
+                u.searchParams.set('desc', '0');
+                u.searchParams.set('discount', '0');
+                if (emailParam) u.searchParams.set('checkout[email]', emailParam);
+                if (bcid)       u.searchParams.set('checkout[custom][bcid]', bcid);
+                if (srcParam)   u.searchParams.set('checkout[custom][source]', srcParam);
+                CLICK_IDS.concat(UTMS).forEach(function (k) {
+                    var v = params.get(k);
+                    if (v) u.searchParams.set(k, v);
+                });
+                return u.toString();
+            } catch (e) {
+                return baseUrl;
+            }
+        }
+
+        function refreshLemonOverlay() {
+            try {
+                if (window.LemonSqueezy && typeof window.LemonSqueezy.Refresh === 'function')
+                    window.LemonSqueezy.Refresh();
+                else if (typeof window.createLemonSqueezy === 'function')
+                    window.createLemonSqueezy();
+            } catch (e) {}
+        }
+
+        // ?billing=monthly lets an ad or a future in-app button land on the
+        // monthly view directly. Anything else falls back to yearly.
+        var currentBilling = params.get('billing') === 'monthly' ? 'monthly' : 'yearly';
+
+        function applyBilling(billing) {
+            currentBilling = billing;
+
+            document.querySelectorAll('[data-plan-card]').forEach(function (card) {
+                var plan = PLANS[card.getAttribute('data-plan-card')];
+                if (!plan) return;
+                var tier = plan[billing];
+                card.querySelector('.price').textContent = tier.price;
+                card.querySelector('.period').textContent = tier.period;
+                card.querySelector('.plan-note').textContent = tier.note;
+                var link = card.querySelector('a[data-plan]');
+                if (link) link.setAttribute('href', decorateCheckoutUrl(tier.url));
+            });
+
+            refreshLemonOverlay();
+
+            document.querySelectorAll('.billing-option').forEach(function (btn) {
+                var on = btn.getAttribute('data-billing') === billing;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+        }
+
+        applyBilling(currentBilling);
+
+        // ============================================
+        // PostHog (memory-only, bootstrap on bcid) — mirrors landing
+        // ============================================
+        !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once identify get_distinct_id".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+
+        try {
+            posthog.init(POSTHOG_API_KEY, {
+                api_host: POSTHOG_API_HOST,
+                ui_host: 'https://us.posthog.com',
+                persistence: 'memory',
+                autocapture: false,
+                capture_pageview: false,
+                person_profiles: 'identified_only',
+                bootstrap: { distinctID: bcid }
+            });
+            posthog.register({ page_version: (window.CUE_PAGE_VERSION || 'plans'), page: 'plans' });
+
+            var loadProps = attributionProps();
+            loadProps.page = 'plans';
+            loadProps.$current_url = window.location.href;
+
+            posthog.capture('page_viewed', loadProps);
+            posthog.capture('plans_page_viewed', loadProps);
+        } catch (e) { /* analytics must never block the page */ }
+
+        // Only used when the document is about to unload (Back). A page-load
+        // keepalive used to fire a second plans_page_viewed with $lib web-plans
+        // and no $current_url — that is the "—" row in PostHog.
+        function postHogKeepalive(eventName, baseProps) {
+            try {
+                var props = Object.assign({}, baseProps, {
+                    $lib: 'web-plans',
+                    page: 'plans',
+                    via: 'keepalive'
+                });
+                fetch(POSTHOG_API_HOST + '/e/', {
+                    method: 'POST', mode: 'cors', credentials: 'omit', keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api_key: POSTHOG_API_KEY,
+                        event: eventName,
+                        distinct_id: bcid,
+                        timestamp: new Date().toISOString(),
+                        properties: props
+                    })
+                }).catch(function () {});
+            } catch (e) {}
+        }
+
+        function capturePlans(eventName, extra, keepalive) {
+            var props = Object.assign(attributionProps(), extra || {});
+            if (typeof posthog !== 'undefined' && posthog.capture) {
+                posthog.capture(eventName, props);
+            }
+            // Keepalive only when the page is about to go away. Sending it on
+            // every click doubles the event: the SDK already delivered one,
+            // and PostHog has no shared event_id to collapse the two.
+            if (keepalive) postHogKeepalive(eventName, props);
+        }
+
+        document.querySelectorAll('.billing-option').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var next = btn.getAttribute('data-billing');
+                var previous = currentBilling;
+                var changed = next !== currentBilling;
+                if (changed) applyBilling(next);
+                capturePlans('billing_period_toggled', {
+                    billing_period: next,
+                    previous_billing_period: previous,
+                    changed: changed
+                });
+            });
+        });
+
+        var backLink = document.querySelector('.plans-back a');
+        if (backLink) {
+            backLink.addEventListener('click', function () {
+                capturePlans('plans_back_clicked', {
+                    href: backLink.getAttribute('href') || '/'
+                }, true);
+            });
+        }
+
+        // ============================================
+        // Checkout click tracking
+        // ============================================
+        function newEventId() {
+            return crypto.randomUUID
+                ? crypto.randomUUID()
+                : String(Date.now()) + Math.random().toString(36).slice(2);
+        }
+
+        // One user_data shape for every CAPI send from this page. Cookies are
+        // re-read at click time rather than reused from load: if fbevents.js
+        // wrote a real _fbp after we minted ours, the Pixel's value is the one
+        // Meta will see browser-side and the two legs have to agree.
+        function capiUserData() {
+            return {
+                fbp: getCookie('_fbp') || fbp || null,
+                fbc: getCookie('_fbc') || fbc || null,
+                fbclid: fbclid || null,
+                external_id: bcid || null,
+                em_raw: emailParam || null
+            };
+        }
+
+        function sendCapi(eventName, eventId, customData, internalName) {
+            try {
+                fetch(PAIRINGS_BASE + '/capi', {
+                    method: 'POST', mode: 'cors', credentials: 'omit', keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        event_name: eventName,
+                        event_id: eventId,
+                        event_source_url: window.location.href,
+                        action_source: 'website',
+                        user_data: capiUserData(),
+                        custom_data: customData,
+                        internal_name: internalName
+                    })
+                }).catch(function () {});
+            } catch (e) { /* never block the click */ }
+        }
+
+        // Lemon.js documents Checkout.Success but not a close event. The overlay
+        // adds `lemonsqueezy-open` on <body> and an iframe; when those go away
+        // without a success we treat it as checkout_cancel (X, Cancel, backdrop).
+        var lastCheckout = null;
+        var overlayOpened = false;
+        var overlayCompleted = false;
+        var cancelReported = false;
+        var completedReported = false;
+
+        function overlayIsOpen() {
+            return document.body.classList.contains('lemonsqueezy-open')
+                || !!document.querySelector('iframe[src*="lemonsqueezy.com"]');
+        }
+
+        function rememberCheckout(plan, info, tier) {
+            lastCheckout = {
+                plan: plan,
+                content_name: info.content_name,
+                value: tier.value
+            };
+            overlayOpened = false;
+            overlayCompleted = false;
+            cancelReported = false;
+            completedReported = false;
+        }
+
+        function reportCheckoutCancel(reason) {
+            if (cancelReported || overlayCompleted || !lastCheckout || !overlayOpened)
+                return;
+            cancelReported = true;
+            capturePlans('checkout_cancel', {
+                plan: lastCheckout.plan,
+                content_name: lastCheckout.content_name,
+                value: lastCheckout.value,
+                close_reason: reason || 'overlay_closed'
+            });
+        }
+
+        function orderFromLemon(event) {
+            var data = (event && event.data) || event || {};
+            if (data.data && typeof data.data === 'object')
+                data = data.data;
+            var attrs = data.attributes || data.order || data;
+            return {
+                order_id: data.id || attrs.id || attrs.identifier || null,
+                order_number: attrs.order_number || null,
+                total: attrs.total || attrs.total_usd || null,
+                currency: attrs.currency || 'USD',
+                has_email: !!(attrs.user_email || attrs.customer_email || data.user_email)
+            };
+        }
+
+        function reportCheckoutCompleted(event) {
+            overlayCompleted = true;
+            if (completedReported) return;
+            completedReported = true;
+            var order = orderFromLemon(event);
+            var extra = {
+                order_id: order.order_id,
+                order_number: order.order_number,
+                currency: order.currency,
+                has_email: order.has_email,
+                via: 'overlay'
+            };
+            if (lastCheckout) {
+                extra.plan = lastCheckout.plan;
+                extra.content_name = lastCheckout.content_name;
+                extra.value = order.total != null ? order.total : lastCheckout.value;
+            } else if (order.total != null) {
+                extra.value = order.total;
+            }
+            capturePlans('checkout_completed', extra);
+        }
+
+        (function watchCheckoutOverlay() {
+            var check = function () {
+                var open = overlayIsOpen();
+                if (open) {
+                    overlayOpened = true;
+                    return;
+                }
+                if (overlayOpened)
+                    reportCheckoutCancel('overlay_closed');
+            };
+            var mo = new MutationObserver(check);
+            mo.observe(document.body, {
+                attributes: true,
+                attributeFilter: ['class'],
+                childList: true
+            });
+
+            function lemonEventName(ev) {
+                if (!ev) return '';
+                if (typeof ev === 'string') return ev;
+                return ev.event || ev.type || ev.name || '';
+            }
+
+            function setupLemonEvents() {
+                if (!window.LemonSqueezy || typeof window.LemonSqueezy.Setup !== 'function') {
+                    setTimeout(setupLemonEvents, 400);
+                    return;
+                }
+                window.LemonSqueezy.Setup({
+                    eventHandler: function (event) {
+                        var name = lemonEventName(event);
+                        if (/success/i.test(name)) {
+                            reportCheckoutCompleted(event);
+                            return;
+                        }
+                        if (/close|cancel/i.test(name))
+                            reportCheckoutCancel(name);
+                    }
+                });
+            }
+            setupLemonEvents();
+
+            window.addEventListener('message', function (e) {
+                if (!e.origin || e.origin.indexOf('lemonsqueezy.com') === -1)
+                    return;
+                var data = e.data;
+                try {
+                    if (typeof data === 'string') data = JSON.parse(data);
+                } catch (err) { return; }
+                var name = lemonEventName(data);
+                if (/success|complete/i.test(name))
+                    reportCheckoutCompleted(data);
+                else if (/close|cancel/i.test(name))
+                    reportCheckoutCancel(name);
+            });
+        })();
+
+        function trackPlanCheckout(plan) {
+            var info = PLANS[plan] || PLANS.pro;
+            var tier = info[currentBilling];
+            rememberCheckout(plan, info, tier);
+            var planClickId = newEventId();
+            var firstClickId = newEventId();
+
+            var clickProps = attributionProps();
+            clickProps.plan = plan;
+            clickProps.content_name = info.content_name;
+            clickProps.value = tier.value;
+            clickProps.currency = 'USD';
+            clickProps.meta_event_id = planClickId;
+
+            if (typeof posthog !== 'undefined' && posthog.capture) {
+                posthog.capture('plan_clicked', clickProps);
+                // Kept alongside plan_clicked: the existing acquisition funnel
+                // and the landing pages both count on this name.
+                posthog.capture('checkout_started', clickProps);
+            }
+
+            var customData = {
+                content_name: info.content_name,
+                plan: plan,
+                source: 'plans_page',
+                entry_source: srcParam,
+                billing_period: currentBilling,
+                value: tier.value,
+                currency: 'USD'
+            };
+
+            // Fires on every click, so this counts clicks and not people.
+            sendCapi('plan_clicked', planClickId, customData, 'plans_page_plan_click');
+
+            // Once per browser, unchanged: campaigns optimize against this as a
+            // person-level conversion, and firing it per click would inflate it.
+            try {
+                var capiOnceKey = 'cue_capi_once_first_checkout_clicked';
+                if (localStorage.getItem(capiOnceKey) !== '1') {
+                    sendCapi('first_checkout_clicked', firstClickId, customData, 'lemonsqueezy_buy_click');
+                    localStorage.setItem(capiOnceKey, '1');
+                }
+            } catch (e) { /* localStorage blocked — skip the once-gate */ }
+
+            if (typeof gtag === 'function') {
+                gtag('event', 'checkout_clicked', {
+                    plan: plan, source: 'plans_page', value: tier.value,
+                    currency: 'USD', transaction_id: planClickId
+                });
+            }
+        }
+
+        ['checkoutPro', 'checkoutTeam'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('click', function () {
+                trackPlanCheckout(el.getAttribute('data-plan'));
+            });
+        });
+    </script>
+</body>
+</html>
