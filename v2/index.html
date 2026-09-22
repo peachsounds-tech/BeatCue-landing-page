@@ -7201,6 +7201,61 @@
             });
         }
 
+        // A pass only counts once the pointer has stayed for a second. See plans/index.html.
+        (function trackPlanCardHover() {
+            var HOVER_MS = 1000;
+            function captureHover(plan, buttonHovered) {
+                var info = window.CUE_BILLING_PLANS[plan];
+                if (typeof posthog === 'undefined' || !posthog.capture) return;
+                posthog.capture('plan_card_hovered', {
+                    plan: plan,
+                    content_name: info ? info.content_name : plan,
+                    button_hovered: buttonHovered,
+                    billing_period: window.__cueBilling,
+                    source: 'pricing_section'
+                });
+            }
+            function overButton(btn, e) {
+                if (!btn || e.clientX == null) return false;
+                var hit = document.elementFromPoint(e.clientX, e.clientY);
+                return !!(hit && (hit === btn || btn.contains(hit)));
+            }
+            document.querySelectorAll('[data-plan-card]').forEach(function (card) {
+                var plan = card.getAttribute('data-plan-card');
+                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"]');
+                var cardTimer = null;
+                var buttonTimer = null;
+                function clearTimers() {
+                    if (cardTimer) { clearTimeout(cardTimer); cardTimer = null; }
+                    if (buttonTimer) { clearTimeout(buttonTimer); buttonTimer = null; }
+                }
+                function arm(buttonHovered) {
+                    clearTimers();
+                    var timer = setTimeout(function () {
+                        if (buttonHovered) buttonTimer = null; else cardTimer = null;
+                        captureHover(plan, buttonHovered);
+                    }, HOVER_MS);
+                    if (buttonHovered) buttonTimer = timer; else cardTimer = timer;
+                }
+                card.addEventListener('pointerenter', function (e) {
+                    if (e.pointerType === 'touch') return;
+                    arm(overButton(btn, e));
+                });
+                card.addEventListener('pointerleave', clearTimers);
+                if (!btn) return;
+                btn.addEventListener('pointerenter', function (e) {
+                    if (e.pointerType === 'touch') return;
+                    if (!card.contains(e.relatedTarget)) return;
+                    arm(true);
+                });
+                btn.addEventListener('pointerleave', function (e) {
+                    if (buttonTimer) { clearTimeout(buttonTimer); buttonTimer = null; }
+                    if (e.pointerType === 'touch') return;
+                    if (card.contains(e.relatedTarget)) arm(false);
+                });
+            });
+        })();
+
         document.querySelectorAll('.billing-option').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var next = btn.getAttribute('data-billing');
