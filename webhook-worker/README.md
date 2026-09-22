@@ -302,6 +302,7 @@ pre-`first_` names stay on the allowlist only so in-field builds do not 400.
 |---|---|---|---|
 | `first_app_launched` | desktop app, first launch | `app_launched` | no |
 | `first_premiere_installed_detected` | desktop app, Premiere on disk | `premiere_installed_detected` | no |
+| `first_premiere_panel_connected` | desktop app, first UXP panel handshake | `bridge_client_connected` | no |
 | `first_cut_played` | desktop app | `cut_played` | no |
 | `first_new_project_created` | desktop app, load request | `track_open_requested` | no |
 | `first_track_imported` | desktop app, after decode + analysis | `track_ready` | **yes (Custom Conversion)** |
