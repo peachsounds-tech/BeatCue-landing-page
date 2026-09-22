@@ -154,6 +154,7 @@ const CAPI_CUSTOM_EVENTS = new Set([
     // after the older per-action / per-song spellings.
     'first_app_launched',
     'first_premiere_installed_detected',
+    'first_premiere_panel_connected',
     'first_cut_played',
     'first_new_project_created',
     'first_track_imported',
@@ -162,6 +163,12 @@ const CAPI_CUSTOM_EVENTS = new Set([
     'first_activation_finished',
     'first_checkout_clicked',
     'first_send_to_desktop_clicked',
+
+    // Repeatable, unlike everything above it: the /plans chooser fires this on
+    // every Pro / Studios click, so a count of these is a count of clicks, not
+    // of people. It carries the plan in custom_data.content_name so campaigns
+    // can optimize on the tier that was picked.
+    'plan_clicked',
 
     // Pre-first_ spellings. In-field builds still send these; keep them
     // accepted so a 400 does not burn a conversion during the cutover.
