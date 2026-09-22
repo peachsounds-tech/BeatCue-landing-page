@@ -12,7 +12,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Get Cue</title>
+    <title>Choose your plan — BeatCue</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     <script>
         // ============================================
@@ -21,27 +21,21 @@
         // During early access: points to LemonSqueezy free checkout
         // After launch: point to the paid checkout URL
         // ============================================
-        const PRODUCT_URL = 'https://beatcue.lemonsqueezy.com/checkout/buy/f2c36877-ec5f-45c4-ad3f-d17a9863c3ca';
+        // Legacy entry point. Older shipped app builds (and any old ad/email
+        // links) open beatcue.app/get. Instead of dropping straight into a
+        // single LemonSqueezy product, forward to the /plans chooser so the
+        // buyer picks Pro or Studios. Query params (email, bcid, click-ids)
+        // are carried through untouched; /plans maps them onto checkout links.
+        const PLANS_URL = '/plans';
         const POSTHOG_API_KEY  = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
 
-        // Budget before leaving, matching /go: fetch(keepalive) survives unload,
-        // but a brief in-process window helps browsers actually hand the request
-        // to the network stack. Second timer in case the first is starved.
-        const REDIRECT_BUDGET_MS = 300;
-        const HARD_REDIRECT_CAP_MS = 1500;
-
         const params = new URLSearchParams(window.location.search);
         const email = params.get('email');
-        const redirect = new URL(PRODUCT_URL);
-        if (email) redirect.searchParams.set('checkout[email]', email);
-        // Keep Google/Meta click IDs on the checkout URL so attribution can
-        // survive the hop off beatcue.app (and so gtag on this page sees them
-        // before navigation).
-        ['gclid', 'gbraid', 'wbraid', 'fbclid'].forEach(function (k) {
-            const v = params.get(k);
-            if (v) redirect.searchParams.set(k, v);
-        });
+        const redirect = new URL(PLANS_URL, window.location.origin);
+        // Carry every incoming param straight through to /plans.
+        params.forEach(function (v, k) { redirect.searchParams.set(k, v); });
+        if (!redirect.searchParams.get('source')) redirect.searchParams.set('source', 'get');
 
         // Resolve the bcid the same way the landing page does, so a checkout
         // opened from the plugin (which passes ?bcid=) or from a browser that
@@ -65,12 +59,13 @@
             }
         })();
         // Deliberately not minted here. A fresh id would only create another
-        // orphan person; absent is more honest than invented.
-        if (bcid) redirect.searchParams.set('checkout[custom][bcid]', bcid);
+        // orphan person; absent is more honest than invented. /plans mints one
+        // if truly needed.
+        if (bcid && !redirect.searchParams.get('bcid')) redirect.searchParams.set('bcid', bcid);
 
-        // This page used to be completely silent, which is why purchases could
-        // appear with no preceding click anywhere in analytics. No SDK: the
-        // PostHog snippet is async and will not flush before location.replace().
+        // Breadcrumb so a legacy /get hit is still visible in analytics before
+        // the hop to /plans. No SDK: the PostHog snippet is async and would not
+        // flush before location.replace(); keepalive is what carries this one.
         try {
             fetch(POSTHOG_API_HOST + '/e/', {
                 method: 'POST',
@@ -80,7 +75,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     api_key: POSTHOG_API_KEY,
-                    event: 'checkout_started',
+                    event: 'get_redirect_to_plans',
                     distinct_id: bcid || ('anon_get_' + Date.now()),
                     timestamp: new Date().toISOString(),
                     properties: {
@@ -91,7 +86,6 @@
                         $referrer: document.referrer || '$direct',
                         page: 'get',
                         source: 'get_redirect',
-                        plan: 'cue_pro',
                         had_bcid: !!bcid,
                         from_email_param: !!email
                     }
@@ -99,23 +93,14 @@
             }).catch(function () {});
         } catch (e) { /* never block the redirect on analytics */ }
 
-        let didRedirect = false;
-        function go() {
-            if (didRedirect) return;
-            didRedirect = true;
-            window.location.replace(redirect.toString());
-        }
-        setTimeout(go, REDIRECT_BUDGET_MS);
-        setTimeout(go, HARD_REDIRECT_CAP_MS);
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'hidden') go();
-        }, { once: true });
+        // Leave immediately. The breadcrumb above is sent with keepalive, which
+        // is what lets the request outlive this document.
+        window.location.replace(redirect.toString());
     </script>
     <noscript>
-        <meta http-equiv="refresh" content="0;url=https://beatcue.lemonsqueezy.com/checkout/buy/f2c36877-ec5f-45c4-ad3f-d17a9863c3ca">
+        <meta http-equiv="refresh" content="0;url=/plans">
     </noscript>
 </head>
 <body>
-    <p>Redirecting to Cue...</p>
 </body>
 </html>

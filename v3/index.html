@@ -2404,7 +2404,7 @@
         }
 
         .cta-container {
-            max-width: 800px;
+            max-width: 1240px;
             margin: 0 auto;
             position: relative;
         }
@@ -2650,9 +2650,9 @@
         }
         
         .pricing-cards .pricing-card {
-            flex: 0 1 380px;
+            flex: 1 1 0;
             max-width: 380px;
-            min-width: 280px;
+            min-width: 240px;
         }
         
         .pricing-card {
@@ -2741,6 +2741,109 @@
             background: var(--wave-blue-dark);
         }
 
+        /* Tier accents: Free = gray, Pro = blue, Studios = peach orange */
+        .pricing-card--free::before { background: #9ca3af; }
+        .pricing-card--free .plan-badge {
+            background: #6b7280;
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+        }
+        .pricing-card--free .plan-price .price {
+            background: #9ca3af;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .pricing-card--pro::before { background: var(--wave-blue); }
+        .pricing-card--pro .plan-badge {
+            background: var(--wave-blue);
+            box-shadow: 0 4px 12px rgba(74, 144, 217, 0.35);
+        }
+        .pricing-card--pro .plan-price .price {
+            background: var(--wave-blue);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .pricing-card--pro:hover { box-shadow: 0 12px 40px rgba(74, 144, 217, 0.15); }
+
+        .pricing-card--studios::before { background: var(--peach-orange); }
+        .pricing-card--studios .plan-badge {
+            background: var(--peach-orange);
+            color: white;
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+        }
+        .pricing-card--studios .plan-price .price {
+            background: var(--peach-orange);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .pricing-card--studios:hover { box-shadow: 0 12px 40px rgba(255, 107, 53, 0.18); }
+        .pricing-card--studios .btn-primary {
+            background: var(--peach-orange);
+            color: white;
+            box-shadow: 0 2px 10px rgba(255, 107, 53, 0.3);
+        }
+        .pricing-card--studios .btn-primary:hover {
+            background: var(--peach-orange-dark);
+            color: white;
+            box-shadow: 0 4px 18px rgba(255, 107, 53, 0.45);
+        }
+
+        /* Billing period toggle above the pricing cards */
+        .billing-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.3rem;
+            margin-bottom: 2rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-light);
+            border-radius: 50px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .billing-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.35rem;
+            border: none;
+            border-radius: 50px;
+            background: transparent;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .billing-option:hover { color: var(--text-primary); }
+        .billing-option.is-active {
+            background: var(--bg-card);
+            color: var(--text-on-card);
+            box-shadow: 0 2px 10px rgba(45, 45, 58, 0.25);
+        }
+        /* --bg-card is nearly the page background in dark mode, so the selected
+           pill needs its own colour to still read as selected. */
+        [data-theme="dark"] .billing-option.is-active {
+            background: var(--wave-blue);
+            box-shadow: 0 2px 10px rgba(74, 144, 217, 0.35);
+        }
+        .billing-save {
+            background: var(--early-access-green);
+            color: #FFFFFF;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            padding: 0.2rem 0.55rem;
+            border-radius: 50px;
+            white-space: nowrap;
+        }
+        @media (max-width: 520px) {
+            .billing-option { padding: 0.55rem 1rem; font-size: 0.9rem; }
+        }
+
         .btn-disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -2757,6 +2860,27 @@
             margin-bottom: 0.75rem;
         }
         
+        .plan-price .price-original {
+            font-size: 1.5rem;
+            font-weight: 500;
+            color: var(--text-on-card-secondary);
+            text-decoration: line-through;
+            opacity: 0.5;
+            margin-right: 0.5rem;
+        }
+
+        .plan-sale {
+            display: inline-block;
+            margin: -0.25rem 0 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--early-access-green);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
         .plan-price .price {
             font-size: 2.5rem;
             font-weight: 700;
@@ -4001,6 +4125,7 @@
         
         .pricing-card:nth-child(1) { animation-delay: 0.05s; }
         .pricing-card:nth-child(2) { animation-delay: 0.1s; }
+        .pricing-card:nth-child(3) { animation-delay: 0.15s; }
         
         /* ============================================
            RESPONSIVE - TABLET (768px - 1024px)
@@ -5601,16 +5726,23 @@
             <h2 class="cta-title">Get BeatCue</h2>
             <span class="cta-label">The difference between a cut and a film is the score. Now it&rsquo;s yours to shape.</span>
             <div id="ctaDesktop">
+                <div class="billing-toggle" role="group" aria-label="Billing period">
+                    <button type="button" class="billing-option" data-billing="monthly" aria-pressed="false">Monthly</button>
+                    <button type="button" class="billing-option is-active" data-billing="yearly" aria-pressed="true">
+                        Yearly
+                        <span class="billing-save">Save 17%</span>
+                    </button>
+                </div>
                 <div class="pricing-cards">
-                    <div class="pricing-card pricing-card--primary">
+                    <div class="pricing-card pricing-card--primary pricing-card--free">
                         <div class="plan-badge">Free</div>
                         <div class="plan-price">
                             <span class="price">$0</span>
                         </div>
-                        <p class="plan-description">Everything you need to retime your music.</p>
+                        <p class="plan-description">Try it on real edits: three projects a month, nothing locked.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
-                            <li>10 projects per month</li>
+                            <li>3 projects per month</li>
                             <li>Unlimited exports</li>
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
@@ -5619,23 +5751,45 @@
                         </a>
                         <p class="plan-note" id="pricingInstallNote">Recommended: macOS 14+</p>
                     </div>
-                    <div class="pricing-card">
-                        <div class="plan-badge plan-badge--soon">Pro</div>
+                    <div class="pricing-card pricing-card--pro" data-plan-card="pro">
+                        <div class="plan-badge">Pro</div>
                         <div class="plan-price">
-                            <span class="price">$24</span>
-                            <span class="period">one-time</span>
+                            <span class="price">$199</span>
+                            <span class="period">/ year</span>
                         </div>
-                        <p class="plan-description">For professionals who need unlimited precision.</p>
+                        <p class="plan-description">Unlimited projects and a license that covers client work.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
                             <li>Unlimited projects</li>
+                            <li>1 seat</li>
+                            <li>Licensed for client work</li>
                             <li>Unlimited exports</li>
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
-                        <a href="https://beatcue.lemonsqueezy.com/checkout/buy/f2c36877-ec5f-45c4-ad3f-d17a9863c3ca" class="btn btn-primary btn-large" target="_blank" onclick="trackInitiateCheckout()">
+                        <a href="https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810?embed=1&media=0&discount=0" class="btn btn-primary btn-large lemonsqueezy-button" onclick="trackInitiateCheckout('pro')">
                             Get BeatCue Pro
                         </a>
-                        <p class="plan-note">One-time payment</p>
+                        <p class="plan-note">Billed annually</p>
+                    </div>
+                    <div class="pricing-card pricing-card--studios" data-plan-card="team">
+                        <div class="plan-badge">Studios</div>
+                        <div class="plan-price">
+                            <span class="price">$1790</span>
+                            <span class="period">/ year</span>
+                        </div>
+                        <p class="plan-description">Ten seats, unlimited projects, one renewal to manage.</p>
+                        <ul class="plan-features">
+                            <li>All editing features</li>
+                            <li>Unlimited projects</li>
+                            <li>10 seats</li>
+                            <li>Licensed for client work</li>
+                            <li>Unlimited exports</li>
+                            <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
+                        </ul>
+                        <a href="https://beatcue.lemonsqueezy.com/checkout/buy/d30f22ec-659f-46f5-80e7-36922800352e?embed=1&media=0&discount=0" class="btn btn-primary btn-large lemonsqueezy-button" onclick="trackInitiateCheckout('team')">
+                            Get BeatCue Studios
+                        </a>
+                        <p class="plan-note">Billed annually</p>
                     </div>
                 </div>
             </div>
@@ -6924,7 +7078,7 @@
         // it up.
         // ============================================
         
-        const checkoutBtn = document.querySelector('.lemonsqueezy-button');
+        const checkoutBtn = null; // overlay CTAs are live; do not rewrite their hrefs
         
         if (checkoutBtn) {
             // Determine if running locally or on production
@@ -6978,7 +7132,7 @@
                     posthog.capture('checkout_started', {
                         ...getBaseEventProps(),
                         plan: 'pro',
-                        price: 24.00,
+                        price: 79.00,
                         currency: 'USD',
                         billing_period: 'one_time',
                         source: 'landing_page',
@@ -7325,16 +7479,30 @@
                 if (pricingNote) pricingNote.textContent = 'Recommended: macOS 14+';
             }
 
-            window.trackInitiateCheckout = function() {
+            window.trackInitiateCheckout = function(plan) {
                 const eventID = (crypto.randomUUID
                     ? crypto.randomUUID()
                     : String(Date.now()) + Math.random().toString(36).slice(2));
 
+                // Plan-specific pricing/content, keyed by the argument the CTA
+                // passes ('pro' | 'team'); defaults to Pro for older callers.
+                // Prices live in the billing toggle's table so the value reported
+                // to Meta / Google / PostHog is the one for the period the visitor
+                // actually has selected, not a hardcoded yearly figure.
+                var CUE_PLANS = window.CUE_BILLING_PLANS || {};
+                var planId   = CUE_PLANS[plan] ? plan : 'pro';
+                var billing  = window.__cueBilling === 'monthly' ? 'monthly' : 'yearly';
+                var planTier = CUE_PLANS[planId] ? CUE_PLANS[planId][billing] : null;
+                var planInfo = {
+                    content_name: CUE_PLANS[planId] ? CUE_PLANS[planId].content_name : 'BeatCue Pro',
+                    value: planTier ? planTier.value : 199.00
+                };
+
                 // Pixel side - pass eventID so CAPI can dedupe.
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'checkout_clicked', {
-                        content_name: 'BeatCue Pro',
-                        value: 24.00,
+                        content_name: planInfo.content_name,
+                        value: planInfo.value,
                         currency: 'USD'
                     }, { eventID: eventID });
                 }
@@ -7369,8 +7537,9 @@
                                 external_id: window.__cue_bcid || null
                             },
                             custom_data: {
-                                content_name: 'BeatCue Pro',
-                                value: 24.00,
+                                content_name: planInfo.content_name,
+                                billing_period: billing,
+                                value: planInfo.value,
                                 currency: 'USD'
                             },
                             internal_name: 'lemonsqueezy_buy_click'
@@ -7382,7 +7551,8 @@
                 if (typeof posthog !== 'undefined' && posthog.capture) {
                     posthog.capture('checkout_started', {
                         ...getBaseEventProps(),
-                        plan: 'cue_pro',
+                        plan: planId,
+                        billing_period: billing,
                         source: 'pricing_section',
                         meta_event_id: eventID
                     });
@@ -7393,7 +7563,7 @@
                 postGoogleAdsServerConversion({
                     event_name: 'checkout_clicked',
                     transaction_id: eventID,
-                    value: 24.00,
+                    value: planInfo.value,
                     currency: 'USD',
                     internal_name: 'lemonsqueezy_buy_click'
                 });
@@ -7401,6 +7571,172 @@
 
         })();
     </script>
+<script>
+    // ============================================
+    // BILLING PERIOD TOGGLE
+    // ============================================
+    // Pro and Studios each have a separate Lemon Squeezy product per billing
+    // period — there is no period switch on their side — so flipping the
+    // toggle swaps the whole checkout URL rather than a parameter on one.
+    (function () {
+        window.CUE_BILLING_PLANS = {
+            pro: {
+                content_name: 'BeatCue Pro',
+                yearly: {
+                    price: '$199', period: '/ year', value: 199.00, note: 'Billed annually',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810'
+                },
+                monthly: {
+                    price: '$20', period: '/ month', value: 20.00, note: 'Billed monthly',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/3a61a400-7a58-404c-a0a2-1e8266b46e12'
+                }
+            },
+            team: {
+                content_name: 'BeatCue Studios',
+                yearly: {
+                    price: '$1790', period: '/ year', value: 1790.00, note: 'Billed annually',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/d30f22ec-659f-46f5-80e7-36922800352e'
+                },
+                monthly: {
+                    price: '$179', period: '/ month', value: 179.00, note: 'Billed monthly',
+                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/b04c3075-7576-40b9-a2f7-ab2eba13df59'
+                }
+            }
+        };
+
+        window.__cueBilling = 'yearly';
+
+        // carryBcidIntoCheckoutLinks() ran at load and stamped the bcid onto the
+        // yearly hrefs. Swapping in a monthly URL would drop it, so re-apply on
+        // every href we write.
+        function decorateCheckoutUrl(baseUrl) {
+            try {
+                var u = new URL(baseUrl);
+                u.searchParams.set('embed', '1');
+                u.searchParams.set('media', '0');
+                u.searchParams.set('discount', '0');
+                if (window.__cue_bcid) u.searchParams.set('checkout[custom][bcid]', window.__cue_bcid);
+                return u.toString();
+            } catch (e) {
+                return baseUrl;
+            }
+        }
+
+        function refreshLemonOverlay() {
+            try {
+                if (window.LemonSqueezy && typeof window.LemonSqueezy.Refresh === 'function')
+                    window.LemonSqueezy.Refresh();
+                else if (typeof window.createLemonSqueezy === 'function')
+                    window.createLemonSqueezy();
+            } catch (e) {}
+        }
+
+        function applyBilling(billing) {
+            window.__cueBilling = billing;
+
+            document.querySelectorAll('[data-plan-card]').forEach(function (card) {
+                var plan = window.CUE_BILLING_PLANS[card.getAttribute('data-plan-card')];
+                if (!plan) return;
+                var tier   = plan[billing];
+                var price  = card.querySelector('.price');
+                var period = card.querySelector('.period');
+                var note   = card.querySelector('.plan-note');
+                var link   = card.querySelector('a[href*="lemonsqueezy.com/checkout"]');
+                if (price)  price.textContent  = tier.price;
+                if (period) period.textContent = tier.period;
+                if (note)   note.textContent   = tier.note;
+                if (link)   link.setAttribute('href', decorateCheckoutUrl(tier.url));
+            });
+
+            refreshLemonOverlay();
+
+            document.querySelectorAll('.billing-option').forEach(function (btn) {
+                var on = btn.getAttribute('data-billing') === billing;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+        }
+
+        // A pass only counts once the pointer has stayed for a second. See plans/index.html.
+        (function trackPlanCardHover() {
+            var HOVER_MS = 1000;
+            function captureHover(plan, buttonHovered) {
+                var info = window.CUE_BILLING_PLANS[plan];
+                if (typeof posthog === 'undefined' || !posthog.capture) return;
+                posthog.capture('plan_card_hovered', {
+                    plan: plan,
+                    content_name: info ? info.content_name : plan,
+                    button_hovered: buttonHovered,
+                    billing_period: window.__cueBilling,
+                    source: 'pricing_section'
+                });
+            }
+            function overButton(btn, e) {
+                if (!btn || e.clientX == null) return false;
+                var hit = document.elementFromPoint(e.clientX, e.clientY);
+                return !!(hit && (hit === btn || btn.contains(hit)));
+            }
+            document.querySelectorAll('[data-plan-card]').forEach(function (card) {
+                var plan = card.getAttribute('data-plan-card');
+                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"]');
+                var cardTimer = null;
+                var buttonTimer = null;
+                function clearTimers() {
+                    if (cardTimer) { clearTimeout(cardTimer); cardTimer = null; }
+                    if (buttonTimer) { clearTimeout(buttonTimer); buttonTimer = null; }
+                }
+                function arm(buttonHovered) {
+                    clearTimers();
+                    var timer = setTimeout(function () {
+                        if (buttonHovered) buttonTimer = null; else cardTimer = null;
+                        captureHover(plan, buttonHovered);
+                    }, HOVER_MS);
+                    if (buttonHovered) buttonTimer = timer; else cardTimer = timer;
+                }
+                card.addEventListener('pointerenter', function (e) {
+                    if (e.pointerType === 'touch') return;
+                    arm(overButton(btn, e));
+                });
+                card.addEventListener('pointerleave', clearTimers);
+                if (!btn) return;
+                btn.addEventListener('pointerenter', function (e) {
+                    if (e.pointerType === 'touch') return;
+                    if (!card.contains(e.relatedTarget)) return;
+                    arm(true);
+                });
+                btn.addEventListener('pointerleave', function (e) {
+                    if (buttonTimer) { clearTimeout(buttonTimer); buttonTimer = null; }
+                    if (e.pointerType === 'touch') return;
+                    if (card.contains(e.relatedTarget)) arm(false);
+                });
+            });
+        })();
+
+        document.querySelectorAll('.billing-option').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var next = btn.getAttribute('data-billing');
+                if (next === window.__cueBilling) return;
+                var previous = window.__cueBilling;
+                applyBilling(next);
+                if (typeof posthog !== 'undefined' && posthog.capture) {
+                    posthog.capture('billing_period_toggled', {
+                        billing_period: next,
+                        previous_billing_period: previous,
+                        source: 'pricing_section'
+                    });
+                }
+            });
+        });
+
+        // ?billing=monthly lets an ad land straight on the monthly view.
+        try {
+            var wanted = new URLSearchParams(window.location.search).get('billing');
+            applyBilling(wanted === 'monthly' ? 'monthly' : 'yearly');
+        } catch (e) {
+            applyBilling('yearly');
+        }
+    })();
+</script>
 </body>
 </html>
 
