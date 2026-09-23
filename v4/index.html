@@ -2455,6 +2455,106 @@
             flex: 1 1 0;
             max-width: 380px;
             min-width: 240px;
+            display: flex;
+            flex-direction: column;
+        }
+        .pricing-cards .pricing-card > .btn {
+            margin-top: auto;
+        }
+
+        /* Every card shares the same row grid: price, control, description,
+           features, CTA, note. Fixed row heights keep the rows level across cards. */
+        .pricing-cards .pricing-card {
+            text-align: left;
+            padding: 2rem 1.75rem 1.75rem;
+        }
+        .pricing-cards .plan-price {
+            display: flex;
+            align-items: baseline;
+            flex-wrap: nowrap;
+            white-space: nowrap;
+            min-height: 3.25rem;
+            margin: 0 0 1rem;
+        }
+        .pricing-cards .plan-price .price {
+            font-size: 2.4rem;
+            line-height: 1.1;
+        }
+        .pricing-cards .plan-price .period {
+            font-size: 0.82rem;
+            margin-left: 0.4rem;
+        }
+        .pricing-cards .plan-control {
+            height: 44px;
+            margin-bottom: 1.1rem;
+            display: flex;
+            align-items: center;
+        }
+        .pricing-cards .plan-control .card-billing {
+            height: 100%;
+            margin: 0;
+            padding: 0.25rem;
+        }
+        .pricing-cards .plan-control .billing-option {
+            height: 100%;
+            min-width: 0;
+            padding: 0 0.6rem;
+            white-space: nowrap;
+        }
+        .pricing-cards .plan-control .billing-option[data-billing="yearly"] {
+            flex: 1.7;
+        }
+        .pricing-cards .plan-control .billing-save {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.45rem;
+        }
+        .plan-pill {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-on-card-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .plan-pill--lifetime {
+            background: rgba(255, 107, 53, 0.14);
+            border-color: rgba(255, 107, 53, 0.25);
+            color: #ffb089;
+        }
+        .pricing-cards .plan-description {
+            min-height: 2.8em;
+            line-height: 1.4;
+            margin: 0 0 1.1rem;
+            font-size: 0.9rem;
+        }
+        .pricing-cards .plan-features {
+            margin: 0 0 1.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .pricing-cards .plan-note {
+            text-align: center;
+        }
+        .pricing-cards .pricing-card > .btn {
+            width: 100%;
+            text-align: center;
+            white-space: nowrap;
+        }
+        @media (max-width: 1100px) {
+            .pricing-cards .pricing-card { padding: 1.9rem 1.35rem 1.5rem; }
+            .pricing-cards .plan-price {
+                align-items: center;
+                height: 3.25rem;
+                white-space: normal;
+            }
+            .pricing-cards .plan-price .price { font-size: 2.1rem; white-space: nowrap; }
+            .pricing-cards .plan-price .period { font-size: 0.75rem; line-height: 1.25; }
+            .pricing-cards .pricing-card > .btn { font-size: 0.88rem; padding: 0 0.75rem; }
         }
         
         .pricing-card {
@@ -2472,7 +2572,7 @@
         
         /* Primary card (Free) - the dominant action */
         .pricing-card--primary {
-            padding: 2rem;
+            padding: 1.75rem;
         }
         
         .pricing-card--primary:hover {
@@ -2646,6 +2746,31 @@
             .billing-option { padding: 0.55rem 1rem; font-size: 0.9rem; }
         }
 
+        /* Toggle lives on the Pro card. Cards stay dark in both themes. */
+        .card-billing {
+            display: flex;
+            width: 100%;
+            margin: 0.9rem 0 0.15rem;
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.08);
+            box-shadow: none;
+        }
+        .card-billing .billing-option {
+            flex: 1;
+            justify-content: center;
+            padding: 0.5rem 0.65rem;
+            font-size: 0.85rem;
+            color: var(--text-on-card-secondary);
+        }
+        .card-billing .billing-option:hover { color: var(--text-on-card); }
+        .card-billing .billing-option.is-active,
+        [data-theme="dark"] .card-billing .billing-option.is-active {
+            background: #ffffff;
+            color: #1a1a1a;
+            box-shadow: none;
+        }
+
+
         .btn-disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -2740,7 +2865,11 @@
         .plan-note {
             margin-top: 0.75rem;
             font-size: 0.8rem;
+            line-height: 1.35;
             color: var(--text-on-card-secondary);
+        }
+        .pricing-cards .plan-note {
+            min-height: 2.7em;
         }
         
         /* Button styles for dark pricing cards */
@@ -3938,9 +4067,6 @@
                 gap: 1.5rem;
             }
             
-            .pricing-card--primary {
-                padding: 1.75rem;
-            }
         }
         
         @media (max-width: 768px) {
@@ -4169,7 +4295,7 @@
             }
             
             .pricing-card--primary {
-                padding: 1.75rem;
+                padding: 1.5rem;
             }
             
             .btn-download-free {
@@ -5140,7 +5266,7 @@
             <div class="grid-pattern"></div>
         </div>
         <div class="hero-content">
-            <h1 class="hero-tagline">Shape the <span class="blue">music</span> to the <span class="orange">story.</span></h1>
+            <h1 class="hero-tagline">Shape <span class="blue">any music</span> to <span class="orange">your story.</span></h1>
             <p class="hero-subtitle">
                 The <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin that retimes your music to your will.<br> Drag the moment. The track reshapes.
             </p>
@@ -5180,7 +5306,7 @@
                 The track is no longer a given - It's clay in your hands.
             </p>
             <p class="manifesto-text">
-                You drag it. It reshapes.
+                Bring your track. Drag it. It reshapes.
                 <!-- <br> No prompts. No regenerating. No waiting to find out. -->
             </p>
             <p class="manifesto-text">
@@ -5379,20 +5505,14 @@
             <h2 class="cta-title">Get BeatCue</h2>
             <span class="cta-label">Stop editing music, start moving moments</span>
             <div id="ctaDesktop">
-                <div class="billing-toggle" role="group" aria-label="Billing period">
-                    <button type="button" class="billing-option" data-billing="monthly" aria-pressed="false">Monthly</button>
-                    <button type="button" class="billing-option is-active" data-billing="yearly" aria-pressed="true">
-                        Yearly
-                        <span class="billing-save">Save 17%</span>
-                    </button>
-                </div>
                 <div class="pricing-cards">
                     <div class="pricing-card pricing-card--primary pricing-card--free">
                         <div class="plan-badge">Free</div>
                         <div class="plan-price">
                             <span class="price">$0</span>
                         </div>
-                        <p class="plan-description">Try it on real edits: three projects a month, nothing locked.</p>
+                        <div class="plan-control"><span class="plan-pill">No credit card needed</span></div>
+                        <p class="plan-description">Try it on real edits. Three projects a month.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
                             <li>3 projects per month</li>
@@ -5407,10 +5527,19 @@
                     <div class="pricing-card pricing-card--pro" data-plan-card="pro">
                         <div class="plan-badge">Pro</div>
                         <div class="plan-price">
-                            <span class="price">$199</span>
-                            <span class="period">/ year</span>
+                            <span class="price">$16.50</span>
+                            <span class="period">/ month (billed yearly)</span>
                         </div>
-                        <p class="plan-description">Unlimited projects and a license that covers client work.</p>
+                        <div class="plan-control">
+                            <div class="billing-toggle card-billing" role="group" aria-label="Billing period">
+                                <button type="button" class="billing-option" data-billing="monthly" aria-pressed="false">Monthly</button>
+                                <button type="button" class="billing-option is-active" data-billing="yearly" aria-pressed="true">
+                                    Yearly
+                                    <span class="billing-save">Save 17%</span>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="plan-description">Unlimited projects, licensed for client work.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
                             <li>Unlimited projects</li>
@@ -5422,27 +5551,28 @@
                         <a href="https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810?embed=1&media=0&discount=0" class="btn btn-primary btn-large lemonsqueezy-button" onclick="trackInitiateCheckout('pro')">
                             Get BeatCue Pro
                         </a>
-                        <p class="plan-note">Billed annually</p>
+                        <p class="plan-note">Billed yearly · cancel anytime</p>
                     </div>
-                    <div class="pricing-card pricing-card--studios" data-plan-card="team">
-                        <div class="plan-badge">Studios</div>
+                    <div class="pricing-card pricing-card--studios" data-plan-card="lifetime">
+                        <div class="plan-badge">Lifetime</div>
                         <div class="plan-price">
-                            <span class="price">$1790</span>
-                            <span class="period">/ year</span>
+                            <span class="price">$999</span>
+                            <span class="period">one-time</span>
                         </div>
-                        <p class="plan-description">Ten seats, unlimited projects, one renewal to manage.</p>
+                        <div class="plan-control"><span class="plan-pill plan-pill--lifetime">Pay once · yours forever</span></div>
+                        <p class="plan-description">Every future update included. No renewals.</p>
                         <ul class="plan-features">
                             <li>All editing features</li>
                             <li>Unlimited projects</li>
-                            <li>10 seats</li>
+                            <li>1 seat</li>
                             <li>Licensed for client work</li>
                             <li>Unlimited exports</li>
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
-                        <a href="https://beatcue.lemonsqueezy.com/checkout/buy/d30f22ec-659f-46f5-80e7-36922800352e?embed=1&media=0&discount=0" class="btn btn-primary btn-large lemonsqueezy-button" onclick="trackInitiateCheckout('team')">
-                            Get BeatCue Studios
+                        <a href="#" class="btn btn-primary btn-large" onclick="return trackInitiateCheckout('lifetime')">
+                            Get lifetime access
                         </a>
-                        <p class="plan-note">Billed annually</p>
+                        <p class="plan-note">Equal to ~5 years of Pro</p>
                     </div>
                 </div>
             </div>
@@ -6881,7 +7011,7 @@
                 if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', storeUrl);
                 if (pricingDownloadBtn) {
                     pricingDownloadBtn.setAttribute('href', storeUrl);
-                    pricingDownloadBtn.textContent = 'Download BeatCue for Windows';
+                    pricingDownloadBtn.textContent = 'Download for Windows';
                 }
                 sectionDownloadBtns.forEach(function (btn) {
                     btn.setAttribute('href', storeUrl);
@@ -6890,7 +7020,7 @@
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('Windows 10+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: Windows 10+';
             } else if (isMac || forcePlatform === 'mac') {
-                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download BeatCue for macOS';
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download for macOS';
                 if (heroIcon) heroIcon.innerHTML = appleIconSvg;
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('macOS 14+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: macOS 14+';
@@ -6902,17 +7032,24 @@
                     : String(Date.now()) + Math.random().toString(36).slice(2));
 
                 // Plan-specific pricing/content, keyed by the argument the CTA
-                // passes ('pro' | 'team'); defaults to Pro for older callers.
+                // passes ('pro' | 'lifetime'); defaults to Pro for older callers.
                 // Prices live in the billing toggle's table so the value reported
                 // to Meta / Google / PostHog is the one for the period the visitor
                 // actually has selected, not a hardcoded yearly figure.
                 var CUE_PLANS = window.CUE_BILLING_PLANS || {};
                 var planId   = CUE_PLANS[plan] ? plan : 'pro';
                 var billing  = window.__cueBilling === 'monthly' ? 'monthly' : 'yearly';
-                var planTier = CUE_PLANS[planId] ? CUE_PLANS[planId][billing] : null;
+                var planObj  = CUE_PLANS[planId];
+                var planTier = planObj
+                    ? ((planObj.monthly || planObj.yearly) ? planObj[billing] : planObj)
+                    : null;
+                // Lifetime has no checkout product yet. Don't record a start
+                // or follow the href.
+                if (planTier && !planTier.url) return false;
+                var reportedBilling = planId === 'lifetime' ? 'lifetime' : billing;
                 var planInfo = {
-                    content_name: CUE_PLANS[planId] ? CUE_PLANS[planId].content_name : 'BeatCue Pro',
-                    value: planTier ? planTier.value : 199.00
+                    content_name: planObj ? planObj.content_name : 'BeatCue Pro',
+                    value: planTier ? planTier.value : 198.00
                 };
 
                 // Pixel side — pass eventID so CAPI can dedupe.
@@ -6955,7 +7092,7 @@
                             },
                             custom_data: {
                                 content_name: planInfo.content_name,
-                                billing_period: billing,
+                                billing_period: reportedBilling,
                                 value: planInfo.value,
                                 currency: 'USD'
                             },
@@ -6969,7 +7106,7 @@
                     posthog.capture('checkout_started', {
                         ...getBaseEventProps(),
                         plan: planId,
-                        billing_period: billing,
+                        billing_period: reportedBilling,
                         source: 'pricing_section',
                         meta_event_id: eventID
                     });
@@ -6982,32 +7119,29 @@
     // ============================================
     // BILLING PERIOD TOGGLE
     // ============================================
-    // Pro and Studios each have a separate Lemon Squeezy product per billing
-    // period — there is no period switch on their side — so flipping the
-    // toggle swaps the whole checkout URL rather than a parameter on one.
+    // Pro has a separate Lemon Squeezy product per billing period — there
+    // is no period switch on their side — so flipping the toggle swaps the
+    // whole checkout URL. Lifetime is one payment and ignores the toggle.
     (function () {
         window.CUE_BILLING_PLANS = {
             pro: {
                 content_name: 'BeatCue Pro',
                 yearly: {
-                    price: '$199', period: '/ year', value: 199.00, note: 'Billed annually',
+                    price: '$16.50', period: '/ month (billed yearly)', value: 198.00,
+                    note: 'Billed yearly · cancel anytime',
                     url: 'https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810'
                 },
                 monthly: {
-                    price: '$20', period: '/ month', value: 20.00, note: 'Billed monthly',
+                    price: '$20', period: '/ month', value: 20.00,
+                    note: 'Billed monthly · cancel anytime',
                     url: 'https://beatcue.lemonsqueezy.com/checkout/buy/3a61a400-7a58-404c-a0a2-1e8266b46e12'
                 }
             },
-            team: {
-                content_name: 'BeatCue Studios',
-                yearly: {
-                    price: '$1790', period: '/ year', value: 1790.00, note: 'Billed annually',
-                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/d30f22ec-659f-46f5-80e7-36922800352e'
-                },
-                monthly: {
-                    price: '$179', period: '/ month', value: 179.00, note: 'Billed monthly',
-                    url: 'https://beatcue.lemonsqueezy.com/checkout/buy/b04c3075-7576-40b9-a2f7-ab2eba13df59'
-                }
+            lifetime: {
+                content_name: 'BeatCue Lifetime',
+                price: '$999', period: 'one-time', value: 999.00,
+                note: 'Equal to ~5 years of Pro',
+                url: ''
             }
         };
 
@@ -7044,7 +7178,8 @@
             document.querySelectorAll('[data-plan-card]').forEach(function (card) {
                 var plan = window.CUE_BILLING_PLANS[card.getAttribute('data-plan-card')];
                 if (!plan) return;
-                var tier   = plan[billing];
+                var tier   = (plan.monthly || plan.yearly) ? plan[billing] : plan;
+                if (!tier) return;
                 var price  = card.querySelector('.price');
                 var period = card.querySelector('.period');
                 var note   = card.querySelector('.plan-note');
@@ -7052,7 +7187,7 @@
                 if (price)  price.textContent  = tier.price;
                 if (period) period.textContent = tier.period;
                 if (note)   note.textContent   = tier.note;
-                if (link)   link.setAttribute('href', decorateCheckoutUrl(tier.url));
+                if (link && tier.url) link.setAttribute('href', decorateCheckoutUrl(tier.url));
             });
 
             refreshLemonOverlay();
