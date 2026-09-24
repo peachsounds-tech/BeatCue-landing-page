@@ -9,6 +9,30 @@ compatibility_date = "2024-01-01"
 # Non-secret environment variables go here
 # POSTHOG_API_KEY is hardcoded in worker.js for simplicity
 
+# ─── Free-key gate (A/B) ──────────────────────────────────────────────────────
+# Lemon Squeezy product / variant ids whose license keys sign tier "free"
+# instead of "pro". Comma-separated. The worker also compiles these ids in as a
+# floor (DEFAULT_FREE_PRODUCT_IDS), so a missing var can never turn a free key
+# into Pro. "BeatCue - Free" = product 1385673, variant 2164536.
+FREE_PRODUCT_IDS = "1385673"
+FREE_VARIANT_IDS = "2164536"
+
+# Experiment start, ms epoch or ISO date. Devices whose quota account was
+# created before this are arm=existing: keyless free tier as today, never
+# gated. While unset, every device resolves to arm=existing, i.e. the
+# experiment is off. Set it when the gated app build ships.
+EXPERIMENT_START = ""
+
+# Share of new devices (0-100) assigned to arm=test. Deterministic per device:
+# sha256(EXPERIMENT_SALT + device_id). 0 stops new test enrollments; devices
+# already assigned keep their arm.
+TEST_PERCENT = "0"
+EXPERIMENT_SALT = "free-key-gate-v1"
+
+# Emergency rollback. "false" releases every gated device back to the keyless
+# free tier on its next resolve, with no app release.
+GATE_ENABLED = "true"
+
 # Secret variables (set via `wrangler secret put NAME`):
 #
 #   LEMONSQUEEZY_WEBHOOK_SECRET    Lemon Squeezy → /webhook/lemonsqueezy HMAC.

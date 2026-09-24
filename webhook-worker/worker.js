@@ -327,7 +327,7 @@ async function handleWebhook(request, env) {
         } else if (eventName === 'subscription_created') {
             await handleSubscriptionCreated(data);
         } else if (eventName === 'license_key_created') {
-            await handleLicenseKeyCreated(data);
+            await handleLicenseKeyCreated(data, env);
         }
         
         return new Response('OK', { status: 200 });
@@ -538,10 +538,25 @@ async function handleSubscriptionCreated(data) {
     await sendToPostHog('subscription_created', bcid || hashedEmail, properties);
 }
 
+/** The in-app registration token, from wherever Lemon Squeezy put the checkout
+ *  custom data. */
+function extractReg(data) {
+    const attrs = data.data?.attributes;
+    const reg = data.meta?.custom_data?.reg
+        || attrs?.custom_data?.reg
+        || attrs?.first_order_item?.custom_data?.reg
+        || null;
+    return reg && REG_RE.test(reg) ? reg : null;
+}
+
 /**
  * Handle license_key_created event
+ *
+ * For the Free product bought from an in-app registration, park the key
+ * against the device that minted the reg token; the app collects it on its
+ * next /install/resolve. The raw key never goes to PostHog.
  */
-async function handleLicenseKeyCreated(data) {
+async function handleLicenseKeyCreated(data, env) {
     const license = data.data?.attributes;
     const email = license?.user_email;
     
@@ -549,11 +564,40 @@ async function handleLicenseKeyCreated(data) {
     
     const hashedEmail = await hashEmail(email);
     const bcid = extractBcid(data);
+    const reg = extractReg(data);
+    const tier = licenseTierFor(env, {
+        productId: license?.product_id != null ? String(license.product_id) : null,
+        variantId: license?.variant_id != null ? String(license.variant_id) : null,
+    });
+
+    let arm = null;
+    let parked = false;
+    if (tier === 'free' && reg && env.QUOTA_DB && license?.key) {
+        const db = env.QUOTA_DB;
+        await db.prepare(
+            `UPDATE registrations
+                SET pending_license_key = ?2, email_hash = ?3, key_received_at = ?4
+              WHERE reg = ?1 AND completed_at IS NULL`
+        ).bind(reg, license.key, hashedEmail, Date.now()).run();
+
+        const row = await db.prepare(
+            `SELECT r.pending_license_key AS parked_key, i.arm AS arm
+               FROM registrations r
+               LEFT JOIN install_resolutions i ON i.device_id = r.device_id
+              WHERE r.reg = ?1`
+        ).bind(reg).first();
+        parked = !!row && row.parked_key === license.key;
+        arm = row ? row.arm : null;
+    }
+    console.log(JSON.stringify({ evt: 'license_key_created', tier, has_reg: !!reg, parked }));
     
     const properties = {
         license_id: data.data?.id,
-        license_key: license?.key,  // The actual license key
+        license_key_short: license?.key_short || null,
         status: license?.status,
+        tier,
+        registration_parked: parked,
+        free_gate_arm: arm,
         hashed_email: hashedEmail,
         bcid: bcid
     };
@@ -2118,6 +2162,18 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
         return attachSigned(snapshot, env, payload);
     };
 
+    // A test-arm device must register a free key before it can edit anything,
+    // songs it already owns included, matching the lock the app shows.
+    if (await deviceNeedsRegistration(env, db, account.deviceId, nowMs)) {
+        const used = await quotaCountUsed(db, account.deviceId, account.periodStart);
+        const snapshot = quotaSnapshot(account, used, {
+            allowed: false,
+            reason: 'registration_required',
+        });
+        console.log(JSON.stringify({ evt: 'quota_claim', granted: false, reason: 'registration_required' }));
+        return quotaJson(await signClaim(snapshot, false, 'registration_required'), 200, cors);
+    }
+
     // Owning a song is permanent and free to re-open, which preserves the
     // grandfathering the local implementation had: re-analysing something you
     // already have never costs a second slot.
@@ -2233,6 +2289,8 @@ async function handleQuotaState(body, env, db, cors, account, nowMs, ctx, machin
         owned_truncated: ownedTruncated,
         seeded,
         account_created: account.created,
+        // UI hint only; the claim above is what actually enforces it.
+        registration_required: await deviceNeedsRegistration(env, db, account.deviceId, nowMs),
     });
 
     // The owned list must be inside the signed payload, not just the body —
@@ -2347,6 +2405,28 @@ const LICENSE_MAX_BODY_BYTES = 4 * 1024;
 const LICENSE_KEY_RE = /^[A-Za-z0-9-]{8,128}$/;
 const INSTANCE_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
+/** "BeatCue - Free". Compiled in as a floor under FREE_PRODUCT_IDS /
+ *  FREE_VARIANT_IDS: the failure mode of a missing var must be "free key stays
+ *  free", never "free key signs pro". */
+const DEFAULT_FREE_PRODUCT_IDS = ['1385673'];
+const DEFAULT_FREE_VARIANT_IDS = ['2164536'];
+
+function idSet(raw, defaults) {
+    const set = new Set(defaults);
+    String(raw || '').split(',').map(s => s.trim()).filter(Boolean).forEach(s => set.add(s));
+    return set;
+}
+
+/** Tier a Lemon Squeezy key entitles, from the product/variant it was sold
+ *  under. Anything not configured as free is a paid product. */
+function licenseTierFor(env, lic) {
+    const freeProducts = idSet(env.FREE_PRODUCT_IDS, DEFAULT_FREE_PRODUCT_IDS);
+    const freeVariants = idSet(env.FREE_VARIANT_IDS, DEFAULT_FREE_VARIANT_IDS);
+    if (lic.productId && freeProducts.has(lic.productId)) return 'free';
+    if (lic.variantId && freeVariants.has(lic.variantId)) return 'free';
+    return 'pro';
+}
+
 /** POST to a Lemon Squeezy License API action as form-urlencoded (what that API
  *  expects). Returns the parsed JSON plus the HTTP status; throws only on a
  *  transport failure, which the caller turns into "serve the cache". */
@@ -2381,16 +2461,19 @@ function parseLsLicense(json) {
         email:      meta.customer_email || null,
         name:       meta.customer_name || null,
         orderId:    meta.order_id != null ? String(meta.order_id) : null,
+        productId:  meta.product_id != null ? String(meta.product_id) : null,
+        variantId:  meta.variant_id != null ? String(meta.variant_id) : null,
         error:      (json && json.error) || null,
     };
 }
 
-async function licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs) {
+async function licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier) {
     await db.prepare(
         `INSERT INTO license_activations
             (device_id, machine_id, license_key, instance_id, status, ends_at,
-             email, name, order_id, created_at, last_validated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
+             email, name, order_id, created_at, last_validated_at,
+             tier, product_id, variant_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?11, ?12, ?13)
          ON CONFLICT(device_id) DO UPDATE SET
             machine_id  = ?2,
             license_key = ?3,
@@ -2400,14 +2483,18 @@ async function licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs) {
             email       = COALESCE(?7, email),
             name        = COALESCE(?8, name),
             order_id    = COALESCE(?9, order_id),
-            last_validated_at = ?10`
+            last_validated_at = ?10,
+            tier        = ?11,
+            product_id  = COALESCE(?12, product_id),
+            variant_id  = COALESCE(?13, variant_id)`
     ).bind(deviceId, machineId || null, licenseKey, lic.instanceId,
-           lic.status, lic.endsAt || 0, lic.email, lic.name, lic.orderId, nowMs).run();
+           lic.status, lic.endsAt || 0, lic.email, lic.name, lic.orderId, nowMs,
+           tier, lic.productId || null, lic.variantId || null).run();
 }
 
-/** Sign a pro entitlement from a resolved licence verdict. */
-async function signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic) {
-    const payload = entitlementBase(deviceId, machineId, 'pro', nonce, nowMs);
+/** Sign a licence entitlement ('pro' or 'free') from a resolved verdict. */
+async function signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier) {
+    const payload = entitlementBase(deviceId, machineId, tier, nonce, nowMs);
     payload.license = {
         status:      lic.status || 'active',
         ends_at:     lic.endsAt || 0,
@@ -2416,6 +2503,24 @@ async function signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic) {
         instance_id: lic.instanceId || '',
     };
     return signEntitlement(env, payload);
+}
+
+/** Bookkeeping once a device holds a working free key: the arm row records
+ *  when, the registration that delivered it closes, and the key is linked to
+ *  the quota account (hashed; the raw key lives only in license_activations). */
+async function recordFreeKeyActivated(db, deviceId, licenseKey, nowMs) {
+    await db.prepare(
+        `UPDATE install_resolutions
+            SET key_activated_at = COALESCE(key_activated_at, ?2)
+          WHERE device_id = ?1`
+    ).bind(deviceId, nowMs).run();
+
+    await db.prepare(
+        `UPDATE registrations SET completed_at = ?3
+          WHERE device_id = ?1 AND pending_license_key = ?2 AND completed_at IS NULL`
+    ).bind(deviceId, licenseKey, nowMs).run();
+
+    await quotaLinkIdentity(db, 'license', await sha256LowerHex(licenseKey), deviceId, nowMs);
 }
 
 /** Shape of a "not licensed" answer: no signed token, so the client stays in
@@ -2479,7 +2584,7 @@ async function handleLicense(request, env, url, ctx) {
 
     const row = await db.prepare(
         `SELECT device_id, machine_id, license_key, instance_id, status, ends_at,
-                email, name, order_id, last_validated_at
+                email, name, order_id, last_validated_at, tier
            FROM license_activations WHERE device_id = ?1`
     ).bind(deviceId).first();
 
@@ -2523,12 +2628,14 @@ async function handleLicenseActivate(env, db, cors, body, deviceId, machineId, n
         return licenseDenied(lic.error || 'activation_failed', lic.status, cors);
     }
 
-    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs);
+    const tier = licenseTierFor(env, lic);
+    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier);
+    if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 
-    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic);
-    console.log(JSON.stringify({ evt: 'license_activate_ok', status: lic.status, has_instance: !!lic.instanceId }));
+    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier);
+    console.log(JSON.stringify({ evt: 'license_activate_ok', status: lic.status, tier, has_instance: !!lic.instanceId }));
     return quotaJson({
-        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt,
+        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt, tier,
         email: lic.email, name: lic.name, order_id: lic.orderId,
         instance_id: lic.instanceId, signed,
     }, 200, cors);
@@ -2567,10 +2674,11 @@ async function handleLicenseValidate(env, db, cors, body, row, deviceId, machine
                 status: row.status, endsAt: Number(row.ends_at) || 0, instanceId: row.instance_id,
                 email: row.email, name: row.name, orderId: row.order_id,
             };
-            const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, cached);
-            console.log(JSON.stringify({ evt: 'license_validate_cached', reason: 'upstream_unreachable' }));
+            const tier = row.tier || 'pro';
+            const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, cached, tier);
+            console.log(JSON.stringify({ evt: 'license_validate_cached', reason: 'upstream_unreachable', tier }));
             return quotaJson({ ok: true, valid: true, status: cached.status, ends_at: cached.endsAt,
-                               cached: true, signed }, 200, cors);
+                               tier, cached: true, signed }, 200, cors);
         }
         throw e;
     }
@@ -2591,12 +2699,14 @@ async function handleLicenseValidate(env, db, cors, body, row, deviceId, machine
     }
 
     lic.instanceId = instanceId;
-    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs);
+    const tier = licenseTierFor(env, lic);
+    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier);
+    if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 
-    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic);
-    console.log(JSON.stringify({ evt: 'license_validate_ok', status: lic.status }));
+    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier);
+    console.log(JSON.stringify({ evt: 'license_validate_ok', status: lic.status, tier }));
     return quotaJson({
-        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt,
+        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt, tier,
         email: lic.email, name: lic.name, order_id: lic.orderId,
         instance_id: lic.instanceId, signed,
     }, 200, cors);
@@ -2630,6 +2740,241 @@ async function handleLicenseDeactivate(env, db, cors, body, row, deviceId) {
     await db.prepare(`DELETE FROM license_activations WHERE device_id = ?1`).bind(deviceId).run();
     console.log(JSON.stringify({ evt: 'license_deactivate', deactivated }));
     return quotaJson({ ok: true, deactivated }, 200, cors);
+}
+
+// ─── Free-key gate: install resolution + in-app registration ─────────────────
+//
+// Every install asks the worker once per launch whether it must register. The
+// answer depends on a sticky per-device arm:
+//
+//   existing — account predates EXPERIMENT_START. Keyless free tier as today,
+//              never gated; excluded from the experiment's analysis.
+//   control  — new device, hash outside TEST_PERCENT. Keyless free tier as
+//              today: nothing to activate, nothing to register.
+//   test     — new device, hash inside TEST_PERCENT. Must register a free key
+//              from inside the app before editing.
+//
+// The key a test device registers comes back through the webhook, keyed by a
+// one-time reg token the app itself minted and sent to checkout, so nothing
+// depends on matching the browser to the machine.
+
+const INSTALL_MAX_BODY_BYTES = 4 * 1024;
+const REG_RE = /^rg_[A-Za-z0-9_-]{16,40}$/;
+
+/** A reg token stays reusable (repeated "Activate free plan" clicks within a
+ *  session share one) for this long before a fresh one is minted. */
+const REG_REUSE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Parse EXPERIMENT_START as ms epoch or an ISO date. 0 means "not started". */
+function experimentStartMs(env) {
+    const raw = String(env.EXPERIMENT_START || '').trim();
+    if (!raw) return 0;
+    if (/^\d+$/.test(raw)) return Number(raw);
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function testPercent(env) {
+    const n = Number(env.TEST_PERCENT);
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(100, Math.max(0, Math.floor(n)));
+}
+
+function gateEnabled(env) {
+    return String(env.GATE_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
+/** Deterministic 0-99 bucket for a device, so the arm is reproducible from the
+ *  device id and salt alone (and a lost row re-derives the same arm). */
+async function experimentBucket(env, deviceId) {
+    const hex = await sha256LowerHex((env.EXPERIMENT_SALT || 'free-key-gate-v1') + ':' + deviceId);
+    return parseInt(hex.slice(0, 8), 16) % 100;
+}
+
+async function assignArm(env, db, deviceId) {
+    const startMs = experimentStartMs(env);
+    if (!startMs) return 'existing';
+
+    const account = await db.prepare(
+        `SELECT created_at FROM quota_accounts WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    if (account && Number(account.created_at) < startMs) return 'existing';
+
+    return (await experimentBucket(env, deviceId)) < testPercent(env) ? 'test' : 'control';
+}
+
+/** True for a test-arm device with the gate on and no live licence. Old app
+ *  builds never call /install/resolve, have no arm row, and are never gated. */
+async function deviceNeedsRegistration(env, db, deviceId, nowMs) {
+    if (!gateEnabled(env)) return false;
+
+    const res = await db.prepare(
+        `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    if (!res || res.arm !== 'test') return false;
+
+    const lic = await db.prepare(
+        `SELECT status, ends_at FROM license_activations WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    const licenseLive = !!lic && lic.status === 'active'
+        && (!Number(lic.ends_at) || Number(lic.ends_at) > nowMs);
+    return !licenseLive;
+}
+
+function randomToken(prefix, bytes = 18) {
+    const raw = new Uint8Array(bytes);
+    crypto.getRandomValues(raw);
+    return prefix + bytesToB64u(raw);
+}
+
+async function handleInstall(request, env, url) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    if (request.method !== 'POST') {
+        return quotaJson({ ok: false, error: 'method_not_allowed' }, 405, cors);
+    }
+
+    const db = env.QUOTA_DB;
+    if (!db) {
+        console.error('QUOTA_DB binding missing — install routes need the D1 database.');
+        return quotaJson({ ok: false, error: 'db_unavailable' }, 503, cors);
+    }
+
+    let body;
+    try {
+        body = await readJsonBounded(request, INSTALL_MAX_BODY_BYTES);
+    } catch (e) {
+        return quotaJson({ ok: false, error: e.message }, e.statusCode || 400, cors);
+    }
+
+    const deviceId = clampString(body.device_id, 64);
+    if (!deviceId || !QUOTA_ID_RE.test(deviceId)) {
+        return quotaJson({ ok: false, error: 'invalid_device_id' }, 400, cors);
+    }
+
+    const nowMs = Date.now();
+
+    if (url.pathname === '/install/resolve') {
+        return handleInstallResolve(env, db, cors, body, deviceId, nowMs);
+    }
+    if (url.pathname === '/install/registration') {
+        return handleInstallRegistration(env, db, cors, deviceId, nowMs);
+    }
+    return quotaJson({ ok: false, error: 'not_found' }, 404, cors);
+}
+
+/**
+ * POST /install/resolve { device_id, bcid?, platform?, app_version? }
+ *   → { ok, action: 'activate' | 'gate' | 'none', arm, license_key?, tier? }
+ *
+ *   activate — the free key this device registered has arrived: activate it
+ *              through /license/activate.
+ *   gate     — test arm without a key: block editing until the user registers.
+ *   none     — nothing to do: the device already holds a live key, or it is
+ *              control / existing and stays on the keyless free tier.
+ */
+async function handleInstallResolve(env, db, cors, body, deviceId, nowMs) {
+    const bcid = (() => {
+        const v = clampString(body.bcid, 80);
+        return v && BCID_RE.test(v) ? v : null;
+    })();
+    const platform   = clampString(body.platform, 32);
+    const appVersion = clampString(body.app_version, 32);
+
+    let res = await db.prepare(
+        `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+    ).bind(deviceId).first();
+
+    let assignedNow = false;
+    if (!res) {
+        const arm = await assignArm(env, db, deviceId);
+        await db.prepare(
+            `INSERT INTO install_resolutions
+                (device_id, arm, bcid, platform, app_version, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(device_id) DO NOTHING`
+        ).bind(deviceId, arm, bcid, platform, appVersion, nowMs).run();
+        res = await db.prepare(
+            `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+        ).bind(deviceId).first();
+        assignedNow = true;
+    } else {
+        await db.prepare(
+            `UPDATE install_resolutions
+                SET bcid = COALESCE(bcid, ?2),
+                    platform = COALESCE(?3, platform),
+                    app_version = COALESCE(?4, app_version)
+              WHERE device_id = ?1`
+        ).bind(deviceId, bcid, platform, appVersion).run();
+    }
+
+    const arm = res.arm;
+    const reply = (action, extra = {}) => {
+        console.log(JSON.stringify({ evt: 'install_resolve', arm, action, assigned_now: assignedNow }));
+        return quotaJson({ ok: true, action, arm, assigned_now: assignedNow,
+                           gate_enabled: gateEnabled(env), ...extra }, 200, cors);
+    };
+
+    const lic = await db.prepare(
+        `SELECT tier, status, ends_at FROM license_activations WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    const licenseLive = !!lic && lic.status === 'active'
+        && (!Number(lic.ends_at) || Number(lic.ends_at) > nowMs);
+    if (licenseLive) {
+        return reply('none', { tier: lic.tier || 'pro' });
+    }
+
+    if (arm === 'test' && gateEnabled(env)) {
+        const pending = await db.prepare(
+            `SELECT pending_license_key FROM registrations
+              WHERE device_id = ?1 AND pending_license_key IS NOT NULL AND completed_at IS NULL
+              ORDER BY key_received_at DESC LIMIT 1`
+        ).bind(deviceId).first();
+        if (pending) {
+            return reply('activate', { tier: 'free', license_key: pending.pending_license_key });
+        }
+        return reply('gate');
+    }
+
+    // control, existing, or test with the gate switched off: keyless free tier.
+    return reply('none');
+}
+
+/**
+ * POST /install/registration { device_id } → { ok, reg }
+ *
+ * Minted when the user clicks "Activate free plan". The app appends it to the
+ * /get URL; /plans forwards it as checkout[custom][reg].
+ */
+async function handleInstallRegistration(env, db, cors, deviceId, nowMs) {
+    const res = await db.prepare(
+        `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    if (!res) {
+        return quotaJson({ ok: false, error: 'unresolved_device' }, 409, cors);
+    }
+
+    const reusable = await db.prepare(
+        `SELECT reg FROM registrations
+          WHERE device_id = ?1 AND completed_at IS NULL AND pending_license_key IS NULL
+            AND created_at > ?2
+          ORDER BY created_at DESC LIMIT 1`
+    ).bind(deviceId, nowMs - REG_REUSE_WINDOW_MS).first();
+    if (reusable) {
+        return quotaJson({ ok: true, reg: reusable.reg, reused: true }, 200, cors);
+    }
+
+    const reg = randomToken('rg_');
+    await db.prepare(
+        `INSERT INTO registrations (reg, device_id, created_at) VALUES (?1, ?2, ?3)`
+    ).bind(reg, deviceId, nowMs).run();
+
+    console.log(JSON.stringify({ evt: 'install_registration', arm: res.arm }));
+    return quotaJson({ ok: true, reg, reused: false }, 200, cors);
 }
 
 /**
@@ -2688,6 +3033,10 @@ async function route(request, env, ctx) {
         || url.pathname === '/license/validate'
         || url.pathname === '/license/deactivate') {
         return handleLicense(request, env, url, ctx);
+    }
+
+    if (url.pathname === '/install/resolve' || url.pathname === '/install/registration') {
+        return handleInstall(request, env, url);
     }
 
     if (url.pathname === '/capi') {

@@ -59,6 +59,8 @@ function makeD1(db) {
 const sqlite = new DatabaseSync(':memory:');
 sqlite.exec(readFileSync(join(here, '..', 'migrations', '0001_quota.sql'), 'utf8'));
 sqlite.exec(readFileSync(join(here, '..', 'migrations', '0002_license.sql'), 'utf8'));
+sqlite.exec(readFileSync(join(here, '..', 'migrations', '0004_install_resolutions.sql'), 'utf8'));
+sqlite.exec(readFileSync(join(here, '..', 'migrations', '0005_install_tables.sql'), 'utf8'));
 
 // ─── Signing key for the test env ─────────────────────────────────────────────
 // A throwaway Ed25519 pair: the worker signs with the private half (via the
