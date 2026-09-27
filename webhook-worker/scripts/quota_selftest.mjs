@@ -123,7 +123,8 @@ globalThis.fetch = async (url, init) => {
         }
 
         const lk   = { status: 'active', expires_at: null };
-        const meta = { customer_email: 'buyer@example.com', customer_name: 'Buyer', order_id: 42 };
+        const meta = { customer_email: 'buyer@example.com', customer_name: 'Buyer', order_id: 42,
+                       product_id: 1295253, variant_id: 2146438 };
 
         if (action === 'activate') {
             return jsonResponse({ activated: true, error: null, license_key: lk,

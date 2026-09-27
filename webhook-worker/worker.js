@@ -565,10 +565,10 @@ async function handleLicenseKeyCreated(data, env) {
     const hashedEmail = await hashEmail(email);
     const bcid = extractBcid(data);
     const reg = extractReg(data);
-    const tier = licenseTierFor(env, {
-        productId: license?.product_id != null ? String(license.product_id) : null,
-        variantId: license?.variant_id != null ? String(license.variant_id) : null,
-    });
+    const productId = license?.product_id != null ? String(license.product_id) : null;
+    const variantId = license?.variant_id != null ? String(license.variant_id) : null;
+    // Only park keys positively identified as the Free product.
+    const tier = productId || variantId ? licenseTierFor(env, { productId, variantId }) : 'unknown';
 
     let arm = null;
     let parked = false;
@@ -2418,8 +2418,15 @@ function idSet(raw, defaults) {
 }
 
 /** Tier a Lemon Squeezy key entitles, from the product/variant it was sold
- *  under. Anything not configured as free is a paid product. */
-function licenseTierFor(env, lic) {
+ *  under. Anything not configured as free is a paid product. A response with
+ *  neither id can't prove a paid product, so it keeps the tier already stored
+ *  for this device and otherwise falls to free. */
+function licenseTierFor(env, lic, storedTier) {
+    if (!lic.productId && !lic.variantId) {
+        const tier = storedTier === 'pro' || storedTier === 'free' ? storedTier : 'free';
+        console.log(JSON.stringify({ evt: 'license_tier_ids_missing', stored_tier: storedTier || null, tier }));
+        return tier;
+    }
     const freeProducts = idSet(env.FREE_PRODUCT_IDS, DEFAULT_FREE_PRODUCT_IDS);
     const freeVariants = idSet(env.FREE_VARIANT_IDS, DEFAULT_FREE_VARIANT_IDS);
     if (lic.productId && freeProducts.has(lic.productId)) return 'free';
@@ -2593,7 +2600,7 @@ async function handleLicense(request, env, url, ctx) {
             return await handleLicenseDeactivate(env, db, cors, body, row, deviceId);
         }
         if (action === 'activate') {
-            return await handleLicenseActivate(env, db, cors, body, deviceId, machineId, nonce, nowMs);
+            return await handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs);
         }
         if (action === 'validate') {
             return await handleLicenseValidate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs);
@@ -2608,7 +2615,14 @@ async function handleLicense(request, env, url, ctx) {
     }
 }
 
-async function handleLicenseActivate(env, db, cors, body, deviceId, machineId, nonce, nowMs) {
+/** Tier previously stored for this exact key on this device. Rows from before
+ *  the tier column held only paid keys. */
+function storedTierFor(row, licenseKey) {
+    if (!row || row.license_key !== licenseKey) return null;
+    return row.tier || 'pro';
+}
+
+async function handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs) {
     const licenseKey = clampString(body.license_key, 128);
     if (!licenseKey || !LICENSE_KEY_RE.test(licenseKey)) {
         return quotaJson({ ok: false, error: 'invalid_license_key' }, 400, cors);
@@ -2628,7 +2642,7 @@ async function handleLicenseActivate(env, db, cors, body, deviceId, machineId, n
         return licenseDenied(lic.error || 'activation_failed', lic.status, cors);
     }
 
-    const tier = licenseTierFor(env, lic);
+    const tier = licenseTierFor(env, lic, storedTierFor(row, licenseKey));
     await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier);
     if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 
@@ -2699,7 +2713,7 @@ async function handleLicenseValidate(env, db, cors, body, row, deviceId, machine
     }
 
     lic.instanceId = instanceId;
-    const tier = licenseTierFor(env, lic);
+    const tier = licenseTierFor(env, lic, storedTierFor(row, licenseKey));
     await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier);
     if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 

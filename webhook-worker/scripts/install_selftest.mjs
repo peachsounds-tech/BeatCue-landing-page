@@ -68,10 +68,12 @@ async function verifyJws(token) {
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 const FREE_KEY = 'free-key-0000-1111-2222-333344445555';
 const PRO_KEY  = 'pro-key-0000-1111-2222-333344445555';
+const NOID_KEY = 'noid-key-000-1111-2222-333344445555';
 
 const KEY_PRODUCTS = {
     [FREE_KEY]: { product_id: 1385673, variant_id: 2164536 },
     [PRO_KEY]:  { product_id: 1295253, variant_id: 2146438 },
+    [NOID_KEY]: {},
 };
 
 let lsCalls = [];
@@ -178,6 +180,16 @@ console.log('\nlicence tiers come from the Lemon Squeezy product');
     const floor = await post('/license/activate', { device_id: d3, machine_id: MACHINE, nonce: 'nonce-free-3', license_key: FREE_KEY });
     check('compiled-in floor keeps free key free without vars', floor.body.tier, 'free');
     Object.assign(env, saved);
+
+    const d4 = newDevice();
+    const noid = await post('/license/activate', { device_id: d4, machine_id: MACHINE, nonce: 'nonce-noid-1', license_key: NOID_KEY });
+    check('response without product ids signs free, not pro', (await verifyJws(noid.body.signed))?.tier, 'free');
+
+    const d5 = newDevice();
+    await post('/license/activate', { device_id: d5, machine_id: MACHINE, nonce: 'nonce-noid-2', license_key: NOID_KEY });
+    sqlite.prepare(`UPDATE license_activations SET tier = 'pro' WHERE device_id = ?`).run(d5);
+    const kept = await post('/license/validate', { device_id: d5, machine_id: MACHINE, nonce: 'nonce-noid-3' });
+    check('missing ids keep the stored pro tier', (await verifyJws(kept.body.signed))?.tier, 'pro');
 }
 
 // ─── Experiment off ──────────────────────────────────────────────────────────
@@ -272,7 +284,7 @@ console.log('\ntest arm: gate, register in-app, key arrives by webhook');
 
     const reg = sqlite.prepare('SELECT completed_at FROM registrations WHERE reg = ?').get(reg1.body.reg);
     check('registration closed', reg.completed_at > 0, true);
-    const link = sqlite.prepare("SELECT device_id FROM quota_identity_links WHERE kind = 'license'").get();
+    const link = sqlite.prepare("SELECT device_id FROM quota_identity_links WHERE kind = 'license' AND device_id = ?").get(d);
     check('key linked to the quota account', link?.device_id, d);
 }
 
@@ -288,6 +300,12 @@ console.log('\nwebhook ignores pro keys and unknown regs');
         data: { id: 100, attributes: { key: PRO_KEY, user_email: 'p@example.com', product_id: 1295253 } },
     });
     check('pro key is not parked', (await post('/install/resolve', { device_id: d })).body.action, 'gate');
+
+    await webhook({
+        meta: { event_name: 'license_key_created', custom_data: { reg } },
+        data: { id: 102, attributes: { key: NOID_KEY, user_email: 'n@example.com' } },
+    });
+    check('key without product ids is not parked', (await post('/install/resolve', { device_id: d })).body.action, 'gate');
 
     await webhook({
         meta: { event_name: 'license_key_created', custom_data: { reg: 'rg_doesnotexist0000000000' } },
