@@ -3,7 +3,7 @@
 (function () {
     var path = (typeof location !== 'undefined' && location.pathname) || '';
     if (/^\/v4(\/|$)/.test(path)) {
-        window.CUE_PAGE_VERSION = '4.0.0';
+        window.CUE_PAGE_VERSION = '4.0.1';
         return;
     }
     window.CUE_PAGE_VERSION = '2.0.6';
