@@ -161,6 +161,7 @@ const CAPI_CUSTOM_EVENTS = new Set([
     'first_export_intent',
     'first_activation_started',
     'first_activation_finished',
+    'first_free_registration_completed',
     'first_checkout_clicked',
     'first_send_to_desktop_clicked',
 
@@ -323,7 +324,7 @@ async function handleWebhook(request, env) {
         
         // Handle different Lemon Squeezy events
         if (eventName === 'order_created') {
-            await handleOrderCreated(data);
+            await handleOrderCreated(data, env);
         } else if (eventName === 'subscription_created') {
             await handleSubscriptionCreated(data);
         } else if (eventName === 'license_key_created') {
@@ -401,7 +402,37 @@ function extractBcid(data) {
 /**
  * Handle order_created event (for one-time purchases or lead magnets)
  */
-async function handleOrderCreated(data) {
+/** Checkout custom field, from wherever Lemon Squeezy put it. */
+function extractCustom(data, key) {
+    const attrs = data.data?.attributes;
+    return data.meta?.custom_data?.[key]
+        || attrs?.custom_data?.[key]
+        || attrs?.first_order_item?.custom_data?.[key]
+        || null;
+}
+
+/** Tier of an order from its first item. Null when the order names no product. */
+function orderTier(env, data) {
+    const item = data.data?.attributes?.first_order_item || {};
+    const productId = item.product_id != null ? String(item.product_id) : null;
+    const variantId = item.variant_id != null ? String(item.variant_id) : null;
+    if (!productId && !variantId) return null;
+    return licenseTierFor(env, { productId, variantId });
+}
+
+/** The device, arm and bcid a reg token was minted for. Null when the token
+ *  matches no registration. */
+async function registrationContext(env, reg) {
+    if (!reg || !env?.QUOTA_DB) return null;
+    return await env.QUOTA_DB.prepare(
+        `SELECT r.device_id AS device_id, i.arm AS arm, i.bcid AS bcid
+           FROM registrations r
+           LEFT JOIN install_resolutions i ON i.device_id = r.device_id
+          WHERE r.reg = ?1`
+    ).bind(reg).first();
+}
+
+async function handleOrderCreated(data, env) {
     const order = data.data?.attributes;
     const email = order?.user_email;
     
@@ -434,9 +465,18 @@ async function handleOrderCreated(data) {
     // that person, which removes the merge step instead of capturing against a
     // hashed email and depending on a later $create_alias landing.
     const bcid = extractBcid(data);
-    
-    // Who the order gets recorded against.
-    const distinctId = bcid || hashedEmail;
+    const reg = extractReg(data);
+    const source = extractCustom(data, 'source');
+    const tier = orderTier(env, data);
+    // An in-app free registration, as opposed to a Pro purchase. The reg token
+    // is what ties the checkout back to the device that asked to register.
+    const freeRegistration = tier === 'free' || !!reg || source === 'registration_gate';
+    const registration = freeRegistration ? await registrationContext(env, reg) : null;
+
+    // Who the order gets recorded against. A registration's stored bcid is the
+    // person the app already reports as, so the checkout lands on that person
+    // even when the checkout link dropped the bcid.
+    const distinctId = (registration && registration.bcid) || bcid || hashedEmail;
     
     console.log('=== Extracted Values ===');
     console.log('hashedEmail:', hashedEmail);
@@ -476,20 +516,37 @@ async function handleOrderCreated(data) {
         hashed_email: hashedEmail,
         // Which identity the order was attributed to, so a bcid-less order is
         // visible as such rather than silently looking the same as a good one.
-        bcid: bcid,
-        attributed_via: bcid ? 'bcid' : (posthogId ? 'posthog_id_merge' : 'hashed_email_only')
+        bcid: (registration && registration.bcid) || bcid,
+        attributed_via: (registration && registration.bcid) || bcid
+            ? 'bcid' : (posthogId ? 'posthog_id_merge' : 'hashed_email_only')
     };
-    
-    console.log('Sending checkout_completed to PostHog with distinct_id:', distinctId);
-    
-    const success = await sendToPostHog('checkout_completed', distinctId, properties);
+
+    // Free registration gets its own event, carrying the registration it belongs
+    // to. Pro keeps checkout_completed.
+    const checkoutEvent = freeRegistration ? 'registration_checkout_completed' : 'checkout_completed';
+    if (freeRegistration) {
+        properties.tier = 'free';
+        properties.reg = reg;
+        properties.device_id = registration ? registration.device_id : null;
+        properties.free_gate_arm = registration ? registration.arm : null;
+        properties.source = source || 'registration_gate';
+    }
+
+    console.log('Sending ' + checkoutEvent + ' to PostHog with distinct_id:', distinctId);
+
+    const success = await sendToPostHog(checkoutEvent, distinctId, properties);
     
     if (success) {
-        console.log('PostHog checkout_completed event sent successfully');
+        console.log('PostHog ' + checkoutEvent + ' event sent successfully');
     } else {
         console.error('Failed to send PostHog event');
     }
     
+    // A free registration is not a purchase, so it must not be labelled as one.
+    if (freeRegistration) {
+        return;
+    }
+
     // Step 3: Set user_type based on product (useful if page view didn't capture it)
     const productName = order?.first_order_item?.product_name || '';
     const isEarlyAccess = productName.toLowerCase().includes('early access');
@@ -572,6 +629,8 @@ async function handleLicenseKeyCreated(data, env) {
 
     let arm = null;
     let parked = false;
+    let registrationDeviceId = null;
+    let registrationBcid = null;
     if (tier === 'free' && reg && env.QUOTA_DB && license?.key) {
         const db = env.QUOTA_DB;
         await db.prepare(
@@ -581,16 +640,25 @@ async function handleLicenseKeyCreated(data, env) {
         ).bind(reg, license.key, hashedEmail, Date.now()).run();
 
         const row = await db.prepare(
-            `SELECT r.pending_license_key AS parked_key, i.arm AS arm
+            `SELECT r.device_id AS device_id, r.pending_license_key AS parked_key,
+                    i.arm AS arm, i.bcid AS bcid
                FROM registrations r
                LEFT JOIN install_resolutions i ON i.device_id = r.device_id
               WHERE r.reg = ?1`
         ).bind(reg).first();
         parked = !!row && row.parked_key === license.key;
         arm = row ? row.arm : null;
+        if (row) {
+            registrationDeviceId = row.device_id;
+            registrationBcid = row.bcid;
+        }
     }
-    console.log(JSON.stringify({ evt: 'license_key_created', tier, has_reg: !!reg, parked }));
-    
+    // A free key is a registration, not a Pro activation, so it gets its own
+    // event tied to the reg token and the device that minted it.
+    const freeRegistration = tier === 'free';
+    const keyEvent = freeRegistration ? 'registration_license_key_created' : 'license_key_created';
+    console.log(JSON.stringify({ evt: keyEvent, tier, has_reg: !!reg, parked }));
+
     const properties = {
         license_id: data.data?.id,
         license_key_short: license?.key_short || null,
@@ -599,10 +667,15 @@ async function handleLicenseKeyCreated(data, env) {
         registration_parked: parked,
         free_gate_arm: arm,
         hashed_email: hashedEmail,
-        bcid: bcid
+        bcid: registrationBcid || bcid
     };
-    
-    await sendToPostHog('license_key_created', bcid || hashedEmail, properties);
+    if (freeRegistration) {
+        properties.reg = reg;
+        properties.device_id = registrationDeviceId;
+        properties.source = 'registration_gate';
+    }
+
+    await sendToPostHog(keyEvent, registrationBcid || bcid || hashedEmail, properties);
 }
 
 // ─── Pairing helpers ──────────────────────────────────────────────────────────

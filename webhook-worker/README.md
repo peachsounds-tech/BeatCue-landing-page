@@ -35,7 +35,7 @@ New devices get a sticky arm on their first `/install/resolve`:
 - `control` — hash outside `TEST_PERCENT`. Keyless free tier, exactly today's experience.
 - `test` — hash inside `TEST_PERCENT`. Editing is gated until the user registers a free key in the app. `/quota/claim` answers `registration_required` for these devices until a key is live.
 
-A test device's key comes back through the webhook: the app mints a `reg` token, `/plans` forwards it as `checkout[custom][reg]`, `license_key_created` parks the key against that device, and the app picks it up on its next resolve.
+A test device's key comes back through the webhook: the app mints a `reg` token, `/plans` forwards it as `checkout[custom][reg]`, `registration_license_key_created` parks the key against that device, and the app picks it up on its next resolve.
 
 Keys from the **BeatCue - Free** product (product `1385673`, variant `2164536`) sign tier `free`; everything else signs `pro`. Those IDs are also compiled in as a floor, so a missing var can never promote a free key to Pro.
 
@@ -54,16 +54,16 @@ Offline tests: `node --experimental-sqlite scripts/install_selftest.mjs` and `sc
 Break everything down by the person property `free_gate_arm` and keep only `control` and `test`; `existing` devices are excluded from the experiment. The app sets that property (and the matching super-property) from every `/install/resolve` answer. Browser and app events join through `bcid`, which the app sends to `/get`.
 
 - **Primary metric**: share of new devices with a granted edit within 7 days of their first launch. The funnel is `install_resolved` (first per device) followed by `free_tier_slot_claim` where `outcome = granted`, with a 7-day conversion window.
-- **Test-arm drop-off**: `install_resolved` → `plan_panel_locked_shown` → `registration_activate_clicked` → `plans_page_viewed` → `checkout_completed` → `free_key_activated` → `free_tier_slot_claim` (`outcome = granted`). Gate closes show up as `registration_gate_dismissed`. `free_key_activated.via` says how the key arrived: `poll`, `deep_link`, or `paste`.
-- **Secondary metrics**: D7 and D30 retention on `app_launched`, Pro conversion (`license_activated`), and emails captured (test-arm `license_key_created` where `tier = free`).
+- **Test-arm drop-off**: `install_resolved` → `plan_panel_locked_shown` → `registration_activate_clicked` → `plans_page_viewed` → `registration_checkout_completed` → `free_key_activated` → `free_tier_slot_claim` (`outcome = granted`). Gate closes show up as `registration_gate_dismissed`. `free_key_activated.via` says how the key arrived: `poll`, `deep_link`, or `paste`.
+- **Secondary metrics**: D7 and D30 retention on `app_launched`, Pro conversion (`license_activated`), and emails captured (test-arm `registration_license_key_created`).
 - **Health**: `install_resolve_failed` and `free_key_auto_activation_failed` should stay near zero. A rising `registration_token_failed` means keys are arriving by email only.
 
 ## Lemon Squeezy events tracked
 
 | Lemon Squeezy Event | PostHog Event | Description |
 |---------------------|---------------|-------------|
-| `order_created` | `checkout_completed` | User completed checkout |
-| `license_key_created` | `license_key_created` | License key was generated |
+| `order_created` | `checkout_completed` | Pro checkout. A free registration sends `registration_checkout_completed` instead. |
+| `license_key_created` | `license_key_created` | Pro key. A free registration sends `registration_license_key_created` instead. |
 | `subscription_created` | `subscription_created` | Subscription started |
 
 ## Pairing flow
@@ -343,6 +343,7 @@ pre-`first_` names stay on the allowlist only so in-field builds do not 400.
 | `first_export_intent` | desktop app | `export_started` | **yes (Custom Conversion)** |
 | `first_activation_started` | desktop app | `activation_started` | no |
 | `first_activation_finished` | desktop app | `activation_finished` | **yes (Custom Conversion)** |
+| `first_free_registration_completed` | desktop app, free key activated | `free_key_activated` | no |
 | `first_checkout_clicked` | landing page | `lemonsqueezy_buy_click` | no |
 | `first_send_to_desktop_clicked` | landing page | `send_to_desktop_clicked` | no |
 

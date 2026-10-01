@@ -267,6 +267,23 @@ console.log('\ntest arm: gate, register in-app, key arrives by webhook');
     });
     const leaked = JSON.stringify(posthogEvents).includes(FREE_KEY);
     check('raw key is not sent to PostHog', leaked, false);
+    const keyEvt = posthogEvents.find(e => e.event === 'registration_license_key_created');
+    check('free key uses the registration event', !!keyEvt, true);
+    check('registration event carries the reg', keyEvt?.properties?.reg, reg1.body.reg);
+    check('registration event carries the device', keyEvt?.properties?.device_id, d);
+    check('free key is not license_key_created', posthogEvents.some(e => e.event === 'license_key_created'), false);
+
+    posthogEvents.length = 0;
+    await webhook({
+        meta: { event_name: 'order_created', custom_data: { reg: reg1.body.reg, source: 'registration_gate', bcid: 'bc_selftest-0001' } },
+        data: { id: 'ord-free', attributes: { user_email: 'new@example.com', total: 0, currency: 'USD', status: 'paid',
+            first_order_item: { product_id: 1385673, variant_id: 2164536, product_name: 'BeatCue - Free' } } },
+    });
+    const checkout = posthogEvents.find(e => e.event === 'registration_checkout_completed');
+    check('free order uses the registration checkout event', !!checkout, true);
+    check('registration checkout carries the reg', checkout?.properties?.reg, reg1.body.reg);
+    check('registration checkout carries the device', checkout?.properties?.device_id, d);
+    check('free order is not checkout_completed', posthogEvents.some(e => e.event === 'checkout_completed'), false);
 
     const r2 = await post('/install/resolve', { device_id: d });
     check('parked key → activate', r2.body.action, 'activate');
@@ -295,11 +312,23 @@ console.log('\nwebhook ignores pro keys and unknown regs');
     await post('/install/resolve', { device_id: d });
     const reg = (await post('/install/registration', { device_id: d })).body.reg;
 
+    posthogEvents.length = 0;
     await webhook({
         meta: { event_name: 'license_key_created', custom_data: { reg } },
         data: { id: 100, attributes: { key: PRO_KEY, user_email: 'p@example.com', product_id: 1295253 } },
     });
     check('pro key is not parked', (await post('/install/resolve', { device_id: d })).body.action, 'gate');
+    check('pro key keeps license_key_created', posthogEvents.some(e => e.event === 'license_key_created'), true);
+    check('pro key is not a registration event', posthogEvents.some(e => e.event === 'registration_license_key_created'), false);
+
+    posthogEvents.length = 0;
+    await webhook({
+        meta: { event_name: 'order_created', custom_data: { bcid: 'bc_pro' } },
+        data: { id: 'ord-pro', attributes: { user_email: 'p@example.com', total: 9900, currency: 'USD', status: 'paid',
+            first_order_item: { product_id: 1295253, product_name: 'BeatCue Pro' } } },
+    });
+    check('pro order keeps checkout_completed', posthogEvents.some(e => e.event === 'checkout_completed'), true);
+    check('pro order is not a registration checkout', posthogEvents.some(e => e.event === 'registration_checkout_completed'), false);
 
     await webhook({
         meta: { event_name: 'license_key_created', custom_data: { reg } },
