@@ -2186,6 +2186,10 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
         return quotaJson(await signClaim(snapshot, true, 'already_owned'), 200, cors);
     }
 
+    // Pro claims exactly like the free tier, with no limit.
+    const pro = await deviceHasLivePro(db, account.deviceId, nowMs);
+    const claimLimit = pro ? Number.MAX_SAFE_INTEGER : account.effectiveLimit;
+
     // Count and insert in one statement so two claims arriving together can't
     // both pass a separate check. D1 gives no multi-statement transaction here,
     // and a conditional INSERT...SELECT is the cheapest way to stay correct.
@@ -2195,7 +2199,7 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
           WHERE (SELECT COUNT(*) FROM quota_songs
                   WHERE device_id = ?1 AND period_start = ?4) < ?5
          ON CONFLICT(device_id, song_hash) DO NOTHING`
-    ).bind(account.deviceId, songHash, nowMs, account.periodStart, account.effectiveLimit).run();
+    ).bind(account.deviceId, songHash, nowMs, account.periodStart, claimLimit).run();
 
     // Re-read rather than trusting `meta.changes`, whose shape has moved
     // between D1 versions. Two indexed lookups is a fine price for a decision
@@ -2207,13 +2211,19 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
         evt: 'quota_claim',
         granted,
         used,
-        limit: account.effectiveLimit,
+        limit: pro ? -1 : account.effectiveLimit,
         period_start: account.periodStart,
         rolled: account.rolled,
     }));
 
     const reason = granted ? 'granted' : 'quota_exhausted';
     const snapshot = quotaSnapshot(account, used, { allowed: granted, reason });
+    // -1 is unlimited. The client ignores a snapshot with no positive limit,
+    // so the free-tier counters it caches are left as they were.
+    if (pro) {
+        snapshot.limit = -1;
+        snapshot.remaining = -1;
+    }
     return quotaJson(await signClaim(snapshot, granted, reason), 200, cors);
 }
 
@@ -2815,6 +2825,15 @@ async function assignArm(env, db, deviceId) {
     if (account && Number(account.created_at) < startMs) return 'existing';
 
     return (await experimentBucket(env, deviceId)) < testPercent(env) ? 'test' : 'control';
+}
+
+/** True when this device holds an active, unexpired Pro licence. */
+async function deviceHasLivePro(db, deviceId, nowMs) {
+    const lic = await db.prepare(
+        `SELECT tier, status, ends_at FROM license_activations WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    return !!lic && (lic.tier || 'pro') === 'pro' && lic.status === 'active'
+        && (!Number(lic.ends_at) || Number(lic.ends_at) > nowMs);
 }
 
 /** True for a test-arm device with the gate on and no live licence. Old app
