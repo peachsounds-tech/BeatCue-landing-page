@@ -5297,58 +5297,6 @@
         </div>
     </section>
 
-    <!-- Hands-on by design -->
-    <section class="manifesto-section">
-        <div class="manifesto-container">
-            <p class="section-label">Hands-on by design</p>
-            <h2>Your hands, back on the music.</h2>
-            <p class="manifesto-text">
-                The track is no longer a given - It's clay in your hands.
-            </p>
-            <p class="manifesto-text">
-                Bring your track. Drag it. It reshapes.
-                <!-- <br> No prompts. No regenerating. No waiting to find out. -->
-            </p>
-            <p class="manifesto-text">
-                Precise enough for client work, <br> Fun enough to remind you why you started editing.
-            </p>
-            <div class="section-cta">
-                <a href="/download.html" class="btn btn-primary" id="manifestoDownloadBtn">Try BeatCue for Free</a>
-                <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Direct Premiere Pro Integration -->
-    <section class="pr-integration" id="premiere-integration">
-        <div class="pr-integration-container">
-            <div class="pr-integration-copy">
-                <p class="section-label"><img src="/premiere-pro.png" alt="Adobe Premiere Pro" class="pr-inline-icon">Direct Premiere Pro integration</p>
-                <h2>Right inside your edit.</h2>
-                <p class="section-subtitle">
-                    BeatCue connects directly to Adobe Premiere Pro. Retime your music in BeatCue and hear it land in your sequence — no exporting, no re-importing, no round trips.
-                </p>
-                <ul class="pr-integration-points">
-                    <li><span class="point-marker">✓</span>Syncs with your Premiere timeline in real time</li>
-                    <li><span class="point-marker">✓</span>Changes appear in your sequence instantly</li>
-                    <li><span class="point-marker">✓</span>Keep cutting while the music reshapes itself</li>
-                </ul>
-                <div class="section-cta">
-                    <a href="/download.html" class="btn btn-primary" id="premiereDownloadBtn">Try it in Premiere Pro</a>
-                    <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
-                </div>
-            </div>
-            <div class="pr-integration-visual">
-                <div class="pr-video-frame">
-                    <video class="pr-demo-video" loop muted playsinline autoplay>
-                        <source src="/premiere-demo.mp4" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <!-- Hear the Difference — Before / After Demo -->
     <section class="before-after" id="hear-the-difference">
         <div class="ba-container">
@@ -5451,6 +5399,58 @@
         </div>
     </section>
 
+    <!-- Direct Premiere Pro Integration -->
+    <section class="pr-integration" id="premiere-integration">
+        <div class="pr-integration-container">
+            <div class="pr-integration-copy">
+                <p class="section-label"><img src="/premiere-pro.png" alt="Adobe Premiere Pro" class="pr-inline-icon">Direct Premiere Pro integration</p>
+                <h2>Right inside your edit.</h2>
+                <p class="section-subtitle">
+                    BeatCue connects directly to Adobe Premiere Pro. Retime your music in BeatCue and hear it land in your sequence — no exporting, no re-importing, no round trips.
+                </p>
+                <ul class="pr-integration-points">
+                    <li><span class="point-marker">✓</span>Syncs with your Premiere timeline in real time</li>
+                    <li><span class="point-marker">✓</span>Changes appear in your sequence instantly</li>
+                    <li><span class="point-marker">✓</span>Keep cutting while the music reshapes itself</li>
+                </ul>
+                <div class="section-cta">
+                    <a href="/download.html" class="btn btn-primary" id="premiereDownloadBtn">Try it in Premiere Pro</a>
+                    <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
+                </div>
+            </div>
+            <div class="pr-integration-visual">
+                <div class="pr-video-frame">
+                    <video class="pr-demo-video" loop muted playsinline autoplay>
+                        <source src="/premiere-demo.mp4" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Hands-on by design -->
+    <section class="manifesto-section">
+        <div class="manifesto-container">
+            <p class="section-label">Hands-on by design</p>
+            <h2>Your hands, back on the music.</h2>
+            <p class="manifesto-text">
+                The track is no longer a given - It's clay in your hands.
+            </p>
+            <p class="manifesto-text">
+                Bring your track. Drag it. It reshapes.
+                <!-- <br> No prompts. No regenerating. No waiting to find out. -->
+            </p>
+            <p class="manifesto-text">
+                Precise enough for client work, <br> Fun enough to remind you why you started editing.
+            </p>
+            <div class="section-cta">
+                <a href="/download.html" class="btn btn-primary" id="manifestoDownloadBtn">Try BeatCue for Free</a>
+                <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
+            </div>
+        </div>
+    </section>
+
     <!-- Social Proof -->
     <section class="quotes-section" id="how-it-works">
         <p class="section-label">BeatCue is built for</p>
@@ -5506,7 +5506,7 @@
             <span class="cta-label">Stop editing music, start moving moments</span>
             <div id="ctaDesktop">
                 <div class="pricing-cards">
-                    <div class="pricing-card pricing-card--primary pricing-card--free">
+                    <div class="pricing-card pricing-card--primary pricing-card--free" data-plan-card="free">
                         <div class="plan-badge">Free</div>
                         <div class="plan-price">
                             <span class="price">$0</span>
@@ -7124,6 +7124,9 @@
     // whole checkout URL. Lifetime is one payment and ignores the toggle.
     (function () {
         window.CUE_BILLING_PLANS = {
+            free: {
+                content_name: 'BeatCue Free'
+            },
             pro: {
                 content_name: 'BeatCue Pro',
                 yearly: {
@@ -7179,7 +7182,7 @@
                 var plan = window.CUE_BILLING_PLANS[card.getAttribute('data-plan-card')];
                 if (!plan) return;
                 var tier   = (plan.monthly || plan.yearly) ? plan[billing] : plan;
-                if (!tier) return;
+                if (!tier || tier.price == null) return;
                 var price  = card.querySelector('.price');
                 var period = card.querySelector('.period');
                 var note   = card.querySelector('.plan-note');
@@ -7220,7 +7223,7 @@
             }
             document.querySelectorAll('[data-plan-card]').forEach(function (card) {
                 var plan = card.getAttribute('data-plan-card');
-                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"]');
+                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"], a.btn-download-free');
                 var cardTimer = null;
                 var buttonTimer = null;
                 function clearTimers() {

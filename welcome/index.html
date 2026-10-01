@@ -508,8 +508,8 @@
 <body>
     <div class="container">
         <div class="badge">&#127881;</div>
-        <h1>Welcome to BeatCue Pro</h1>
-        <p class="subtitle">Your access key is ready.</p>
+        <h1 id="welcomeTitle">Welcome to BeatCue Pro</h1>
+        <p class="subtitle" id="welcomeSubtitle">Your access key is ready.</p>
 
         <!-- Shown while attempting deep link -->
         <p class="opening-status" id="openingStatus" style="display:none;">
@@ -577,6 +577,17 @@
     <script>
         const params = new URLSearchParams(window.location.search);
         const licenseKey = params.get('license_key');
+        if (params.get('free') === '1') {
+            var title = document.getElementById('welcomeTitle');
+            var subtitle = document.getElementById('welcomeSubtitle');
+            var noKey = document.getElementById('noKeyMessage');
+            if (title) title.textContent = 'Your free plan is ready';
+            if (subtitle) subtitle.textContent = 'Return to BeatCue. Your free plan activates automatically.';
+            // BeatCue picks the key up on its own; the email copy is the fallback.
+            if (noKey) noKey.innerHTML = 'We also emailed you your free license key.<br>'
+                + 'If BeatCue hasn\'t unlocked within a minute, click <strong>Enter license key</strong> '
+                + 'on its plan panel and paste it there.';
+        }
 
         function openCue() {
             if (licenseKey) {
