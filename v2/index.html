@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <script src="/js/page-version.js"></script>
+    <script>window.CUE_PAGE_VERSION = '4.0.1';</script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -439,7 +440,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
+        const CUE_PAGE_VERSION = '4.0.1';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -468,7 +469,7 @@
         }
 
         function getBaseEventProps() {
-            const props = { ...getUtmProps() };
+            const props = { ...getUtmProps(), page_version: CUE_PAGE_VERSION };
             if (isInternalTester) {
                 props.is_internal = true;
             }
@@ -1057,11 +1058,12 @@
         }
         
         .hero-tagline {
-            font-size: clamp(1.6rem, 3.5vw, 2.5rem);
-            font-weight: 600;
+            font-size: clamp(2rem, 4.6vw, 3.4rem);
+            font-weight: 700;
+            line-height: 1.12;
             color: var(--text-primary);
             margin: 0.25rem 0 16px 0;
-            letter-spacing: -0.01em;
+            letter-spacing: -0.02em;
             animation: fadeInUp 0.8s ease 0.25s both;
         }
         
@@ -1169,6 +1171,22 @@
             box-shadow: none;
         }
         
+        .cta-download-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .cta-download-icon svg {
+            display: block;
+        }
+
+        .cta-download-label,
+        #heroDownloadLabel {
+            white-space: nowrap;
+        }
+
         .btn {
             display: inline-flex;
             align-items: center;
@@ -1254,172 +1272,6 @@
             border-radius: 12px;
             display: block;
             cursor: pointer;
-        }
-        
-        .video-sound-toggle {
-            position: absolute;
-            bottom: 18px;
-            right: 18px;
-            background: rgba(0, 0, 0, 0.65);
-            color: #ffffff;
-            width: 52px;
-            height: 36px;
-            padding: 0;
-            border-radius: 18px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(4px);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            animation: subtlePulse 2s ease-in-out 3;
-            overflow: hidden;
-        }
-        
-        .video-sound-toggle:hover {
-            background: rgba(0, 0, 0, 0.8);
-        }
-        
-        .video-sound-toggle:focus {
-            outline: 2px solid rgba(255, 107, 53, 0.8);
-            outline-offset: 2px;
-        }
-        
-        .video-sound-toggle.unmuted {
-            background: rgba(255, 107, 53, 0.85);
-            animation: none;
-        }
-        
-        .video-sound-toggle.faded {
-            opacity: 0.4;
-            transition: opacity 0.4s ease;
-        }
-        
-        .video-sound-toggle.faded:hover {
-            opacity: 1;
-        }
-        
-        @keyframes subtlePulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
-            50% { box-shadow: 0 0 20px 12px rgba(255, 255, 255, 0.9); }
-        }
-        
-        /* Sound wave bars animation - positioned behind text */
-        .sound-bars {
-            position: absolute;
-            left: 4px;
-            right: 4px;
-            top: 4px;
-            bottom: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            opacity: 0.35;
-        }
-        
-        .sound-bars .bar {
-            flex: 1;
-            margin: 0 1px;
-            background: #ffffff;
-            border-radius: 2px;
-        }
-        
-        .sound-bars .bar:nth-child(1) {
-            height: 35%;
-            animation: soundBar1 0.3s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(2) {
-            height: 70%;
-            animation: soundBar2 0.35s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(3) {
-            height: 50%;
-            animation: soundBar3 0.25s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(4) {
-            height: 90%;
-            animation: soundBar4 0.4s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(5) {
-            height: 60%;
-            animation: soundBar5 0.28s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(6) {
-            height: 45%;
-            animation: soundBar1 0.32s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(7) {
-            height: 75%;
-            animation: soundBar2 0.38s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(8) {
-            height: 55%;
-            animation: soundBar3 0.33s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(9) {
-            height: 80%;
-            animation: soundBar4 0.27s ease-in-out infinite;
-        }
-        
-        .sound-bars .bar:nth-child(10) {
-            height: 40%;
-            animation: soundBar5 0.36s ease-in-out infinite;
-        }
-        
-        @keyframes soundBar1 {
-            0%, 100% { height: 35%; }
-            50% { height: 80%; }
-        }
-        
-        @keyframes soundBar2 {
-            0%, 100% { height: 70%; }
-            50% { height: 30%; }
-        }
-        
-        @keyframes soundBar3 {
-            0%, 100% { height: 50%; }
-            50% { height: 100%; }
-        }
-        
-        @keyframes soundBar4 {
-            0%, 100% { height: 90%; }
-            50% { height: 40%; }
-        }
-        
-        @keyframes soundBar5 {
-            0%, 100% { height: 60%; }
-            50% { height: 85%; }
-        }
-        
-        /* Red mute line crossing the waves */
-        .mute-line {
-            position: absolute;
-            left: 6px;
-            right: 6px;
-            top: 50%;
-            height: 3px;
-            background: #ff4444;
-            transform: translateY(-50%) rotate(-20deg);
-            z-index: 2;
-            border-radius: 2px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-        }
-        
-        .video-sound-toggle.unmuted .mute-line {
-            display: none;
-        }
-        
-        .video-sound-toggle.unmuted .sound-bars {
-            opacity: 0.6;
         }
         
         .waveform-bars {
@@ -2086,10 +1938,11 @@
            QUOTES / USE CASES
         ============================================ */
         .quotes-section {
-            padding: 4rem 2rem;
+            padding: var(--section-pad-y) var(--section-pad-x);
             text-align: center;
             background: var(--bg-secondary);
             border-top: 1px solid var(--border-light);
+            scroll-margin-top: calc(var(--nav-h) - 120px);
         }
 
         .quotes-section .section-label {
@@ -2151,9 +2004,74 @@
         }
 
         /* ============================================
+           HANDS-ON MANIFESTO
+        ============================================ */
+        .manifesto-section {
+            padding: 5rem 2rem;
+            text-align: center;
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-light);
+        }
+
+        .manifesto-container {
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        .manifesto-section .section-label {
+            color: var(--peach-orange);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-bottom: 1rem;
+        }
+
+        .manifesto-text {
+            color: var(--text-secondary);
+            font-size: 1.08rem;
+            line-height: 1.85;
+        }
+
+        .manifesto-text + .manifesto-text {
+            margin-top: 1.2rem;
+        }
+
+        .section-cta {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        .section-cta-sub {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            opacity: 0.85;
+        }
+
+        .pr-integration-copy .section-cta {
+            align-items: flex-start;
+            margin-top: 2rem;
+        }
+
+        .features .section-cta {
+            margin-top: 2.75rem;
+        }
+
+        @media (max-width: 900px) {
+            .pr-integration-copy .section-cta {
+                align-items: center;
+            }
+        }
+
+        /* ============================================
            ABOUT THE CREATOR
         ============================================ */
         .creator-section {
+            display: none;
             padding: 5rem 2rem;
             background: var(--bg-primary);
             border-top: 1px solid var(--border-light);
@@ -4322,13 +4240,6 @@
                 padding: 0 24px;
             }
             
-            .video-sound-toggle {
-                width: 44px;
-                height: 28px;
-                bottom: 10px;
-                right: 10px;
-            }
-            
             .waveform-demo {
                 height: auto;
             }
@@ -5253,6 +5164,17 @@
             opacity: 0.75;
         }
 
+        @media (max-width: 768px) {
+            .btn:has(.cta-download-icon) {
+                width: auto;
+                max-width: calc(100vw - 2rem);
+                height: auto;
+                min-height: 46px;
+                padding: 0 18px;
+                font-size: 0.95rem;
+            }
+        }
+
         /* Tablet / phone: stack the two panels vertically. Each panel
            keeps its native 16:9 — composed aspect becomes 16:18. */
         @media (max-width: 720px) {
@@ -5371,29 +5293,30 @@
             <div class="grid-pattern"></div>
         </div>
         <div class="hero-content">
-            <span class="hero-badge"><svg class="laurel laurel-left" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c-4-3-7-7-7-12C5 6 8 2 12 2"/><path d="M9 7c-2 1-3.5 3-3.5 5.5"/><path d="M10 12c-1.5 1-2.5 2.5-2.5 4.5"/></svg> Made for video editors <svg class="laurel laurel-right" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4-3 7-7 7-12 0-4-3-8-7-8"/><path d="M15 7c2 1 3.5 3 3.5 5.5"/><path d="M14 12c1.5 1 2.5 2.5 2.5 4.5"/></svg></span>
-            <p class="hero-tagline">Perfect <span class="blue">music.</span> Wrong <span class="orange">timings?</span></p>
+            <h1 class="hero-tagline">Shape <span class="blue">any music</span> to <span class="orange">your story.</span></h1>
             <p class="hero-subtitle">
-                Move the drop. BeatCue rebuilds the rest.
+                The <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin that retimes your music to your will.<br> Drag the moment. The track reshapes.
             </p>
             
             <div class="hero-ctas" style="justify-content: center;">
                 <a href="/download.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn">
-                    <span id="heroDownloadIcon"></span>
+                    <span id="heroDownloadIcon" class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
                     <span id="heroDownloadLabel">Try BeatCue for Free</span>
                 </a>
             </div>
-            <p class="hero-install-note" id="heroInstallNote">Free to try · <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</p>
+            <p class="hero-install-note" id="heroInstallNote">Free to try · No account needed · macOS & Windows</p>
             <div class="hero-visual">
                 <div class="app-screenshot">
                     <div class="waveform-demo">
                         <video class="demo-video" id="heroVideo" loop muted playsinline>
-                            <source src="/demo-video.mp4" type="video/mp4">
+                            <source src="/demo-video-v4.mp4?v=20260904" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>
-                        <button class="video-sound-toggle" id="soundToggle" data-video="heroVideo" aria-label="Unmute demo video" aria-pressed="false">
-                            <span class="sound-bars"><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
-                            <span class="mute-line"></span>
+                        <button class="ba-overlay" id="heroSoundOverlay" type="button" aria-label="Play with sound">
+                            <span class="ba-overlay-icon" aria-hidden="true">
+                                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            </span>
+                            <span class="ba-overlay-label">Play with sound</span>
                         </button>
                     </div>
                 </div>
@@ -5497,7 +5420,7 @@
             </div>
 
             <div class="ba-cta">
-                <a href="/download.html" class="btn btn-primary ba-cta-btn" id="beforeAfterDownloadBtn">Try it on your own edit</a>
+                <a href="/download.html" class="btn btn-primary ba-cta-btn" id="beforeAfterDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try it on your own edit</span></a>
                 <p class="ba-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
             </div>
         </div>
@@ -5517,6 +5440,10 @@
                     <li><span class="point-marker">✓</span>Changes appear in your sequence instantly</li>
                     <li><span class="point-marker">✓</span>Keep cutting while the music reshapes itself</li>
                 </ul>
+                <div class="section-cta">
+                    <a href="/download.html" class="btn btn-primary" id="premiereDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try it in Premiere Pro</span></a>
+                    <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
+                </div>
             </div>
             <div class="pr-integration-visual">
                 <div class="pr-video-frame">
@@ -5529,51 +5456,51 @@
         </div>
     </section>
 
-    <!-- Why Editors Use BeatCue -->
-    <section class="features" id="how-it-works">
-        <div class="features-container">
-            <div class="section-header">
-                <p class="section-label">Why Premiere Pro editors use Cue</p>
-                <h2>Cue. Shape. Land.</h2>
-                <p class="section-subtitle">
-                    BeatCue is a music retiming plugin for <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Adobe Premiere Pro. Drop in a track, move the moments that matter, and BeatCue rebuilds the music around your edits in real time — right alongside your Premiere timeline.
-                </p>
+    <!-- Hands-on by design -->
+    <section class="manifesto-section">
+        <div class="manifesto-container">
+            <p class="section-label">Hands-on by design</p>
+            <h2>Your hands, back on the music.</h2>
+            <p class="manifesto-text">
+                The track is no longer a given - It's clay in your hands.
+            </p>
+            <p class="manifesto-text">
+                Bring your track. Drag it. It reshapes.
+                <!-- <br> No prompts. No regenerating. No waiting to find out. -->
+            </p>
+            <p class="manifesto-text">
+                Precise enough for client work, <br> Fun enough to remind you why you started editing.
+            </p>
+            <div class="section-cta">
+                <a href="/download.html" class="btn btn-primary" id="manifestoDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try BeatCue for Free</span></a>
+                <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
             </div>
-            
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">⏱️</div>
-                    <h3>Make the music fit</h3>
-                    <p>No more cutting, looping, or fighting the track. BeatCue reshapes it to match your Premiere timeline.</p>
-                    <div class="feature-video-container">
-                        <video class="feature-video" loop muted playsinline autoplay>
-                            <source src="/how-it-works-1.mp4" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
-                    </div>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">📍</div>
-                    <h3>Place the Cue</h3>
-                    <p>Move the drop, build, or impact exactly where it should hit.</p>
-                    <div class="feature-video-container">
-                        <video class="feature-video" loop muted playsinline autoplay>
-                            <source src="/how-it-works-2.mp4" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
-                    </div>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3>See what sounds right</h3>
-                    <p>Hear changes instantly as you adjust. Colors indicate how clean each transition is.</p>
-                    <div class="feature-video-container">
-                        <video class="feature-video" loop muted playsinline autoplay>
-                            <source src="/how-it-works-3.mp4" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
-                    </div>
-                </div>
+        </div>
+    </section>
+
+    <!-- Social Proof -->
+    <section class="quotes-section" id="how-it-works">
+        <p class="section-label">BeatCue is built for</p>
+        <div class="audience-tags">
+            <span class="audience-tag">Film Editors</span>
+            <span class="audience-tag">Commercial Editors</span>
+            <span class="audience-tag">Trailer Editors</span>
+            <span class="audience-tag">Content Creators</span>
+            <span class="audience-tag">Podcasters</span>
+        </div>
+
+        <div class="use-cases">
+            <div class="use-case">
+                <p class="scenario">"It's the first thing I do now. Track in, moments marked, then I just cut."</p>
+                <p class="context">Weekly episode workflow</p>
+            </div>
+            <div class="use-case">
+                <p class="scenario">"A 2-minute track for a 47-second scene. The drop landed exactly where I needed it."</p>
+                <p class="context">Short-form commercial</p>
+            </div>
+            <div class="use-case">
+                <p class="scenario">"The director wanted the swell as the door opens. I moved it there. Done."</p>
+                <p class="context">Narrative film</p>
             </div>
         </div>
     </section>
@@ -5599,33 +5526,6 @@
         </div>
     </section>
 
-    <!-- Social Proof -->
-    <section class="quotes-section">
-        <p class="section-label">BeatCue is built for</p>
-        <div class="audience-tags">
-            <span class="audience-tag">Film Editors</span>
-            <span class="audience-tag">Commercial Editors</span>
-            <span class="audience-tag">Trailer Editors</span>
-            <span class="audience-tag">Content Creators</span>
-            <span class="audience-tag">Podcasters</span>
-        </div>
-
-        <div class="use-cases">
-            <div class="use-case">
-                <p class="scenario">"The client moved the reveal up by 8 seconds. I dragged one handle in BeatCue and the build landed perfectly — no re-editing the whole track."</p>
-                <p class="context">Product launch video</p>
-            </div>
-            <div class="use-case">
-                <p class="scenario">"I had a 2-minute track for a 47-second scene. BeatCue shortened it and kept the drop exactly where I needed it."</p>
-                <p class="context">Short-form commercial</p>
-            </div>
-            <div class="use-case">
-                <p class="scenario">"The director wanted the emotional swell to hit right as the door opens. I just moved it there. Done."</p>
-                <p class="context">Narrative film</p>
-            </div>
-        </div>
-    </section>
-
     <!-- Get BeatCue Section -->
     <section class="cta-section" id="pricing">
         <div class="cta-container">
@@ -5633,7 +5533,7 @@
             <span class="cta-label">Stop editing music, start moving moments</span>
             <div id="ctaDesktop">
                 <div class="pricing-cards">
-                    <div class="pricing-card pricing-card--primary pricing-card--free">
+                    <div class="pricing-card pricing-card--primary pricing-card--free" data-plan-card="free">
                         <div class="plan-badge">Free</div>
                         <div class="plan-price">
                             <span class="price">$0</span>
@@ -5647,7 +5547,8 @@
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
                         <a href="/download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
-                            Download BeatCue
+                            <span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                            <span class="cta-download-label">Download BeatCue</span>
                         </a>
                         <p class="plan-note" id="pricingInstallNote">Recommended: macOS 14+</p>
                     </div>
@@ -5736,7 +5637,7 @@
         
         // Video sound toggle
         const heroVideo = document.getElementById('heroVideo');
-        const soundToggle = document.getElementById('soundToggle');
+        const heroSoundOverlay = document.getElementById('heroSoundOverlay');
         
         // Play video when it comes into view
         const videoObserverOptions = {
@@ -6243,43 +6144,19 @@
             sections.forEach(section => sectionObserver.observe(section));
         })();
 
-        function muteVideo(video, toggle) {
-            video.muted = true;
-            toggle.classList.remove('unmuted', 'faded');
-            toggle.setAttribute('aria-label', 'Unmute video');
-            toggle.setAttribute('aria-pressed', 'false');
-        }
-        
-        function unmuteVideo(video, toggle) {
-            video.muted = false;
-            toggle.classList.add('unmuted');
-            toggle.setAttribute('aria-label', 'Mute video');
-            toggle.setAttribute('aria-pressed', 'true');
-            
-            // Fade out after 2.5 seconds
-            setTimeout(() => {
-                if (!video.muted) {
-                    toggle.classList.add('faded');
-                }
-            }, 2500);
-        }
-        
-        soundToggle.addEventListener('click', () => {
-            if (heroVideo.muted) {
-                unmuteVideo(heroVideo, soundToggle);
-                trackLandingInteraction('hero_demo_unmuted');
-            } else {
-                muteVideo(heroVideo, soundToggle);
+        if (heroVideo) {
+            const setHeroSound = (unmuted) => {
+                heroVideo.muted = !unmuted;
+                if (heroSoundOverlay) heroSoundOverlay.classList.toggle('is-hidden', unmuted);
+                trackLandingInteraction(unmuted ? 'hero_demo_unmuted' : 'hero_demo_muted');
+            };
+
+            if (heroSoundOverlay) {
+                heroSoundOverlay.addEventListener('click', () => setHeroSound(true));
             }
-        });
-        
-        // Keyboard support
-        soundToggle.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                soundToggle.click();
-            }
-        });
+
+            heroVideo.addEventListener('click', () => setHeroSound(heroVideo.muted));
+        }
         
         // Navbar scroll effect
         const navbar = document.getElementById('navbar');
@@ -6426,7 +6303,8 @@
             // Build event properties (only include non-null values)
             const eventProps = {
                 url: window.location.href,
-                page: 'landing_v2'
+                page: 'landing_v2',
+                page_version: CUE_PAGE_VERSION
             };
             
             if (utms.utm_source) eventProps.utm_source = utms.utm_source;
@@ -6472,6 +6350,7 @@
                 // Pre-consent mode: track event with UTMs but no person properties
                 var anonProps = {
                     page: 'landing_v2',
+                    page_version: CUE_PAGE_VERSION,
                     url: window.__cue_initial_url || window.location.href,
                     referrer: document.referrer || 'direct',
                     screen_width: window.screen.width,
@@ -6941,6 +6820,11 @@
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
             const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
             const beforeAfterDownloadBtn = document.getElementById('beforeAfterDownloadBtn');
+            const sectionDownloadBtns = [
+                beforeAfterDownloadBtn,
+                document.getElementById('manifestoDownloadBtn'),
+                document.getElementById('premiereDownloadBtn')
+            ].filter(Boolean);
             const heroLabel = document.getElementById('heroDownloadLabel');
 
             // Check if we should block Windows downloads (force_mac=true and user is on Windows)
@@ -6956,10 +6840,11 @@
             if (!blockWindowsDownload && !useMobileHandoff) {
                 if (heroDownloadBtn) heroDownloadBtn.addEventListener('click', trackTrialDownloadClick);
                 if (pricingDownloadBtn) pricingDownloadBtn.addEventListener('click', trackTrialDownloadClick);
-                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.addEventListener('click', trackTrialDownloadClick);
+                sectionDownloadBtns.forEach(function (btn) {
+                    btn.addEventListener('click', trackTrialDownloadClick);
+                });
             }
 
-            var heroIcon = document.getElementById('heroDownloadIcon');
             var appleIconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block;position:relative;top:-1px"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>';
             var windowsIconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block;position:relative;top:-1px"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.39l9.5-1.64V12h-9.5V5.39zM11.5 12.5H21v7.75l-9.5-1.64V12.5z"/></svg>';
 
@@ -7105,15 +6990,25 @@
                     document.getElementById('heroDownloadIcon')
                 );
                 wireShareCta(pricingDownloadBtn, pricingDownloadBtn);
-                wireShareCta(beforeAfterDownloadBtn, beforeAfterDownloadBtn);
+                sectionDownloadBtns.forEach(function (btn) {
+                    wireShareCta(btn, btn);
+                });
                 if (heroNote) heroNote.innerHTML = noteHtml;
                 if (pricingNote) pricingNote.innerHTML = noteHtml;
-                var baSub = document.querySelector('.ba-cta-sub');
-                if (baSub) baSub.innerHTML = noteHtml;
+                document.querySelectorAll('.ba-cta-sub, .section-cta-sub').forEach(function (el) {
+                    el.innerHTML = noteHtml;
+                });
             }
 
             function formatHeroInstallNote(platformSuffix) {
-                return 'Free to try \u00b7 <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin \u00b7 ' + platformSuffix;
+                return 'Free to try \u00b7 No account needed \u00b7 ' + platformSuffix;
+            }
+
+            function setCtaLabel(btn, text) {
+                if (!btn) return;
+                var label = btn.querySelector('.cta-download-label');
+                if (label) label.textContent = text;
+                else btn.textContent = text;
             }
             
             // Handle force_mac=true on Windows: disable buttons and show "Coming soon"
@@ -7125,23 +7020,22 @@
                     heroDownloadBtn.style.cursor = 'not-allowed';
                 }
                 if (heroLabel) heroLabel.textContent = 'Windows coming soon';
-                if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
                 if (heroNote) heroNote.textContent = 'Currently available for macOS only';
                 if (pricingDownloadBtn) {
                     pricingDownloadBtn.removeAttribute('href');
                     pricingDownloadBtn.style.pointerEvents = 'none';
                     pricingDownloadBtn.style.opacity = '0.6';
                     pricingDownloadBtn.style.cursor = 'not-allowed';
-                    pricingDownloadBtn.textContent = 'Windows coming soon';
+                    setCtaLabel(pricingDownloadBtn, 'Windows coming soon');
                 }
                 if (pricingNote) pricingNote.textContent = 'Currently available for macOS only';
-                if (beforeAfterDownloadBtn) {
-                    beforeAfterDownloadBtn.removeAttribute('href');
-                    beforeAfterDownloadBtn.style.pointerEvents = 'none';
-                    beforeAfterDownloadBtn.style.opacity = '0.6';
-                    beforeAfterDownloadBtn.style.cursor = 'not-allowed';
-                    beforeAfterDownloadBtn.textContent = 'Windows coming soon';
-                }
+                sectionDownloadBtns.forEach(function (btn) {
+                    btn.removeAttribute('href');
+                    btn.style.pointerEvents = 'none';
+                    btn.style.opacity = '0.6';
+                    btn.style.cursor = 'not-allowed';
+                    setCtaLabel(btn, 'Windows coming soon');
+                });
             } else if (useMobileHandoff) {
                 setupMobileHandoffCtas();
             } else if (isWindows || forcePlatform === 'windows') {
@@ -7150,15 +7044,15 @@
                 if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', storeUrl);
                 if (pricingDownloadBtn) {
                     pricingDownloadBtn.setAttribute('href', storeUrl);
-                    pricingDownloadBtn.textContent = 'Download for Windows';
+                    setCtaLabel(pricingDownloadBtn, 'Download for Windows');
                 }
-                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.setAttribute('href', storeUrl);
-                if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
+                sectionDownloadBtns.forEach(function (btn) {
+                    btn.setAttribute('href', storeUrl);
+                });
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('Windows 10+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: Windows 10+';
             } else if (isMac || forcePlatform === 'mac') {
-                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download for macOS';
-                if (heroIcon) heroIcon.innerHTML = appleIconSvg;
+                setCtaLabel(pricingDownloadBtn, 'Download for macOS');
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('macOS 14+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: macOS 14+';
             }
@@ -7261,6 +7155,9 @@
     // whole checkout URL. Lifetime is one payment and ignores the toggle.
     (function () {
         window.CUE_BILLING_PLANS = {
+            free: {
+                content_name: 'BeatCue Free'
+            },
             pro: {
                 content_name: 'BeatCue Pro',
                 yearly: {
@@ -7316,7 +7213,7 @@
                 var plan = window.CUE_BILLING_PLANS[card.getAttribute('data-plan-card')];
                 if (!plan) return;
                 var tier   = (plan.monthly || plan.yearly) ? plan[billing] : plan;
-                if (!tier) return;
+                if (!tier || tier.price == null) return;
                 var price  = card.querySelector('.price');
                 var period = card.querySelector('.period');
                 var note   = card.querySelector('.plan-note');
@@ -7357,7 +7254,7 @@
             }
             document.querySelectorAll('[data-plan-card]').forEach(function (card) {
                 var plan = card.getAttribute('data-plan-card');
-                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"]');
+                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"], a.btn-download-free');
                 var cardTimer = null;
                 var buttonTimer = null;
                 function clearTimers() {

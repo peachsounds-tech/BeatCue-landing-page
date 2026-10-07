@@ -1171,6 +1171,22 @@
             box-shadow: none;
         }
         
+        .cta-download-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .cta-download-icon svg {
+            display: block;
+        }
+
+        .cta-download-label,
+        #heroDownloadLabel {
+            white-space: nowrap;
+        }
+
         .btn {
             display: inline-flex;
             align-items: center;
@@ -5148,6 +5164,17 @@
             opacity: 0.75;
         }
 
+        @media (max-width: 768px) {
+            .btn:has(.cta-download-icon) {
+                width: auto;
+                max-width: calc(100vw - 2rem);
+                height: auto;
+                min-height: 46px;
+                padding: 0 18px;
+                font-size: 0.95rem;
+            }
+        }
+
         /* Tablet / phone: stack the two panels vertically. Each panel
            keeps its native 16:9 — composed aspect becomes 16:18. */
         @media (max-width: 720px) {
@@ -5273,7 +5300,7 @@
             
             <div class="hero-ctas" style="justify-content: center;">
                 <a href="/download.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn">
-                    <span id="heroDownloadIcon"></span>
+                    <span id="heroDownloadIcon" class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
                     <span id="heroDownloadLabel">Try BeatCue for Free</span>
                 </a>
             </div>
@@ -5393,7 +5420,7 @@
             </div>
 
             <div class="ba-cta">
-                <a href="/download.html" class="btn btn-primary ba-cta-btn" id="beforeAfterDownloadBtn">Try it on your own edit</a>
+                <a href="/download.html" class="btn btn-primary ba-cta-btn" id="beforeAfterDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try it on your own edit</span></a>
                 <p class="ba-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
             </div>
         </div>
@@ -5414,7 +5441,7 @@
                     <li><span class="point-marker">✓</span>Keep cutting while the music reshapes itself</li>
                 </ul>
                 <div class="section-cta">
-                    <a href="/download.html" class="btn btn-primary" id="premiereDownloadBtn">Try it in Premiere Pro</a>
+                    <a href="/download.html" class="btn btn-primary" id="premiereDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try it in Premiere Pro</span></a>
                     <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
                 </div>
             </div>
@@ -5445,7 +5472,7 @@
                 Precise enough for client work, <br> Fun enough to remind you why you started editing.
             </p>
             <div class="section-cta">
-                <a href="/download.html" class="btn btn-primary" id="manifestoDownloadBtn">Try BeatCue for Free</a>
+                <a href="/download.html" class="btn btn-primary" id="manifestoDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try BeatCue for Free</span></a>
                 <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
             </div>
         </div>
@@ -5520,7 +5547,8 @@
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
                         <a href="/download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
-                            Download BeatCue
+                            <span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                            <span class="cta-download-label">Download BeatCue</span>
                         </a>
                         <p class="plan-note" id="pricingInstallNote">Recommended: macOS 14+</p>
                     </div>
@@ -6817,7 +6845,6 @@
                 });
             }
 
-            var heroIcon = document.getElementById('heroDownloadIcon');
             var appleIconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block;position:relative;top:-1px"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>';
             var windowsIconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block;position:relative;top:-1px"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.39l9.5-1.64V12h-9.5V5.39zM11.5 12.5H21v7.75l-9.5-1.64V12.5z"/></svg>';
 
@@ -6976,6 +7003,13 @@
             function formatHeroInstallNote(platformSuffix) {
                 return 'Free to try \u00b7 No account needed \u00b7 ' + platformSuffix;
             }
+
+            function setCtaLabel(btn, text) {
+                if (!btn) return;
+                var label = btn.querySelector('.cta-download-label');
+                if (label) label.textContent = text;
+                else btn.textContent = text;
+            }
             
             // Handle force_mac=true on Windows: disable buttons and show "Coming soon"
             if (blockWindowsDownload) {
@@ -6986,14 +7020,13 @@
                     heroDownloadBtn.style.cursor = 'not-allowed';
                 }
                 if (heroLabel) heroLabel.textContent = 'Windows coming soon';
-                if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
                 if (heroNote) heroNote.textContent = 'Currently available for macOS only';
                 if (pricingDownloadBtn) {
                     pricingDownloadBtn.removeAttribute('href');
                     pricingDownloadBtn.style.pointerEvents = 'none';
                     pricingDownloadBtn.style.opacity = '0.6';
                     pricingDownloadBtn.style.cursor = 'not-allowed';
-                    pricingDownloadBtn.textContent = 'Windows coming soon';
+                    setCtaLabel(pricingDownloadBtn, 'Windows coming soon');
                 }
                 if (pricingNote) pricingNote.textContent = 'Currently available for macOS only';
                 sectionDownloadBtns.forEach(function (btn) {
@@ -7001,7 +7034,7 @@
                     btn.style.pointerEvents = 'none';
                     btn.style.opacity = '0.6';
                     btn.style.cursor = 'not-allowed';
-                    btn.textContent = 'Windows coming soon';
+                    setCtaLabel(btn, 'Windows coming soon');
                 });
             } else if (useMobileHandoff) {
                 setupMobileHandoffCtas();
@@ -7011,17 +7044,15 @@
                 if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', storeUrl);
                 if (pricingDownloadBtn) {
                     pricingDownloadBtn.setAttribute('href', storeUrl);
-                    pricingDownloadBtn.textContent = 'Download for Windows';
+                    setCtaLabel(pricingDownloadBtn, 'Download for Windows');
                 }
                 sectionDownloadBtns.forEach(function (btn) {
                     btn.setAttribute('href', storeUrl);
                 });
-                if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('Windows 10+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: Windows 10+';
             } else if (isMac || forcePlatform === 'mac') {
-                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download for macOS';
-                if (heroIcon) heroIcon.innerHTML = appleIconSvg;
+                setCtaLabel(pricingDownloadBtn, 'Download for macOS');
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('macOS 14+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: macOS 14+';
             }
