@@ -374,6 +374,25 @@
          applyBilling(). Markup ships the yearly values so the page reads
          correctly before the script runs. Lifetime does not change with the toggle. -->
     <div class="pricing-cards">
+        <div class="pricing-card pricing-card--primary pricing-card--free" data-plan-card="free" id="freePlanCard" hidden>
+            <div class="plan-badge">Free</div>
+            <div class="plan-price">
+                <span class="price">$0</span>
+                <span class="period">/ month</span>
+            </div>
+            <p class="plan-description">Your email, a free license key, and a monthly track allowance.</p>
+            <ul class="plan-features">
+                <li>3 input tracks per month</li>
+                <li>All editing features</li>
+                <li>Premiere Pro plugin · macOS &amp; Windows</li>
+            </ul>
+            <a href="https://beatcue.lemonsqueezy.com/checkout/buy/d9be5987-d1c8-4dfe-b117-0ea0d4a5362b?embed=1&media=0"
+               class="btn btn-primary lemonsqueezy-button" id="checkoutFree" data-plan="free">
+                Get BeatCue Free
+            </a>
+            <p class="plan-note">Free license key by email</p>
+        </div>
+
         <div class="pricing-card pricing-card--primary pricing-card--pro" data-plan-card="pro">
             <div class="plan-badge">Pro</div>
             <div class="billing-toggle card-billing" role="group" aria-label="Billing period">
@@ -469,6 +488,12 @@
                 price: '$999', period: 'one-time', value: 999.00,
                 note: 'Equal to ~5 years of Pro',
                 url: ''
+            },
+            free: {
+                content_name: 'BeatCue Free',
+                price: '$0', period: '/ month', value: 0,
+                note: 'Free license key by email',
+                url: 'https://beatcue.lemonsqueezy.com/checkout/buy/d9be5987-d1c8-4dfe-b117-0ea0d4a5362b'
             }
         };
 
@@ -517,6 +542,25 @@
         var hadBcid = !!(params.get('bcid') || params.get('ph_id'));
         var srcParam = params.get('source') || 'plans';
         window.__cue_bcid = bcid;
+
+        // The app's free-key gate opens /get?source=registration_gate&free=1&reg=…
+        // Only then is the Free card offered; everyone else sees the paid plans.
+        var showFreePlan = srcParam === 'registration_gate' || params.get('free') === '1';
+
+        function setPlansHeader(title, subtitle) {
+            var header = document.querySelector('.plans-header');
+            if (!header) return;
+            var h = header.querySelector('h1');
+            var sub = header.querySelector('p');
+            if (h) h.textContent = title;
+            if (sub) sub.textContent = subtitle;
+        }
+
+        if (showFreePlan) {
+            var freeCard = document.getElementById('freePlanCard');
+            if (freeCard) freeCard.hidden = false;
+            setPlansHeader('Choose a plan', 'Start free with your email, or upgrade to Pro.');
+        }
 
         // ============================================
         // Meta match keys — URL first, cookie second
@@ -607,6 +651,8 @@
                 if (emailParam) u.searchParams.set('checkout[email]', emailParam);
                 if (bcid)       u.searchParams.set('checkout[custom][bcid]', bcid);
                 if (srcParam)   u.searchParams.set('checkout[custom][source]', srcParam);
+                var regParam = params.get('reg');
+                if (regParam)   u.searchParams.set('checkout[custom][reg]', regParam);
                 CLICK_IDS.concat(UTMS).forEach(function (k) {
                     var v = params.get(k);
                     if (v) u.searchParams.set(k, v);
@@ -912,6 +958,13 @@
                 extra.value = order.total;
             }
             capturePlans('checkout_completed', extra);
+
+            // The app is polling for this key; tell the user to go back to it
+            // rather than leaving them on a page that still reads "choose a plan".
+            if (lastCheckout && lastCheckout.plan === 'free') {
+                setPlansHeader('Your free plan is ready',
+                               'Return to BeatCue - it activates automatically. Your key is also in your email.');
+            }
         }
 
         (function watchCheckoutOverlay() {
@@ -985,6 +1038,10 @@
             clickProps.currency = 'USD';
             clickProps.meta_event_id = planClickId;
             if (plan === 'lifetime') clickProps.billing_period = 'lifetime';
+            if (plan === 'free') {
+                clickProps.billing_period = 'free';
+                clickProps.has_reg = !!params.get('reg');
+            }
 
             if (typeof posthog !== 'undefined' && posthog.capture) {
                 posthog.capture('plan_clicked', clickProps);
@@ -992,6 +1049,10 @@
                 // and the landing pages both count on this name.
                 posthog.capture('checkout_started', clickProps);
             }
+
+            // A free registration is not purchase intent: keep it out of the
+            // Meta and Google Ads conversions campaigns optimise against.
+            if (plan === 'free') return;
 
             var customData = {
                 content_name: info.content_name,
