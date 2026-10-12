@@ -3,6 +3,7 @@
 <head>
     <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
+    <script src="/js/google-ads.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -634,6 +635,8 @@
                         transaction_id: opts.transaction_id,
                         event_source_url: window.location.href,
                         internal_name: opts.internal_name || null,
+                        distinct_id: (window.posthog && posthog.get_distinct_id) ? posthog.get_distinct_id() : null,
+                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
                         value: typeof opts.value === 'number' ? opts.value : 1.0,
                         currency: opts.currency || 'ILS',
                         user_data: {
@@ -677,6 +680,7 @@
                     gclid: googleClickIds.gclid || null,
                     gbraid: googleClickIds.gbraid || null,
                     wbraid: googleClickIds.wbraid || null,
+                    ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
                     utms: getUtmProps(),
                     platform: platform
                 };
