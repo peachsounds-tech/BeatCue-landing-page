@@ -687,11 +687,14 @@ async function sendPurchaseToMeta(env, { order, orderId, email, hashedEmail, bci
         // Still recorded in PostHog so an internal order is visibly suppressed
         // rather than looking identical to a send that silently never happened.
         await sendToPostHog('capi_send_result', distinctId, {
-            event_name: 'Purchase',
-            internal_event_name: 'purchase_completed',
-            status: 'skipped',
-            skip_reason: skip,
+            ad_platform: 'meta',
             source: 'worker',
+            trigger: 'order_webhook',
+            event_name: 'Purchase',
+            internal_name: 'purchase_completed',
+            event_id: `ls_order_${orderId}`,
+            ok: false,
+            error: `skipped:${skip}`,
             order_id: orderId,
         });
         return;
@@ -740,16 +743,21 @@ async function sendPurchaseToMeta(env, { order, orderId, email, hashedEmail, bci
 
     // Mirrors what the desktop app reports after its own sends, so every
     // conversion Meta receives — app-side or worker-side — lands in one table.
+    // Property names match the desktop app's rows so one query covers both.
     await sendToPostHog('capi_send_result', distinctId, {
-        event_name: 'Purchase',
-        internal_event_name: 'purchase_completed',
-        status: ok ? 'ok' : 'failed',
-        upstream_status: up.status,
+        ad_platform: 'meta',
         source: 'worker',
-        order_id: orderId,
-        had_em: !!hashedEmail,
+        trigger: 'order_webhook',
+        event_name: 'Purchase',
+        internal_name: 'purchase_completed',
+        event_id: event.event_id,
+        ok,
+        status_code: up.status,
+        ...(ok ? {} : { error: clampString(up.error, 200) || `http_${up.status}` }),
+        had_email: !!hashedEmail,
         had_bcid: !!userData.external_id,
         matchable: !!hashedEmail || !!userData.external_id,
+        order_id: orderId,
         value: event.custom_data.value,
         currency: event.custom_data.currency,
     });
@@ -1704,6 +1712,9 @@ async function getGoogleAdsAccessToken(env) {
  *     internal_name:    string  (optional; logged),
  *     value:            number  (optional),
  *     currency:         string  (optional; default ILS to match existing gtag),
+ *     event_source:     string  (optional; APP from the desktop app, else WEB),
+ *     distinct_id:      string  (optional; PostHog id for the browser's
+ *                                capi_send_result row),
  *     user_data: {
  *       gclid, gbraid, wbraid   (at least one required to upload; else skipped)
  *     }
@@ -1770,6 +1781,29 @@ async function handleGads(request, env, url) {
         });
     }
 
+    // The desktop app reports every send itself as `capi_send_result`, so a
+    // worker-side row would count its uploads twice. Browser callers have no
+    // other record of the outcome.
+    const requestedSource = (clampString(body.event_source, 16) || '').toUpperCase();
+    const reportsItself = requestedSource === 'APP';
+    const report = async (fields) => {
+        if (reportsItself) return;
+        const distinctId = clampString(body.distinct_id, 200);
+        try {
+            await sendToPostHog('capi_send_result', distinctId || `gads_${body.transaction_id}`, {
+                ad_platform: 'google',
+                source: 'worker',
+                trigger: 'browser',
+                event_name: clampString(body.event_name, 64),
+                internal_name: clampString(body.internal_name, 64),
+                event_id: clampString(body.transaction_id, 96),
+                event_source_url: clampString(body.event_source_url, 2048),
+                ...(distinctId ? {} : { $process_person_profile: false }),
+                ...fields,
+            });
+        } catch (_) { /* telemetry must never fail the upload */ }
+    };
+
     const eventName = clampString(body.event_name, 64);
     if (!eventName || !GADS_EVENT_NAMES.has(eventName)) {
         console.log(JSON.stringify({ evt: 'gads_rejected_event_name', event_name: eventName }));
@@ -1802,6 +1836,7 @@ async function handleGads(request, env, url) {
             event_name: eventName,
             has_key: !!(convActions && convActions[eventName]),
         }));
+        await report({ ok: false, status_code: 200, error: 'skipped:conversion_action_unmapped' });
         // Soft-skip: allowlist includes events we may not have wired yet
         // (e.g. checkout_clicked before a conversion action exists).
         return new Response(JSON.stringify({
@@ -1825,6 +1860,11 @@ async function handleGads(request, env, url) {
             event_name: eventName,
             transaction_id: transactionId,
         }));
+        await report({
+            ok: false, status_code: 200, matchable: false,
+            had_gclid: false, had_gbraid: false, had_wbraid: false,
+            error: 'skipped:no_click_id',
+        });
         return new Response(JSON.stringify({
             ok: true,
             skipped: 'no_click_id',
@@ -1847,12 +1887,12 @@ async function handleGads(request, env, url) {
     if (gclid)  adIdentifiers.gclid  = gclid;
     if (gbraid) adIdentifiers.gbraid = gbraid;
     if (wbraid) adIdentifiers.wbraid = wbraid;
+    const clickKeys = { matchable: true, had_gclid: !!gclid, had_gbraid: !!gbraid, had_wbraid: !!wbraid };
 
     // The reference docs mark eventSource optional; the service rejects a
     // request without it (REQUIRED_FIELD_MISSING on events[0].event_source).
     // Defaults to WEB because the landing-page dual-fire predates the field
     // and doesn't send one; the desktop app sends APP.
-    const requestedSource = (clampString(body.event_source, 16) || '').toUpperCase();
     const eventSource = GADS_EVENT_SOURCES.has(requestedSource) ? requestedSource : 'WEB';
 
     const event = {
@@ -1882,6 +1922,7 @@ async function handleGads(request, env, url) {
     try {
         accessToken = await getGoogleAdsAccessToken(env);
     } catch (_) {
+        await report({ ...clickKeys, ok: false, status_code: 502, error: 'oauth_failed' });
         return new Response(JSON.stringify({ ok: false, error: 'oauth_failed' }), {
             status: 502,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -1948,6 +1989,7 @@ async function handleGads(request, env, url) {
             event_name: eventName,
             error: String(e && e.message || e),
         }));
+        await report({ ...clickKeys, ok: false, status_code: 0, error: 'upstream_unreachable' });
         return new Response(JSON.stringify({ ok: false, error: 'upstream_unreachable' }), {
             status: 502,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -1977,6 +2019,19 @@ async function handleGads(request, env, url) {
             ? clampString(partialFailure.message, 200)
             : null,
     }));
+
+    await report({
+        ...clickKeys,
+        ok: httpOk && !hasPartialFailure,
+        status_code: upstreamStatus,
+        request_id: requestId,
+        validate_only: !!(payload.validateOnly),
+        ...(httpOk && !hasPartialFailure ? {} : {
+            error: hasPartialFailure
+                ? clampString(partialFailure.message, 200) || 'partial_failure'
+                : clampString(upstreamBody, 200) || `http_${upstreamStatus}`,
+        }),
+    });
 
     return new Response(JSON.stringify({
         ok: httpOk && !hasPartialFailure,
