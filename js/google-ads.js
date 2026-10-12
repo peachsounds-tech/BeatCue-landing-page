@@ -85,9 +85,46 @@
         return out;
     }
 
+    /** Calls back with true when the visitor needs the cookie banner (EEA, UK,
+     *  Switzerland, or anywhere we can't place them) and false otherwise.
+     *  Asks the worker, which reads the country off the request; any failure
+     *  or a slow answer means true, so the banner errs towards showing. */
+    var GEO_URL = 'https://peachsounds-webhook.sareldu.workers.dev/geo';
+    var GEO_CACHE_KEY = 'cue_consent_required';
+    var GEO_TIMEOUT_MS = 1500;
+
+    function consentRequired(callback) {
+        var done = false;
+        function finish(required) {
+            if (done) return;
+            done = true;
+            callback(required);
+        }
+
+        try {
+            var cached = sessionStorage.getItem(GEO_CACHE_KEY);
+            if (cached === 'true' || cached === 'false') return finish(cached === 'true');
+        } catch (e) {}
+
+        setTimeout(function () { finish(true); }, GEO_TIMEOUT_MS);
+        try {
+            fetch(GEO_URL, { credentials: 'omit' })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    var required = !(j && j.consent_required === false);
+                    try { sessionStorage.setItem(GEO_CACHE_KEY, String(required)); } catch (e) {}
+                    finish(required);
+                })
+                .catch(function () { finish(true); });
+        } catch (e) {
+            finish(true);
+        }
+    }
+
     window.CueGoogleAds = {
         consent: consent,
         applyConsent: applyConsent,
-        clickIds: clickIds
+        clickIds: clickIds,
+        consentRequired: consentRequired
     };
 })();

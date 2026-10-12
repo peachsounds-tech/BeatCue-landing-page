@@ -423,7 +423,20 @@
              */
             function init() {
                 if (shouldShowBanner()) {
-                    showBanner();
+                    if (window.CueGoogleAds && CueGoogleAds.consentRequired) {
+                        CueGoogleAds.consentRequired(function (required) {
+                            if (required) {
+                                showBanner();
+                            } else if (typeof initPostHog === 'function') {
+                                // Outside the EEA/UK/Switzerland: no banner,
+                                // analytics as if accepted. Nothing is stored,
+                                // so a later visit from Europe still asks.
+                                initPostHog(false);
+                            }
+                        });
+                    } else {
+                        showBanner();
+                    }
                 }
                 if (shouldLoadAnalytics()) {
                     // User already consented, load analytics

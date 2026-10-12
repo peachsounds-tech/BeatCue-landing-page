@@ -986,6 +986,34 @@ function gadsConsentFor(choice) {
     return null;
 }
 
+/**
+ * GET /geo  — whether the visitor is somewhere that needs the cookie banner.
+ *
+ * The landing page skips the banner where no consent is required. An unknown
+ * country (no request.cf, or Cloudflare's XX / T1 for Tor) answers "required":
+ * showing the banner to someone who didn't need it costs a click, while
+ * skipping it for someone in the EEA breaks the law.
+ */
+function handleGeo(request) {
+    const cors = pairingsCorsHeaders(request.headers.get('origin') || '');
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    const country = (request.cf && request.cf.country) || null;
+    const known = !!country && country !== 'XX' && country !== 'T1';
+    return new Response(JSON.stringify({
+        country,
+        consent_required: !known || GADS_CONSENT_COUNTRIES.has(country),
+    }), {
+        status: 200,
+        headers: {
+            ...cors,
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'private, no-store',
+        },
+    });
+}
+
 function clampString(v, maxLen) {
     if (typeof v !== 'string') return null;
     const trimmed = v.trim();
@@ -3505,6 +3533,10 @@ async function route(request, env, ctx) {
 
     if (url.pathname === '/gads') {
         return handleGads(request, env, url);
+    }
+
+    if (url.pathname === '/geo') {
+        return handleGeo(request);
     }
 
     return new Response('Not found', { status: 404 });
