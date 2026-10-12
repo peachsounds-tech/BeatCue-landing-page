@@ -4600,8 +4600,11 @@
         .cookie-banner {
             position: fixed;
             bottom: 16px;
+            /* Centred with auto margins rather than translateX: the show/hide
+               animation already owns `transform`. */
             left: 16px;
-            right: auto;
+            right: 16px;
+            margin: 0 auto;
             z-index: 10000;
             max-width: 320px;
             
