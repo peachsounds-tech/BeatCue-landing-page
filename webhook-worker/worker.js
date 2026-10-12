@@ -960,6 +960,32 @@ async function buildAsnKey(cf, os) {
     return `pair:${hex}`;
 }
 
+/** 'granted' | 'denied' | null. Anything else (absent, garbage) is "no answer". */
+function normalizeAdConsent(v) {
+    return v === 'granted' || v === 'denied' ? v : null;
+}
+
+/** Where Google's EU user consent policy applies: the EEA, the UK and
+ *  Switzerland. Mirrors REQUIRES_CONSENT in landing-page/js/google-ads.js. */
+const GADS_CONSENT_COUNTRIES = new Set([
+    'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
+    'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK',
+    'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH',
+]);
+
+/** Data Manager `consent` for one upload, or null to leave it out.
+ *
+ *  A recorded answer is always passed on. Without one, the field is left out:
+ *  outside the consent countries that is exactly right, and inside them Google
+ *  treats missing consent as not consented — the conversion is neither
+ *  reported nor bid on, which is the correct outcome for a visitor who never
+ *  answered. */
+function gadsConsentFor(choice) {
+    if (choice === 'granted') return { adUserData: 'CONSENT_GRANTED', adPersonalization: 'CONSENT_GRANTED' };
+    if (choice === 'denied')  return { adUserData: 'CONSENT_DENIED',  adPersonalization: 'CONSENT_DENIED' };
+    return null;
+}
+
 function clampString(v, maxLen) {
     if (typeof v !== 'string') return null;
     const trimmed = v.trim();
@@ -1096,6 +1122,9 @@ async function handlePairings(request, env, url) {
             gclid:  clampString(body.gclid,  256),
             gbraid: clampString(body.gbraid, 256),
             wbraid: clampString(body.wbraid, 256),
+            // The visitor's cookie-banner answer on advertising. Travels to
+            // the desktop app so its /gads uploads carry the same consent.
+            ad_consent: normalizeAdConsent(body.ad_consent),
             utms:   clampUtms(body.utms),
             ts:     Date.now(),
             os,
@@ -1715,6 +1744,8 @@ async function getGoogleAdsAccessToken(env) {
  *     event_source:     string  (optional; APP from the desktop app, else WEB),
  *     distinct_id:      string  (optional; PostHog id for the browser's
  *                                capi_send_result row),
+ *     ad_consent:       string  (optional; 'granted' | 'denied' from the
+ *                                cookie banner, or via pairing for the app),
  *     user_data: {
  *       gclid, gbraid, wbraid   (at least one required to upload; else skipped)
  *     }
@@ -1798,6 +1829,8 @@ async function handleGads(request, env, url) {
                 internal_name: clampString(body.internal_name, 64),
                 event_id: clampString(body.transaction_id, 96),
                 event_source_url: clampString(body.event_source_url, 2048),
+                ad_consent: normalizeAdConsent(body.ad_consent) || 'unknown',
+                consent_required: GADS_CONSENT_COUNTRIES.has((request.cf && request.cf.country) || ''),
                 ...(distinctId ? {} : { $process_person_profile: false }),
                 ...fields,
             });
@@ -1903,6 +1936,8 @@ async function handleGads(request, env, url) {
         eventSource,
         adIdentifiers,
     };
+    const consent = gadsConsentFor(normalizeAdConsent(body.ad_consent));
+    if (consent) event.consent = consent;
 
     const value = typeof body.value === 'number' && Number.isFinite(body.value)
         ? body.value
