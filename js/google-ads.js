@@ -18,6 +18,19 @@
         'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH'
     ];
 
+    // Where the cookie banner is shown and ad storage starts denied: Google's
+    // regions plus places whose own law expects opt-in. Mirrors
+    // BANNER_COUNTRIES / BANNER_REGIONS in webhook-worker/worker.js.
+    var BANNER_REGIONS = REQUIRES_CONSENT.concat([
+        'RS', 'ME', 'MK', 'AL', 'BA', 'XK', 'MD', 'UA', 'TR',
+        'AD', 'MC', 'SM', 'VA', 'CA-QC'
+    ]);
+
+    // Global Privacy Control is a legally binding opt-out of ad sharing in
+    // California and several other US states, so it overrides any stored
+    // or clicked grant, everywhere.
+    var gpc = navigator.globalPrivacyControl === true;
+
     window.dataLayer = window.dataLayer || [];
     function gtag() { window.dataLayer.push(arguments); }
 
@@ -29,6 +42,7 @@
     /** 'granted' | 'denied' | null when the visitor hasn't answered the
      *  advertising question (or the answer expired). */
     function consent() {
+        if (gpc) return 'denied';
         try {
             var c = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
             if (!c || typeof c.ads !== 'boolean' || !c.timestamp) return null;
@@ -40,15 +54,15 @@
     }
 
     function applyConsent(granted) {
-        gtag('consent', 'update', signals(!!granted));
+        gtag('consent', 'update', signals(!!granted && !gpc));
     }
 
     // Region-scoped default wins over the global one inside those regions.
     var regional = signals(false);
-    regional.region = REQUIRES_CONSENT;
+    regional.region = BANNER_REGIONS;
     regional.wait_for_update = 500;
     gtag('consent', 'default', regional);
-    gtag('consent', 'default', signals(true));
+    gtag('consent', 'default', signals(!gpc));
 
     var stored = consent();
     if (stored) applyConsent(stored === 'granted');
@@ -85,8 +99,8 @@
         return out;
     }
 
-    /** Calls back with true when the visitor needs the cookie banner (EEA, UK,
-     *  Switzerland, or anywhere we can't place them) and false otherwise.
+    /** Calls back with true when the visitor needs the cookie banner (one of
+     *  BANNER_REGIONS, or anywhere we can't place them) and false otherwise.
      *  Asks the worker, which reads the country off the request; any failure
      *  or a slow answer means true, so the banner errs towards showing. */
     var GEO_URL = 'https://peachsounds-webhook.sareldu.workers.dev/geo';

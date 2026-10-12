@@ -973,6 +973,19 @@ const GADS_CONSENT_COUNTRIES = new Set([
     'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH',
 ]);
 
+/** Where the cookie banner is shown: Google's countries plus European
+ *  countries whose own GDPR-style laws expect opt-in for tracking cookies.
+ *  Mirrors BANNER_REGIONS in landing-page/js/google-ads.js. */
+const BANNER_COUNTRIES = new Set([
+    ...GADS_CONSENT_COUNTRIES,
+    'RS', 'ME', 'MK', 'AL', 'BA', 'XK', 'MD', 'UA', 'TR',
+    'AD', 'MC', 'SM', 'VA',
+]);
+
+/** Subdivisions that need the banner although their country doesn't:
+ *  Quebec's Law 25 requires opt-in for profiling trackers. */
+const BANNER_REGIONS = new Set(['CA-QC']);
+
 /** Data Manager `consent` for one upload, or null to leave it out.
  *
  *  A recorded answer is always passed on. Without one, the field is left out:
@@ -1000,10 +1013,13 @@ function handleGeo(request) {
         return new Response(null, { status: 204, headers: cors });
     }
     const country = (request.cf && request.cf.country) || null;
+    const regionCode = (request.cf && request.cf.regionCode) || null;
     const known = !!country && country !== 'XX' && country !== 'T1';
     return new Response(JSON.stringify({
         country,
-        consent_required: !known || GADS_CONSENT_COUNTRIES.has(country),
+        consent_required: !known
+            || BANNER_COUNTRIES.has(country)
+            || (!!regionCode && BANNER_REGIONS.has(`${country}-${regionCode}`)),
     }), {
         status: 200,
         headers: {
