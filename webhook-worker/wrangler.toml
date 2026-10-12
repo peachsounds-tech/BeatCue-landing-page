@@ -9,6 +9,16 @@ compatibility_date = "2024-01-01"
 # Non-secret environment variables go here
 # POSTHOG_API_KEY is hardcoded in worker.js for simplicity
 
+# ─── Internal buyers ──────────────────────────────────────────────────────────
+# Comma-separated plaintext emails whose orders must never be forwarded to Meta
+# as a Purchase. The server-side counterpart of ~/.cue_internal, which the
+# webhook cannot see. Test-mode orders and zero-total comps are already skipped
+# without being listed here, so this is only for a real card used against the
+# live checkout. Worth keeping current: a conversion handed to Meta stays in the
+# bid model permanently, unlike a PostHog event that can be filtered at query
+# time.
+INTERNAL_EMAILS = "sareldu@gmail.com"
+
 # ─── Free-key gate (A/B) ──────────────────────────────────────────────────────
 # Lemon Squeezy product / variant ids whose license keys sign tier "free"
 # instead of "pro". Comma-separated. The worker also compiles these ids in as a
@@ -21,7 +31,7 @@ FREE_VARIANT_IDS = "2164536"
 # created before this are arm=existing: keyless free tier as today, never
 # gated. While unset, every device resolves to arm=existing, i.e. the
 # experiment is off. Set it when the gated app build ships.
-EXPERIMENT_START = ""
+EXPERIMENT_START = "2026-10-05T22:05:00Z"
 
 # Share of new devices (0-100) assigned to arm=test. Deterministic per device:
 # sha256(EXPERIMENT_SALT + device_id). 0 stops new test enrollments; devices
@@ -31,7 +41,7 @@ EXPERIMENT_SALT = "free-key-gate-v1"
 
 # Emergency rollback. "false" releases every gated device back to the keyless
 # free tier on its next resolve, with no app release.
-GATE_ENABLED = "true"
+GATE_ENABLED = "false"
 
 # Secret variables (set via `wrangler secret put NAME`):
 #
@@ -56,16 +66,27 @@ GATE_ENABLED = "true"
 #                                  `wrangler secret delete META_TEST_EVENT_CODE`
 #                                  once the integration is verified.
 #
-#   GOOGLE_ADS_DEVELOPER_TOKEN     Google Ads API developer token.
-#   GOOGLE_ADS_CLIENT_ID           OAuth client ID (Desktop / Web app).
+#   GOOGLE_ADS_DEVELOPER_TOKEN     Deprecated 2026-09-09 and ignored. Not used.
+#   GOOGLE_ADS_CLIENT_ID           OAuth client ID (Desktop / Web app). The
+#                                  Cloud project owning this client is what
+#                                  carries the API access level.
 #   GOOGLE_ADS_CLIENT_SECRET       OAuth client secret.
 #   GOOGLE_ADS_REFRESH_TOKEN       Long-lived refresh token for an Ads user.
+#                                  Must carry the
+#                                  https://www.googleapis.com/auth/datamanager
+#                                  scope: /gads uploads through the Data
+#                                  Manager API, and an adwords-only token is
+#                                  rejected with
+#                                  ACCESS_TOKEN_SCOPE_INSUFFICIENT. Mint with
+#                                  scripts/get-google-ads-refresh-token.mjs.
 #   GOOGLE_ADS_CUSTOMER_ID         Ads customer ID (digits only, no dashes).
 #   GOOGLE_ADS_LOGIN_CUSTOMER_ID   Optional MCC / manager customer ID.
-#   GOOGLE_ADS_CONV_ACTIONS        JSON map of event_name → conversion action
-#                                  resource name, e.g.
-#                                  {"send_to_desktop":"customers/123/conversionActions/456",
-#                                   "trial_download":"customers/123/conversionActions/789"}
+#   GOOGLE_ADS_CONV_ACTIONS        JSON map of event_name → conversion action.
+#                                  Bare id or full resource name, e.g.
+#                                  {"first_track_imported":"7838436673",
+#                                   "new_project_created":"customers/123/conversionActions/789"}
+#                                  Each must be an UPLOAD_CLICKS action in the
+#                                  account that serves the ads.
 #   GOOGLE_ADS_VALIDATE_ONLY       Optional. Set to "1" to dry-run uploads
 #                                  (validateOnly=true, no attribution).
 #

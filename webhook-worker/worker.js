@@ -198,7 +198,21 @@ const CAPI_ACTION_SOURCES = new Set([
 
 /** Ads API version pinned for predictable schema. Bump deliberately after
  *  testing — Google sunsets versions on a rolling schedule. */
-const GOOGLE_ADS_API_VERSION = 'v19';
+// Offline click conversions go through the Data Manager API, not the Google
+// Ads API. Google closed ConversionUploadService.UploadClickConversions to new
+// integrations: it answers HTTP 200 with a partialFailureError of
+// CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE ("New integrations for uploading
+// click conversions should use the Data Manager API"), so every conversion is
+// silently dropped. Unlike the Ads API this one is unversioned in the path.
+//
+// Needs the https://www.googleapis.com/auth/datamanager OAuth scope — an
+// adwords-scoped token is rejected with ACCESS_TOKEN_SCOPE_INSUFFICIENT.
+const GOOGLE_DATA_MANAGER_BASE = 'https://datamanager.googleapis.com/v1';
+
+/** Accepted Data Manager `Event.eventSource` values. An unrecognised one is
+ *  replaced with the default rather than forwarded, since the service rejects
+ *  the whole request on a bad enum. */
+const GADS_EVENT_SOURCES = new Set(['WEB', 'APP', 'IN_STORE', 'PHONE', 'MESSAGE', 'OTHER']);
 
 /** Hard upper bound on /gads request bodies. */
 const GADS_MAX_BODY_BYTES = 8 * 1024;
@@ -207,12 +221,46 @@ const GADS_MAX_BODY_BYTES = 8 * 1024;
  * event_name values the worker will upload. Each must map to a conversion
  * action resource name via the GOOGLE_ADS_CONV_ACTIONS JSON secret
  * (e.g. {"send_to_desktop":"customers/123/conversionActions/456"}).
- * Keep in sync with landing-page dual-fire call sites.
+ *
+ * A name listed here but absent from the secret soft-skips with ok:true, so a
+ * client can ship ahead of the Ads account config. Creating the conversion
+ * action in the Google Ads UI and adding it to the secret is what switches it
+ * on — no worker deploy needed.
+ *
+ * Browser-side (landing-page dual-fire call sites, keep in sync):
+ *   send_to_desktop, trial_download, checkout_clicked
+ *
+ * Desktop-side: the app's ConversionCatalog, the same names Meta receives on
+ * /capi. `first_*` is sent once per install (a count of people); the bare
+ * name once per occurrence (a count of actions) where the catalog says
+ * repeats carry signal. Which one a campaign bids on is chosen by which
+ * names GOOGLE_ADS_CONV_ACTIONS maps and how those actions are set in the Ads
+ * UI — map both of a pair as Primary and every conversion counts twice.
  */
 const GADS_EVENT_NAMES = new Set([
     'send_to_desktop',
     'trial_download',
     'checkout_clicked',
+
+    // Once per install.
+    'first_app_launched',
+    'first_premiere_installed_detected',
+    'first_premiere_panel_connected',
+    'first_cut_played',
+    'first_new_project_created',
+    'first_track_imported',
+    'first_export_intent',
+    'first_activation_started',
+    'first_activation_finished',
+    'first_free_registration_completed',
+
+    // Once per occurrence.
+    'app_launched',
+    'premiere_installed_detected',
+    'new_project_created',
+    'export_intent',
+    'activation_started',
+    'activation_finished',
 ]);
 
 /** Module-scoped OAuth access-token cache. Workers may reuse the isolate
@@ -547,6 +595,20 @@ async function handleOrderCreated(data, env) {
         return;
     }
 
+    // Step 2b: the money event. Deliberately not derived from licence
+    // activation: a key can be activated on a second machine, re-activated
+    // after a reinstall, or handed out by support, none of which is a sale.
+    // `order_created` is the only moment we know a payment actually happened,
+    // and it is also the only one that knows what it was worth.
+    await sendPurchaseToMeta(env, {
+        order,
+        orderId: data.data?.id,
+        email,
+        hashedEmail,
+        bcid,
+        distinctId,
+    });
+
     // Step 3: Set user_type based on product (useful if page view didn't capture it)
     const productName = order?.first_order_item?.product_name || '';
     const isEarlyAccess = productName.toLowerCase().includes('early access');
@@ -593,6 +655,140 @@ async function handleSubscriptionCreated(data) {
     };
     
     await sendToPostHog('subscription_created', bcid || hashedEmail, properties);
+}
+
+/** Forward a paid Lemon Squeezy order to Meta as a standard `Purchase`.
+ *
+ *  Standard rather than a custom name on purpose: `Purchase` with `value` and
+ *  `currency` is what Ads Manager's ROAS columns, value optimization and
+ *  value-based Lookalikes all read. A custom conversion would count the same
+ *  people and tell Meta nothing about what they were worth. `purchase_completed`
+ *  rides along in custom_data as our own label so it can be reconciled against
+ *  PostHog the same way every other send is.
+ *
+ *  Matching is email-first and that is fine here: fbp/fbc only ever existed in
+ *  the browser and the desktop app, and the pairing record that briefly held
+ *  them is deleted on first launch (see the delete-on-read fan-out in
+ *  /pairings). The hashed email is Meta's strongest single key and the only one
+ *  that survives the buyer switching device between the ad click and the
+ *  checkout, which — given the app is where they convert — is the normal case.
+ *
+ *  The event id is derived from the order id so a Lemon Squeezy retry, or a
+ *  replay of the same webhook, collapses into one conversion at Meta's end. */
+async function sendPurchaseToMeta(env, { order, orderId, email, hashedEmail, bcid, distinctId }) {
+    if (!env.META_PIXEL_ID || !env.META_CAPI_TOKEN) {
+        console.log(JSON.stringify({ evt: 'capi_purchase_skipped', reason: 'not_configured' }));
+        return;
+    }
+
+    const skip = internalOrderReason(env, order, email);
+    if (skip) {
+        console.log(JSON.stringify({ evt: 'capi_purchase_skipped', reason: skip, order_id: orderId }));
+        // Still recorded in PostHog so an internal order is visibly suppressed
+        // rather than looking identical to a send that silently never happened.
+        await sendToPostHog('capi_send_result', distinctId, {
+            event_name: 'Purchase',
+            internal_event_name: 'purchase_completed',
+            status: 'skipped',
+            skip_reason: skip,
+            source: 'worker',
+            order_id: orderId,
+        });
+        return;
+    }
+
+    const userData = {};
+    if (hashedEmail) userData.em = [hashedEmail];
+    if (bcid && BCID_RE.test(bcid)) userData.external_id = bcid;
+
+    const event = {
+        event_name: 'Purchase',
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: `ls_order_${orderId}`,
+        event_source_url: 'https://beatcue.app/',
+        action_source: 'website',
+        user_data: userData,
+        custom_data: {
+            // Lemon Squeezy reports money in cents.
+            value: Number(order.total) / 100,
+            currency: order.currency || 'USD',
+            internal_event_name: 'purchase_completed',
+            order_id: orderId,
+            order_number: order.order_number,
+            content_name: order.first_order_item?.product_name,
+            variant_name: order.first_order_item?.variant_name,
+        },
+    };
+
+    const up = await postEventsToMeta(env, { data: [event] });
+    const ok = !up.unreachable && up.status >= 200 && up.status < 300;
+
+    console.log(JSON.stringify({
+        evt: 'capi_purchase',
+        order_id: orderId,
+        ok,
+        upstream_status: up.status,
+        events_received: up.eventsReceived,
+        fbtrace_id: up.fbtraceId,
+        error: up.error || null,
+        had_em: !!hashedEmail,
+        had_bcid: !!userData.external_id,
+        value: event.custom_data.value,
+        currency: event.custom_data.currency,
+        test_mode: !!env.META_TEST_EVENT_CODE,
+    }));
+
+    // Mirrors what the desktop app reports after its own sends, so every
+    // conversion Meta receives — app-side or worker-side — lands in one table.
+    await sendToPostHog('capi_send_result', distinctId, {
+        event_name: 'Purchase',
+        internal_event_name: 'purchase_completed',
+        status: ok ? 'ok' : 'failed',
+        upstream_status: up.status,
+        source: 'worker',
+        order_id: orderId,
+        had_em: !!hashedEmail,
+        had_bcid: !!userData.external_id,
+        matchable: !!hashedEmail || !!userData.external_id,
+        value: event.custom_data.value,
+        currency: event.custom_data.currency,
+    });
+}
+
+/** Why an order must not become a Meta conversion, or null when it should.
+ *
+ *  The desktop app suppresses internal sends by looking for `~/.cue_internal`
+ *  (see AppConfig::isInternalUser). A webhook has no filesystem to consult, so
+ *  the equivalent has to be spelled out here. It matters more server-side than
+ *  it does in PostHog: a PostHog event tagged internal can be filtered at query
+ *  time forever, but a conversion handed to Meta is inside the bid model for
+ *  good and there is no way to take it back.
+ *
+ *  Three independent reasons, each of which has produced a bogus "purchase":
+ *    - Lemon Squeezy test-mode orders, which are not money.
+ *    - A known internal buyer, via the INTERNAL_EMAILS var. This is the direct
+ *      analogue of ~/.cue_internal and the only one that catches a real card
+ *      used to smoke-test the live checkout.
+ *    - A zero total, i.e. a 100%-off comp. Reporting it as a Purchase with
+ *      value 0 is worse than silence once value optimization is switched on:
+ *      it teaches Meta that this person was worth nothing. */
+function internalOrderReason(env, order, email) {
+    if (order?.test_mode === true) return 'test_mode';
+
+    const internal = new Set(
+        String(env.INTERNAL_EMAILS || '')
+            .split(',')
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean)
+    );
+    if (email && internal.has(String(email).trim().toLowerCase())) return 'internal_email';
+
+    // `total` is an integer in cents. Absent/unparseable is treated as zero —
+    // we would have nothing meaningful to report as the value anyway.
+    const totalCents = Number(order?.total);
+    if (!Number.isFinite(totalCents) || totalCents <= 0) return 'zero_total';
+
+    return null;
 }
 
 /** The in-app registration token, from wherever Lemon Squeezy put the checkout
@@ -1140,6 +1336,51 @@ function isHexSha256(s) {
     return typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 }
 
+/** POST an already-built `{ data: [...] }` payload to the pixel's events edge.
+ *
+ *  Shared by the /capi proxy and by the Lemon Squeezy order webhook, which
+ *  originates its Purchase server-side and so has no request to proxy. Never
+ *  throws: a transport failure comes back as `unreachable` so each caller can
+ *  decide what to tell its own client. Nothing retries — Meta CAPI is
+ *  best-effort and a double-fire would double-count a conversion. */
+async function postEventsToMeta(env, payload) {
+    if (env.META_TEST_EVENT_CODE) {
+        // Routes these events into the "Test Events" tab in Events Manager
+        // instead of into prod attribution. Set the secret while verifying,
+        // then `wrangler secret delete META_TEST_EVENT_CODE`.
+        payload.test_event_code = env.META_TEST_EVENT_CODE;
+    }
+
+    const graphUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/`
+        + encodeURIComponent(env.META_PIXEL_ID)
+        + `/events?access_token=${encodeURIComponent(env.META_CAPI_TOKEN)}`;
+
+    try {
+        const r = await fetch(graphUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const text = await r.text();
+        let fbtraceId = null;
+        let eventsReceived = null;
+        try {
+            const j = JSON.parse(text);
+            fbtraceId = j.fbtrace_id || null;
+            eventsReceived = typeof j.events_received === 'number' ? j.events_received : null;
+        } catch (_) { /* non-JSON error body — passthrough */ }
+        return { unreachable: false, status: r.status, fbtraceId, eventsReceived };
+    } catch (e) {
+        return {
+            unreachable: true,
+            status: 0,
+            fbtraceId: null,
+            eventsReceived: null,
+            error: String(e && e.message || e),
+        };
+    }
+}
+
 /**
  * POST /capi  — desktop app or browser pushes a single Meta CAPI event.
  *
@@ -1333,46 +1574,24 @@ async function handleCapi(request, env, url) {
     };
 
     const payload = { data: [event] };
-    if (env.META_TEST_EVENT_CODE) {
-        // Routes this single event into the "Test Events" tab in Events
-        // Manager instead of into prod attribution. Set the secret while
-        // verifying, then `wrangler secret delete META_TEST_EVENT_CODE`.
-        payload.test_event_code = env.META_TEST_EVENT_CODE;
-    }
 
     // ── Forward to Meta ──────────────────────────────────────────────────────
-    const graphUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/`
-        + encodeURIComponent(env.META_PIXEL_ID)
-        + `/events?access_token=${encodeURIComponent(env.META_CAPI_TOKEN)}`;
-
-    let upstreamStatus = 0;
-    let upstreamBody = '';
-    let fbtraceId = null;
-    let eventsReceived = null;
-    try {
-        const r = await fetch(graphUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        upstreamStatus = r.status;
-        upstreamBody = await r.text();
-        try {
-            const j = JSON.parse(upstreamBody);
-            fbtraceId = j.fbtrace_id || null;
-            eventsReceived = typeof j.events_received === 'number' ? j.events_received : null;
-        } catch (_) { /* non-JSON error body — passthrough */ }
-    } catch (e) {
+    const up = await postEventsToMeta(env, payload);
+    if (up.unreachable) {
         console.log(JSON.stringify({
             evt: 'capi_upstream_error',
             event_name: eventName,
-            error: String(e && e.message || e),
+            error: up.error,
         }));
         return new Response(JSON.stringify({ ok: false, error: 'upstream_unreachable' }), {
             status: 502,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
         });
     }
+
+    const upstreamStatus = up.status;
+    const fbtraceId      = up.fbtraceId;
+    const eventsReceived = up.eventsReceived;
 
     console.log(JSON.stringify({
         evt: 'capi_forwarded',
@@ -1403,15 +1622,8 @@ async function handleCapi(request, env, url) {
 
 // ─── Google Ads click-conversion upload handler ───────────────────────────────
 
-/** UTC timestamp in the format Google Ads requires:
- *  `yyyy-mm-dd hh:mm:ss+00:00`. */
-function formatGoogleAdsDateTime(date = new Date()) {
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} `
-        + `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}+00:00`;
-}
-
-/** Parse GOOGLE_ADS_CONV_ACTIONS secret (JSON object of event_name → resource). */
+/** Parse GOOGLE_ADS_CONV_ACTIONS secret (JSON object of event_name → conversion
+ *  action). */
 function parseGadsConvActions(raw) {
     if (!raw || typeof raw !== 'string') return null;
     try {
@@ -1423,7 +1635,22 @@ function parseGadsConvActions(raw) {
     }
 }
 
-const GADS_CONV_ACTION_RE = /^customers\/\d+\/conversionActions\/\d+$/;
+/**
+ * The bare conversion action id Data Manager wants as `productDestinationId`,
+ * or '' if the value isn't a conversion action at all.
+ *
+ * Accepts the full `customers/{cid}/conversionActions/{id}` resource name as
+ * well as the bare id, because that is the form the Google Ads UI and
+ * scripts/list-google-ads-conversions.mjs both show, and silently dropping
+ * every conversion because the secret carries the familiar spelling is a bad
+ * trade for a one-line normalisation.
+ */
+function gadsConversionActionId(raw) {
+    const s = clampString(raw, 128);
+    if (/^\d+$/.test(s)) return s;
+    const m = /^customers\/\d+\/conversionActions\/(\d+)$/.exec(s);
+    return m ? m[1] : '';
+}
 
 /**
  * Exchange the long-lived refresh token for a short-lived access token.
@@ -1506,9 +1733,13 @@ async function handleGads(request, env, url) {
         });
     }
 
+    // GOOGLE_ADS_DEVELOPER_TOKEN is deliberately absent: Google deprecated
+    // developer tokens on 2026-09-09 and the API servers ignore the header.
+    // Access level now follows the Google Cloud project that owns the OAuth
+    // client, not a token. Requiring one here would make a correctly
+    // configured deployment answer 503.
     const configured = !!(
-        env.GOOGLE_ADS_DEVELOPER_TOKEN
-        && env.GOOGLE_ADS_CLIENT_ID
+        env.GOOGLE_ADS_CLIENT_ID
         && env.GOOGLE_ADS_CLIENT_SECRET
         && env.GOOGLE_ADS_REFRESH_TOKEN
         && env.GOOGLE_ADS_CUSTOMER_ID
@@ -1564,8 +1795,8 @@ async function handleGads(request, env, url) {
         });
     }
 
-    const conversionAction = clampString(convActions[eventName], 128);
-    if (!conversionAction || !GADS_CONV_ACTION_RE.test(conversionAction)) {
+    const conversionActionId = gadsConversionActionId(convActions[eventName]);
+    if (!conversionActionId) {
         console.log(JSON.stringify({
             evt: 'gads_unmapped_event',
             event_name: eventName,
@@ -1612,22 +1843,40 @@ async function handleGads(request, env, url) {
         });
     }
 
-    const conversion = {
-        conversionAction,
-        conversionDateTime: formatGoogleAdsDateTime(),
-        orderId: transactionId,
+    const adIdentifiers = {};
+    if (gclid)  adIdentifiers.gclid  = gclid;
+    if (gbraid) adIdentifiers.gbraid = gbraid;
+    if (wbraid) adIdentifiers.wbraid = wbraid;
+
+    // The reference docs mark eventSource optional; the service rejects a
+    // request without it (REQUIRED_FIELD_MISSING on events[0].event_source).
+    // Defaults to WEB because the landing-page dual-fire predates the field
+    // and doesn't send one; the desktop app sends APP.
+    const requestedSource = (clampString(body.event_source, 16) || '').toUpperCase();
+    const eventSource = GADS_EVENT_SOURCES.has(requestedSource) ? requestedSource : 'WEB';
+
+    const event = {
+        // Google dedupes on this, so a client that retries after a lost
+        // acknowledgement collapses into the original conversion.
+        transactionId,
+        eventTimestamp: new Date().toISOString(),
+        eventSource,
+        adIdentifiers,
     };
-    if (gclid)  conversion.gclid  = gclid;
-    if (gbraid) conversion.gbraid = gbraid;
-    if (wbraid) conversion.wbraid = wbraid;
 
     const value = typeof body.value === 'number' && Number.isFinite(body.value)
         ? body.value
         : (typeof body.value === 'string' && body.value !== '' && Number.isFinite(Number(body.value))
             ? Number(body.value) : null);
-    if (value !== null) conversion.conversionValue = value;
-    const currency = clampString(body.currency, 8) || 'ILS';
-    if (value !== null) conversion.currencyCode = currency;
+    if (value !== null) {
+        event.conversionValue = value;
+        // Backstop only: every live caller that sends a value sends a currency
+        // with it. USD here so a caller that forgets inherits the desktop's
+        // convention rather than silently valuing a conversion in the wrong
+        // one. A valueless event sends neither, which lets the conversion
+        // action's own configured value apply.
+        event.currency = clampString(body.currency, 8) || 'USD';
+    }
 
     let accessToken;
     try {
@@ -1641,20 +1890,28 @@ async function handleGads(request, env, url) {
 
     const headers = {
         'Authorization': `Bearer ${accessToken}`,
-        'developer-token': env.GOOGLE_ADS_DEVELOPER_TOKEN,
         'Content-Type': 'application/json',
+    };
+
+    // Data Manager carries the account relationship in the destination rather
+    // than in headers, so there is no login-customer-id here: a manager
+    // account goes in `loginAccount` instead.
+    const destination = {
+        operatingAccount: { accountType: 'GOOGLE_ADS', accountId: customerId },
+        productDestinationId: conversionActionId,
     };
     const loginCustomerId = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID
         ? String(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, '')
         : '';
-    if (loginCustomerId) headers['login-customer-id'] = loginCustomerId;
+    if (loginCustomerId) {
+        destination.loginAccount = { accountType: 'GOOGLE_ADS', accountId: loginCustomerId };
+    }
 
-    const adsUrl = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/`
-        + `customers/${encodeURIComponent(customerId)}:uploadClickConversions`;
+    const adsUrl = `${GOOGLE_DATA_MANAGER_BASE}/events:ingest`;
 
     const payload = {
-        conversions: [conversion],
-        partialFailure: true,
+        destinations: [destination],
+        events: [event],
     };
     // Optional: validate-only mode for dry runs (no attribution).
     if (env.GOOGLE_ADS_VALIDATE_ONLY === '1' || env.GOOGLE_ADS_VALIDATE_ONLY === 'true') {
@@ -1664,7 +1921,7 @@ async function handleGads(request, env, url) {
     let upstreamStatus = 0;
     let upstreamBody = '';
     let partialFailure = null;
-    let results = null;
+    let requestId = null;
     try {
         const r = await fetch(adsUrl, {
             method: 'POST',
@@ -1675,8 +1932,15 @@ async function handleGads(request, env, url) {
         upstreamBody = await r.text();
         try {
             const j = JSON.parse(upstreamBody);
-            partialFailure = j.partialFailureError || null;
-            results = j.results || null;
+            requestId = j.requestId || null;
+            // Data Manager reports a rejected row as fieldWarnings on an
+            // otherwise successful response, and a rejected request as a
+            // top-level error. Both mean the conversion did not land, so both
+            // have to read as a failure here or the client claims its
+            // once-per-install flag for nothing.
+            partialFailure = (Array.isArray(j.fieldWarnings) && j.fieldWarnings.length)
+                ? { message: JSON.stringify(j.fieldWarnings).slice(0, 400) }
+                : (j.error || null);
         } catch (_) { /* non-JSON */ }
     } catch (e) {
         console.log(JSON.stringify({
@@ -1691,9 +1955,9 @@ async function handleGads(request, env, url) {
     }
 
     const httpOk = upstreamStatus >= 200 && upstreamStatus < 300;
-    // partialFailureError present means the conversion itself was rejected
-    // even on HTTP 200 (e.g. CLICK_NOT_FOUND when debug is on). Treat as soft
-    // failure for logging; still return 200 so the browser nav isn't blocked.
+    // A rejection can arrive on an HTTP 200 (e.g. an unrecognised gclid).
+    // Treat as a soft failure for logging; still return 200 so the browser
+    // nav isn't blocked.
     const hasPartialFailure = !!(partialFailure && (
         partialFailure.code || partialFailure.message || (partialFailure.details && partialFailure.details.length)
     ));
@@ -1719,7 +1983,7 @@ async function handleGads(request, env, url) {
         skipped: null,
         upstream_status: upstreamStatus,
         partial_failure: hasPartialFailure,
-        results_count: Array.isArray(results) ? results.length : 0,
+        request_id: requestId,
     }), {
         // Always 200 on a successful upstream round-trip so keepalive fetches
         // from the landing page don't surface as network errors; ok/partial

@@ -5,7 +5,7 @@ A single Cloudflare Worker with five responsibilities:
 1. **Lemon Squeezy → PostHog**: receive purchase webhooks and forward funnel events to PostHog.
 2. **Web ↔ desktop pairing**: bridge the `bcid` + Meta attribution captured on the download page over to the freshly installed desktop app — without tripping Chrome's Local Network Access permission prompt.
 3. **Meta Conversions API proxy**: accept `/capi` events from the desktop app (and optionally the browser) and forward them to Meta's Graph API, keeping the access token off-client.
-4. **Google Ads conversion upload proxy**: accept `/gads` events from the browser and forward them via `uploadClickConversions`, keeping OAuth + developer token off-client.
+4. **Google Ads conversion upload proxy**: accept `/gads` events from the browser and the desktop app and forward them to the **Data Manager API** (`events:ingest`), keeping OAuth off-client.
 5. **Free-tier song quota**: the authoritative ledger of which songs each install owns and how many it may still claim this period. See [Free-tier quota](#free-tier-quota).
 
 ## Routes
@@ -358,16 +358,60 @@ Landing pages dual-fire key conversions: browser `gtag('event','conversion',{tra
 
 #### One-time Google Cloud / Ads setup
 
-1. Create (or reuse) a Google Cloud project → enable **Google Ads API**.
+> **`/gads` uses the Data Manager API, not the Google Ads API.** Google closed
+> `ConversionUploadService.UploadClickConversions` to new integrations: it
+> answers HTTP 200 with a `partialFailureError` of
+> `CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE` and drops the conversion. The
+> replacement is `POST https://datamanager.googleapis.com/v1/events:ingest`,
+> which needs the `https://www.googleapis.com/auth/datamanager` scope.
+>
+> **Developer tokens were deprecated on 2026-09-09** and are ignored. Access
+> level attaches to the **Google Cloud project that owns the OAuth client**,
+> and a Google Ads *manager* account is not required. Do not apply for access
+> from Google Ads → API Center — that page is retired and requests made there
+> are not processed. Explorer access is enough for this volume; Basic is only
+> needed above ~2,880 production operations/day.
+
+1. Create (or reuse) a Google Cloud project → enable the **Data Manager API**
+   (and the **Google Ads API** if you want
+   `scripts/list-google-ads-conversions.mjs` to work).
+   Keep it off the Cloud *free trial* billing plan: a known issue rejects
+   Basic access requests from free-trial or suspended-billing projects with
+   "Basic access requires a verified brand OAuth profile". Either upgrade to
+   a paid plan or detach billing entirely.
 2. Create an OAuth client (Desktop or Web) → note `client_id` + `client_secret`.
-3. Generate a refresh token for a user that can access the BeatCue Ads account
-   (e.g. via [OAuth Playground](https://developers.google.com/oauthplayground) with
-   scope `https://www.googleapis.com/auth/adwords`, or `gcloud` auth flow).
-4. Apply for / copy a **Developer token** from Google Ads → Tools → API Center.
-5. Note the **Customer ID** (digits only, no dashes). If you authenticate via an
-   MCC, also note the manager **Login Customer ID**.
-6. Look up conversion action resource names (Google Ads → Goals → Conversions,
-   or via the API). Format: `customers/{CUSTOMER_ID}/conversionActions/{ACTION_ID}`.
+   This project is what carries the API access level, so use the same one
+   throughout.
+3. Generate a refresh token for a user that can access the BeatCue Ads account:
+   `node scripts/get-google-ads-refresh-token.mjs`. It requests both
+   `.../auth/datamanager` (what `/gads` uploads with) and `.../auth/adwords`
+   (what the listing script reads with). A token minted with only `adwords` is
+   rejected by Data Manager with `ACCESS_TOKEN_SCOPE_INSUFFICIENT`.
+4. On the project's **Google Ads API overview** page in Cloud Console, complete
+   **brand verification**, then request **Basic access**. New projects start at
+   Test access, which can only call Google's sandbox accounts — a production
+   call fails with `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`. Basic requests
+   are automated and usually clear within minutes of brand verification.
+5. Note the **Customer ID** (digits only, no dashes). A manager account is only
+   needed to administer several accounts at once; if you use one, also note its
+   **Login Customer ID**.
+6. Look up conversion action resource names with
+   `node scripts/list-google-ads-conversions.mjs`. Format:
+   `customers/{CUSTOMER_ID}/conversionActions/{ACTION_ID}`.
+
+> **Every action mapped in `GOOGLE_ADS_CONV_ACTIONS` must be type
+> `UPLOAD_CLICKS`**, and must live in the account that *runs the ads*, not in a
+> manager account — the `gclid` belongs to the serving account. The `WEBPAGE` /
+> `WEBPAGE_CODELESS` actions that back the browser `gtag` calls cannot receive
+> `/gads` uploads even though their names match. Create upload actions under
+> Goals → Conversions → New conversion action → **Conversions offline** → skip
+> the data source → pick a category. The listing script checks the type and
+> refuses to suggest a mapping that would fail.
+>
+> The secret accepts either the bare conversion action id (`7838436673`, what
+> Data Manager calls `productDestinationId`) or the full
+> `customers/{cid}/conversionActions/{id}` resource name, which the worker
+> normalises.
 
 Map the existing browser conversion labels to those resource names:
 
@@ -377,8 +421,46 @@ Map the existing browser conversion labels to those resource names:
 | `trial_download` | `AW-18317916073/H-gBCKTHnNUcEKnv1J5E` | `trial_download` |
 | `checkout_clicked` | (optional — leave unmapped until you create one) | `checkout_clicked` |
 
+#### Desktop conversions
+
+The app posts to `/gads` as well, through `GoogleAdsConversionProvider`
+(`Source/Identity/Conversions/`). These are the post-install events no browser
+tag can observe. Google receives exactly the events and names Meta does — both
+come from the app's `ConversionCatalog`, and `tools/ConversionProviderTest.cpp`
+fails if the two platforms ever diverge. See the `/capi` table above for the
+full list.
+
+Each conversion has a `first_*` name sent once per install (a count of
+people) and, where repeats carry signal, a bare name sent once per occurrence
+(a count of actions). Create conversion actions only for the names you want
+in Google Ads; the rest soft-skip. The ones that matter most:
+
+| Desktop `event_name` | What it means | Suggested setup |
+|---|---|---|
+| `new_project_created` | A new song claimed against the free tier, once per song — progress toward the paywall | Primary, count **Every**, small value |
+| `first_activation_finished` | The paid conversion. Carries `value` + `currency` | Primary, purchase with value |
+| `first_track_imported` | The first track of the user's own decoded and analysed | Secondary |
+| `first_export_intent` | A local export, or the Premiere panel-mode equivalent | Secondary |
+
+Never make both names of one pair Primary (e.g. `activation_finished` and
+`first_activation_finished`): bidding would count every such conversion twice.
+
+Until a key is present in `GOOGLE_ADS_CONV_ACTIONS` the worker soft-skips it
+with `ok:true, skipped:"conversion_action_unmapped"`, so the desktop can ship
+ahead of the Ads account config. Switching one on is a secret update, not a
+worker deploy.
+
+Note the asymmetry with Meta: `/gads` uploads click conversions only, so an
+install that never carried a `gclid`/`gbraid`/`wbraid` cannot be attributed on
+Google at all. The desktop knows this and skips the POST entirely rather than
+spending a request to be told `skipped:"no_click_id"`. Meta can still match
+such an install on a hashed email, which is why its event set is wider. If that
+gap matters, the fix is enhanced conversions (`userIdentifiers.hashedEmail`) on
+this route.
+
 ```bash
-wrangler secret put GOOGLE_ADS_DEVELOPER_TOKEN
+# GOOGLE_ADS_DEVELOPER_TOKEN is no longer needed (deprecated 2026-09-09). The
+# worker still forwards one if set, for an older deployment.
 wrangler secret put GOOGLE_ADS_CLIENT_ID
 wrangler secret put GOOGLE_ADS_CLIENT_SECRET
 wrangler secret put GOOGLE_ADS_REFRESH_TOKEN
@@ -413,9 +495,12 @@ wrangler secret put GOOGLE_ADS_CONV_ACTIONS
          "user_data": { "gclid": "PASTE_A_REAL_GCLID" }
        }'
    ```
-3. Watch `wrangler tail` for `gads_forwarded` / `gads_oauth_error`. In Ads UI,
+3. Watch `wrangler tail` for `gads_forwarded` / `gads_oauth_error`. A healthy
+   line has `upstream_status: 200` and `partial_failure: false`; the response
+   carries Data Manager's `request_id` for support escalation. In Ads UI,
    Diagnostics → Uploads (or conversion action diagnostics) should show the hit
-   once validate-only is off and a real click id is used.
+   once validate-only is off and a real click id is used — allow a few hours,
+   offline conversions do not appear immediately.
 4. Delete validate-only when done: `wrangler secret delete GOOGLE_ADS_VALIDATE_ONLY`.
 
 ### 6. Configure Lemon Squeezy Webhook
