@@ -5,7 +5,7 @@ A single Cloudflare Worker with five responsibilities:
 1. **Lemon Squeezy → PostHog**: receive purchase webhooks and forward funnel events to PostHog.
 2. **Web ↔ desktop pairing**: bridge the `bcid` + Meta attribution captured on the download page over to the freshly installed desktop app — without tripping Chrome's Local Network Access permission prompt.
 3. **Meta Conversions API proxy**: accept `/capi` events from the desktop app (and optionally the browser) and forward them to Meta's Graph API, keeping the access token off-client.
-4. **Google Ads conversion upload proxy**: accept `/gads` events from the browser and forward them via `uploadClickConversions`, keeping OAuth + developer token off-client.
+4. **Google Ads conversion upload proxy**: accept `/gads` events from the browser and the desktop app and forward them to the **Data Manager API** (`events:ingest`), keeping OAuth off-client.
 5. **Free-tier song quota**: the authoritative ledger of which songs each install owns and how many it may still claim this period. See [Free-tier quota](#free-tier-quota).
 
 ## Routes
@@ -22,14 +22,48 @@ A single Cloudflare Worker with five responsibilities:
 | `POST` | `/quota/state` | desktop app | sync usage, period and owned-song list; carries the migration seed |
 | `POST` | `/quota/claim` | desktop app | claim a quota slot for one song — the only call that consumes quota |
 | `POST` | `/quota/grant` | support | set a per-account limit, re-anchor a period, or grant songs (requires `QUOTA_ADMIN_TOKEN`) |
+| `POST` | `/license/activate`, `/license/validate`, `/license/deactivate` | desktop app | worker-mediated Lemon Squeezy licence; signs tier `pro` or `free` by product |
+| `POST` | `/install/resolve` | desktop app | the device's A/B arm and what to do: `gate` (must register), `activate` (its registered free key arrived), or `none` |
+| `POST` | `/install/registration` | desktop app | mint the one-time `reg` token carried through `/get` → `/plans` → checkout |
 | `OPTIONS` | `/pairings*`, `/capi`, `/gads` | browsers | CORS preflight |
+
+## Free-key gate (A/B)
+
+New devices get a sticky arm on their first `/install/resolve`:
+
+- `existing` — quota account created before `EXPERIMENT_START` (or the experiment is off). Keyless free tier as today, never gated.
+- `control` — hash outside `TEST_PERCENT`. Keyless free tier, exactly today's experience.
+- `test` — hash inside `TEST_PERCENT`. Editing is gated until the user registers a free key in the app. `/quota/claim` answers `registration_required` for these devices until a key is live.
+
+A test device's key comes back through the webhook: the app mints a `reg` token, `/plans` forwards it as `checkout[custom][reg]`, `registration_license_key_created` parks the key against that device, and the app picks it up on its next resolve.
+
+Keys from the **BeatCue - Free** product (product `1385673`, variant `2164536`) sign tier `free`; everything else signs `pro`. Those IDs are also compiled in as a floor, so a missing var can never promote a free key to Pro.
+
+Setup and rollout:
+
+1. Lemon Squeezy dashboard, BeatCue - Free: set an activation limit (e.g. 3). Set both the confirmation modal button link and the receipt button link to `https://beatcue.app/welcome/?free=1&license_key=[license_key]`. Lemon Squeezy substitutes the real key. The app runs this checkout in its own window and catches that navigation to activate the key on the spot; in the browser fallback, `/welcome` opens `beatcue://activate?key=…` instead. Either is faster than the other two delivery paths (app polling via `reg`, pasting from email).
+2. Make sure `LEMONSQUEEZY_WEBHOOK_SECRET` is set, since the webhook now parks keys for devices.
+3. `wrangler d1 migrations apply beatcue-quota --remote`, then `wrangler deploy` with `TEST_PERCENT = "0"`.
+4. When the gated app build ships, set `EXPERIMENT_START` to the release time and redeploy. New devices are all `control` until step 5.
+5. Raise `TEST_PERCENT` to `50`. Emergency rollback: `GATE_ENABLED = "false"`.
+
+Offline tests: `node --experimental-sqlite scripts/install_selftest.mjs` and `scripts/quota_selftest.mjs`.
+
+### Measuring it (PostHog)
+
+Break everything down by the person property `free_gate_arm` and keep only `control` and `test`; `existing` devices are excluded from the experiment. The app sets that property (and the matching super-property) from every `/install/resolve` answer. Browser and app events join through `bcid`, which the app sends to `/get`.
+
+- **Primary metric**: share of new devices with a granted edit within 7 days of their first launch. The funnel is `install_resolved` (first per device) followed by `free_tier_slot_claim` where `outcome = granted`, with a 7-day conversion window.
+- **Test-arm drop-off**: `install_resolved` → `plan_panel_locked_shown` → `registration_activate_clicked` → `plans_page_viewed` → `registration_checkout_completed` → `free_key_activated` → `free_tier_slot_claim` (`outcome = granted`). Gate closes show up as `registration_gate_dismissed`. `free_key_activated.via` says how the key arrived: `poll`, `deep_link`, or `paste`.
+- **Secondary metrics**: D7 and D30 retention on `app_launched`, Pro conversion (`license_activated`), and emails captured (test-arm `registration_license_key_created`).
+- **Health**: `install_resolve_failed` and `free_key_auto_activation_failed` should stay near zero. A rising `registration_token_failed` means keys are arriving by email only.
 
 ## Lemon Squeezy events tracked
 
 | Lemon Squeezy Event | PostHog Event | Description |
 |---------------------|---------------|-------------|
-| `order_created` | `checkout_completed` | User completed checkout |
-| `license_key_created` | `license_key_created` | License key was generated |
+| `order_created` | `checkout_completed` | Pro checkout. A free registration sends `registration_checkout_completed` instead. |
+| `license_key_created` | `license_key_created` | Pro key. A free registration sends `registration_license_key_created` instead. |
 | `subscription_created` | `subscription_created` | Subscription started |
 
 ## Pairing flow
@@ -309,6 +343,7 @@ pre-`first_` names stay on the allowlist only so in-field builds do not 400.
 | `first_export_intent` | desktop app | `export_started` | **yes (Custom Conversion)** |
 | `first_activation_started` | desktop app | `activation_started` | no |
 | `first_activation_finished` | desktop app | `activation_finished` | **yes (Custom Conversion)** |
+| `first_free_registration_completed` | desktop app, free key activated | `free_key_activated` | no |
 | `first_checkout_clicked` | landing page | `lemonsqueezy_buy_click` | no |
 | `first_send_to_desktop_clicked` | landing page | `send_to_desktop_clicked` | no |
 
@@ -323,16 +358,60 @@ Landing pages dual-fire key conversions: browser `gtag('event','conversion',{tra
 
 #### One-time Google Cloud / Ads setup
 
-1. Create (or reuse) a Google Cloud project → enable **Google Ads API**.
+> **`/gads` uses the Data Manager API, not the Google Ads API.** Google closed
+> `ConversionUploadService.UploadClickConversions` to new integrations: it
+> answers HTTP 200 with a `partialFailureError` of
+> `CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE` and drops the conversion. The
+> replacement is `POST https://datamanager.googleapis.com/v1/events:ingest`,
+> which needs the `https://www.googleapis.com/auth/datamanager` scope.
+>
+> **Developer tokens were deprecated on 2026-09-09** and are ignored. Access
+> level attaches to the **Google Cloud project that owns the OAuth client**,
+> and a Google Ads *manager* account is not required. Do not apply for access
+> from Google Ads → API Center — that page is retired and requests made there
+> are not processed. Explorer access is enough for this volume; Basic is only
+> needed above ~2,880 production operations/day.
+
+1. Create (or reuse) a Google Cloud project → enable the **Data Manager API**
+   (and the **Google Ads API** if you want
+   `scripts/list-google-ads-conversions.mjs` to work).
+   Keep it off the Cloud *free trial* billing plan: a known issue rejects
+   Basic access requests from free-trial or suspended-billing projects with
+   "Basic access requires a verified brand OAuth profile". Either upgrade to
+   a paid plan or detach billing entirely.
 2. Create an OAuth client (Desktop or Web) → note `client_id` + `client_secret`.
-3. Generate a refresh token for a user that can access the BeatCue Ads account
-   (e.g. via [OAuth Playground](https://developers.google.com/oauthplayground) with
-   scope `https://www.googleapis.com/auth/adwords`, or `gcloud` auth flow).
-4. Apply for / copy a **Developer token** from Google Ads → Tools → API Center.
-5. Note the **Customer ID** (digits only, no dashes). If you authenticate via an
-   MCC, also note the manager **Login Customer ID**.
-6. Look up conversion action resource names (Google Ads → Goals → Conversions,
-   or via the API). Format: `customers/{CUSTOMER_ID}/conversionActions/{ACTION_ID}`.
+   This project is what carries the API access level, so use the same one
+   throughout.
+3. Generate a refresh token for a user that can access the BeatCue Ads account:
+   `node scripts/get-google-ads-refresh-token.mjs`. It requests both
+   `.../auth/datamanager` (what `/gads` uploads with) and `.../auth/adwords`
+   (what the listing script reads with). A token minted with only `adwords` is
+   rejected by Data Manager with `ACCESS_TOKEN_SCOPE_INSUFFICIENT`.
+4. On the project's **Google Ads API overview** page in Cloud Console, complete
+   **brand verification**, then request **Basic access**. New projects start at
+   Test access, which can only call Google's sandbox accounts — a production
+   call fails with `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`. Basic requests
+   are automated and usually clear within minutes of brand verification.
+5. Note the **Customer ID** (digits only, no dashes). A manager account is only
+   needed to administer several accounts at once; if you use one, also note its
+   **Login Customer ID**.
+6. Look up conversion action resource names with
+   `node scripts/list-google-ads-conversions.mjs`. Format:
+   `customers/{CUSTOMER_ID}/conversionActions/{ACTION_ID}`.
+
+> **Every action mapped in `GOOGLE_ADS_CONV_ACTIONS` must be type
+> `UPLOAD_CLICKS`**, and must live in the account that *runs the ads*, not in a
+> manager account — the `gclid` belongs to the serving account. The `WEBPAGE` /
+> `WEBPAGE_CODELESS` actions that back the browser `gtag` calls cannot receive
+> `/gads` uploads even though their names match. Create upload actions under
+> Goals → Conversions → New conversion action → **Conversions offline** → skip
+> the data source → pick a category. The listing script checks the type and
+> refuses to suggest a mapping that would fail.
+>
+> The secret accepts either the bare conversion action id (`7838436673`, what
+> Data Manager calls `productDestinationId`) or the full
+> `customers/{cid}/conversionActions/{id}` resource name, which the worker
+> normalises.
 
 Map the existing browser conversion labels to those resource names:
 
@@ -342,8 +421,46 @@ Map the existing browser conversion labels to those resource names:
 | `trial_download` | `AW-18317916073/H-gBCKTHnNUcEKnv1J5E` | `trial_download` |
 | `checkout_clicked` | (optional — leave unmapped until you create one) | `checkout_clicked` |
 
+#### Desktop conversions
+
+The app posts to `/gads` as well, through `GoogleAdsConversionProvider`
+(`Source/Identity/Conversions/`). These are the post-install events no browser
+tag can observe. Google receives exactly the events and names Meta does — both
+come from the app's `ConversionCatalog`, and `tools/ConversionProviderTest.cpp`
+fails if the two platforms ever diverge. See the `/capi` table above for the
+full list.
+
+Each conversion has a `first_*` name sent once per install (a count of
+people) and, where repeats carry signal, a bare name sent once per occurrence
+(a count of actions). Create conversion actions only for the names you want
+in Google Ads; the rest soft-skip. The ones that matter most:
+
+| Desktop `event_name` | What it means | Suggested setup |
+|---|---|---|
+| `new_project_created` | A new song claimed against the free tier, once per song — progress toward the paywall | Primary, count **Every**, small value |
+| `first_activation_finished` | The paid conversion. Carries `value` + `currency` | Primary, purchase with value |
+| `first_track_imported` | The first track of the user's own decoded and analysed | Secondary |
+| `first_export_intent` | A local export, or the Premiere panel-mode equivalent | Secondary |
+
+Never make both names of one pair Primary (e.g. `activation_finished` and
+`first_activation_finished`): bidding would count every such conversion twice.
+
+Until a key is present in `GOOGLE_ADS_CONV_ACTIONS` the worker soft-skips it
+with `ok:true, skipped:"conversion_action_unmapped"`, so the desktop can ship
+ahead of the Ads account config. Switching one on is a secret update, not a
+worker deploy.
+
+Note the asymmetry with Meta: `/gads` uploads click conversions only, so an
+install that never carried a `gclid`/`gbraid`/`wbraid` cannot be attributed on
+Google at all. The desktop knows this and skips the POST entirely rather than
+spending a request to be told `skipped:"no_click_id"`. Meta can still match
+such an install on a hashed email, which is why its event set is wider. If that
+gap matters, the fix is enhanced conversions (`userIdentifiers.hashedEmail`) on
+this route.
+
 ```bash
-wrangler secret put GOOGLE_ADS_DEVELOPER_TOKEN
+# GOOGLE_ADS_DEVELOPER_TOKEN is no longer needed (deprecated 2026-09-09). The
+# worker still forwards one if set, for an older deployment.
 wrangler secret put GOOGLE_ADS_CLIENT_ID
 wrangler secret put GOOGLE_ADS_CLIENT_SECRET
 wrangler secret put GOOGLE_ADS_REFRESH_TOKEN
@@ -378,9 +495,12 @@ wrangler secret put GOOGLE_ADS_CONV_ACTIONS
          "user_data": { "gclid": "PASTE_A_REAL_GCLID" }
        }'
    ```
-3. Watch `wrangler tail` for `gads_forwarded` / `gads_oauth_error`. In Ads UI,
+3. Watch `wrangler tail` for `gads_forwarded` / `gads_oauth_error`. A healthy
+   line has `upstream_status: 200` and `partial_failure: false`; the response
+   carries Data Manager's `request_id` for support escalation. In Ads UI,
    Diagnostics → Uploads (or conversion action diagnostics) should show the hit
-   once validate-only is off and a real click id is used.
+   once validate-only is off and a real click id is used — allow a few hours,
+   offline conversions do not appear immediately.
 4. Delete validate-only when done: `wrangler secret delete GOOGLE_ADS_VALIDATE_ONLY`.
 
 ### 6. Configure Lemon Squeezy Webhook

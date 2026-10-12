@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <!-- Google tag (gtag.js) -->
+    <script src="/js/google-ads.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -337,11 +338,16 @@
         // utms travel on the wire but the C++ PairingClient does not consume
         // them — first-touch UTM attribution lives on the PostHog person record
         // we create below, not on the desktop side.
+        var googleClickIds = window.CueGoogleAds ? CueGoogleAds.clickIds() : {};
         fire(WORKER_BASE + '/pairings', {
             bcid: bcid,
             fbp: fbp || null,
             fbc: fbc || null,
             fbclid: fbclid || null,
+            gclid: googleClickIds.gclid || null,
+            gbraid: googleClickIds.gbraid || null,
+            wbraid: googleClickIds.wbraid || null,
+            ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
             utms: utms,
             platform: (platform === 'windows') ? 'windows' : (platform === 'mac' ? 'mac' : 'other')
         });

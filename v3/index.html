@@ -3,6 +3,7 @@
 <head>
     <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
+    <script src="/js/google-ads.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -242,12 +243,13 @@
              * Store consent decision
              * @param {string} status - 'accepted', 'rejected', or 'dismissed'
              */
-            function storeConsent(status) {
+            function storeConsent(status, ads) {
                 try {
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                        status: status,
-                        timestamp: Date.now()
-                    }));
+                    const record = { status: status, timestamp: Date.now() };
+                    // Advertising is its own answer (read by /js/google-ads.js);
+                    // left out when the visitor made no choice about it.
+                    if (typeof ads === 'boolean') record.ads = ads;
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
                 } catch (e) {
                     console.warn('CookieConsent: Could not write to localStorage', e);
                 }
@@ -288,15 +290,20 @@
              */
             function shouldShowBanner() {
                 const consent = getStoredConsent();
-                // Show banner if no consent stored OR consent has expired
-                return !consent || isConsentExpired(consent);
+                // Show banner if no consent stored OR consent has expired, and
+                // once more for anyone who accepted before advertising was
+                // part of the question.
+                return !consent || isConsentExpired(consent)
+                    || (consent.status === CONSENT_ACCEPTED && typeof consent.ads !== 'boolean');
             }
             
             /**
              * Accept consent - enables analytics
              */
-            function accept() {
-                storeConsent(CONSENT_ACCEPTED);
+            function accept(ads) {
+                const adsGranted = ads !== false;
+                storeConsent(CONSENT_ACCEPTED, adsGranted);
+                if (window.CueGoogleAds) CueGoogleAds.applyConsent(adsGranted);
                 hideBanner();
                 // Initialize PostHog and track consent event
                 if (typeof initPostHog === 'function') {
@@ -307,8 +314,10 @@
             /**
              * Reject consent - no analytics
              */
-            function reject() {
-                storeConsent(CONSENT_REJECTED);
+            function reject(ads) {
+                const adsGranted = ads === true;
+                storeConsent(CONSENT_REJECTED, adsGranted);
+                if (window.CueGoogleAds) CueGoogleAds.applyConsent(adsGranted);
                 hideBanner();
                 // Track rejection (still in memory mode, no cookies)
                 if (typeof trackConsentDecision === 'function') {
@@ -387,15 +396,25 @@
                     toggle.classList.toggle('cookie-banner__toggle--on', analyticsEnabled);
                 }
             }
+
+            let adsEnabled = true;
+
+            function toggleAds() {
+                adsEnabled = !adsEnabled;
+                const toggle = document.getElementById('adsToggle');
+                if (toggle) {
+                    toggle.classList.toggle('cookie-banner__toggle--on', adsEnabled);
+                }
+            }
             
             /**
              * Save preferences - accept or reject based on toggle state
              */
             function savePreferences() {
                 if (analyticsEnabled) {
-                    accept();
+                    accept(adsEnabled);
                 } else {
-                    reject();
+                    reject(adsEnabled);
                 }
             }
             
@@ -404,8 +423,22 @@
              */
             function init() {
                 if (shouldShowBanner()) {
-                    showBanner();
-                } else if (shouldLoadAnalytics()) {
+                    if (window.CueGoogleAds && CueGoogleAds.consentRequired) {
+                        CueGoogleAds.consentRequired(function (required) {
+                            if (required) {
+                                showBanner();
+                            } else if (typeof initPostHog === 'function') {
+                                // Outside the EEA/UK/Switzerland: no banner,
+                                // analytics as if accepted. Nothing is stored,
+                                // so a later visit from Europe still asks.
+                                initPostHog(false);
+                            }
+                        });
+                    } else {
+                        showBanner();
+                    }
+                }
+                if (shouldLoadAnalytics()) {
                     // User already consented, load analytics
                     if (typeof initPostHog === 'function') {
                         initPostHog(false); // false = returning user
@@ -424,6 +457,7 @@
                 init,
                 togglePreferences,
                 toggleAnalytics,
+                toggleAds,
                 savePreferences
             };
         })();
@@ -4768,8 +4802,11 @@
         .cookie-banner {
             position: fixed;
             bottom: 16px;
+            /* Centred with auto margins rather than translateX: the show/hide
+               animation already owns `transform`. */
             left: 16px;
-            right: auto;
+            right: 16px;
+            margin: 0 auto;
             z-index: 10000;
             max-width: 320px;
             
@@ -5483,7 +5520,7 @@
         aria-describedby="cookieConsentText"
     >
         <p id="cookieConsentText" class="cookie-banner__text">
-            We use cookies for analytics. <a href="/privacy.html" class="cookie-banner__link">Privacy</a>
+            We use cookies for analytics and advertising. <a href="/privacy.html" class="cookie-banner__link">Privacy</a>
         </p>
         <div class="cookie-banner__actions">
             <button class="cookie-banner__btn--accept" onclick="CookieConsent.accept()">OK</button>
@@ -5505,6 +5542,13 @@
                     <div class="cookie-banner__pref-desc">Usage stats</div>
                 </div>
                 <div id="analyticsToggle" class="cookie-banner__toggle cookie-banner__toggle--on" onclick="CookieConsent.toggleAnalytics()"></div>
+            </div>
+            <div class="cookie-banner__pref-row">
+                <div>
+                    <div class="cookie-banner__pref-label">Advertising</div>
+                    <div class="cookie-banner__pref-desc">Ad measurement</div>
+                </div>
+                <div id="adsToggle" class="cookie-banner__toggle cookie-banner__toggle--on" onclick="CookieConsent.toggleAds()"></div>
             </div>
             <div class="cookie-banner__pref-actions">
                 <button class="cookie-banner__btn--save" onclick="CookieConsent.savePreferences()">Save</button>
@@ -6937,6 +6981,8 @@
                         transaction_id: opts.transaction_id,
                         event_source_url: window.location.href,
                         internal_name: opts.internal_name || null,
+                        distinct_id: (window.posthog && posthog.get_distinct_id) ? posthog.get_distinct_id() : null,
+                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
                         value: typeof opts.value === 'number' ? opts.value : 1.0,
                         currency: opts.currency || 'ILS',
                         user_data: {
@@ -6957,6 +7003,7 @@
                 // remain a fallback for environments that disallow cookie reads.
                 var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
                 var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
+                var g = window.CueGoogleAds ? CueGoogleAds.clickIds() : {};
                 fetch(PAIRINGS_BASE + '/pairings', {
                     method: 'POST',
                     mode: 'cors',
@@ -6968,6 +7015,10 @@
                         fbp: freshFbp,
                         fbc: freshFbc,
                         fbclid: window.__cue_fbclid || null,
+                        gclid: g.gclid || null,
+                        gbraid: g.gbraid || null,
+                        wbraid: g.wbraid || null,
+                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
                         utms: (typeof getUtmProps === 'function') ? getUtmProps() : {},
                         platform: 'windows'
                     })

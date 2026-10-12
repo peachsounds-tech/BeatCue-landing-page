@@ -24,7 +24,14 @@ import { exec } from 'node:child_process';
 
 const PORT = 4173;
 const REDIRECT_URI = `http://127.0.0.1:${PORT}/oauth2callback`;
-const SCOPE = 'https://www.googleapis.com/auth/adwords';
+// datamanager is what /gads actually needs — offline click conversions go
+// through the Data Manager API. adwords is kept so the same token still works
+// for scripts/list-google-ads-conversions.mjs, which reads conversion action
+// resource names through the Google Ads API.
+const SCOPE = [
+    'https://www.googleapis.com/auth/datamanager',
+    'https://www.googleapis.com/auth/adwords',
+].join(' ');
 
 function openBrowser(url) {
     const platform = process.platform;

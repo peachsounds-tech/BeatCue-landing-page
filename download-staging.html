@@ -3,6 +3,7 @@
 <head>
     <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
+    <script src="/js/google-ads.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -718,12 +719,17 @@
                 // disallow cookie reads.
                 var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
                 var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
+                var googleClickIds = window.CueGoogleAds ? CueGoogleAds.clickIds() : {};
 
                 var payload = {
                     bcid: bcid,
                     fbp: freshFbp,
                     fbc: freshFbc,
                     fbclid: window.__cue_fbclid || null,
+                    gclid: googleClickIds.gclid || null,
+                    gbraid: googleClickIds.gbraid || null,
+                    wbraid: googleClickIds.wbraid || null,
+                    ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
                     utms: safeUtmProps(),
                     platform: platform
                 };

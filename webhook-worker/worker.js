@@ -161,6 +161,7 @@ const CAPI_CUSTOM_EVENTS = new Set([
     'first_export_intent',
     'first_activation_started',
     'first_activation_finished',
+    'first_free_registration_completed',
     'first_checkout_clicked',
     'first_send_to_desktop_clicked',
 
@@ -197,7 +198,21 @@ const CAPI_ACTION_SOURCES = new Set([
 
 /** Ads API version pinned for predictable schema. Bump deliberately after
  *  testing — Google sunsets versions on a rolling schedule. */
-const GOOGLE_ADS_API_VERSION = 'v19';
+// Offline click conversions go through the Data Manager API, not the Google
+// Ads API. Google closed ConversionUploadService.UploadClickConversions to new
+// integrations: it answers HTTP 200 with a partialFailureError of
+// CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE ("New integrations for uploading
+// click conversions should use the Data Manager API"), so every conversion is
+// silently dropped. Unlike the Ads API this one is unversioned in the path.
+//
+// Needs the https://www.googleapis.com/auth/datamanager OAuth scope — an
+// adwords-scoped token is rejected with ACCESS_TOKEN_SCOPE_INSUFFICIENT.
+const GOOGLE_DATA_MANAGER_BASE = 'https://datamanager.googleapis.com/v1';
+
+/** Accepted Data Manager `Event.eventSource` values. An unrecognised one is
+ *  replaced with the default rather than forwarded, since the service rejects
+ *  the whole request on a bad enum. */
+const GADS_EVENT_SOURCES = new Set(['WEB', 'APP', 'IN_STORE', 'PHONE', 'MESSAGE', 'OTHER']);
 
 /** Hard upper bound on /gads request bodies. */
 const GADS_MAX_BODY_BYTES = 8 * 1024;
@@ -206,12 +221,46 @@ const GADS_MAX_BODY_BYTES = 8 * 1024;
  * event_name values the worker will upload. Each must map to a conversion
  * action resource name via the GOOGLE_ADS_CONV_ACTIONS JSON secret
  * (e.g. {"send_to_desktop":"customers/123/conversionActions/456"}).
- * Keep in sync with landing-page dual-fire call sites.
+ *
+ * A name listed here but absent from the secret soft-skips with ok:true, so a
+ * client can ship ahead of the Ads account config. Creating the conversion
+ * action in the Google Ads UI and adding it to the secret is what switches it
+ * on — no worker deploy needed.
+ *
+ * Browser-side (landing-page dual-fire call sites, keep in sync):
+ *   send_to_desktop, trial_download, checkout_clicked
+ *
+ * Desktop-side: the app's ConversionCatalog, the same names Meta receives on
+ * /capi. `first_*` is sent once per install (a count of people); the bare
+ * name once per occurrence (a count of actions) where the catalog says
+ * repeats carry signal. Which one a campaign bids on is chosen by which
+ * names GOOGLE_ADS_CONV_ACTIONS maps and how those actions are set in the Ads
+ * UI — map both of a pair as Primary and every conversion counts twice.
  */
 const GADS_EVENT_NAMES = new Set([
     'send_to_desktop',
     'trial_download',
     'checkout_clicked',
+
+    // Once per install.
+    'first_app_launched',
+    'first_premiere_installed_detected',
+    'first_premiere_panel_connected',
+    'first_cut_played',
+    'first_new_project_created',
+    'first_track_imported',
+    'first_export_intent',
+    'first_activation_started',
+    'first_activation_finished',
+    'first_free_registration_completed',
+
+    // Once per occurrence.
+    'app_launched',
+    'premiere_installed_detected',
+    'new_project_created',
+    'export_intent',
+    'activation_started',
+    'activation_finished',
 ]);
 
 /** Module-scoped OAuth access-token cache. Workers may reuse the isolate
@@ -323,11 +372,11 @@ async function handleWebhook(request, env) {
         
         // Handle different Lemon Squeezy events
         if (eventName === 'order_created') {
-            await handleOrderCreated(data);
+            await handleOrderCreated(data, env);
         } else if (eventName === 'subscription_created') {
             await handleSubscriptionCreated(data);
         } else if (eventName === 'license_key_created') {
-            await handleLicenseKeyCreated(data);
+            await handleLicenseKeyCreated(data, env);
         }
         
         return new Response('OK', { status: 200 });
@@ -401,7 +450,37 @@ function extractBcid(data) {
 /**
  * Handle order_created event (for one-time purchases or lead magnets)
  */
-async function handleOrderCreated(data) {
+/** Checkout custom field, from wherever Lemon Squeezy put it. */
+function extractCustom(data, key) {
+    const attrs = data.data?.attributes;
+    return data.meta?.custom_data?.[key]
+        || attrs?.custom_data?.[key]
+        || attrs?.first_order_item?.custom_data?.[key]
+        || null;
+}
+
+/** Tier of an order from its first item. Null when the order names no product. */
+function orderTier(env, data) {
+    const item = data.data?.attributes?.first_order_item || {};
+    const productId = item.product_id != null ? String(item.product_id) : null;
+    const variantId = item.variant_id != null ? String(item.variant_id) : null;
+    if (!productId && !variantId) return null;
+    return licenseTierFor(env, { productId, variantId });
+}
+
+/** The device, arm and bcid a reg token was minted for. Null when the token
+ *  matches no registration. */
+async function registrationContext(env, reg) {
+    if (!reg || !env?.QUOTA_DB) return null;
+    return await env.QUOTA_DB.prepare(
+        `SELECT r.device_id AS device_id, i.arm AS arm, i.bcid AS bcid
+           FROM registrations r
+           LEFT JOIN install_resolutions i ON i.device_id = r.device_id
+          WHERE r.reg = ?1`
+    ).bind(reg).first();
+}
+
+async function handleOrderCreated(data, env) {
     const order = data.data?.attributes;
     const email = order?.user_email;
     
@@ -434,9 +513,18 @@ async function handleOrderCreated(data) {
     // that person, which removes the merge step instead of capturing against a
     // hashed email and depending on a later $create_alias landing.
     const bcid = extractBcid(data);
-    
-    // Who the order gets recorded against.
-    const distinctId = bcid || hashedEmail;
+    const reg = extractReg(data);
+    const source = extractCustom(data, 'source');
+    const tier = orderTier(env, data);
+    // An in-app free registration, as opposed to a Pro purchase. The reg token
+    // is what ties the checkout back to the device that asked to register.
+    const freeRegistration = tier === 'free' || !!reg || source === 'registration_gate';
+    const registration = freeRegistration ? await registrationContext(env, reg) : null;
+
+    // Who the order gets recorded against. A registration's stored bcid is the
+    // person the app already reports as, so the checkout lands on that person
+    // even when the checkout link dropped the bcid.
+    const distinctId = (registration && registration.bcid) || bcid || hashedEmail;
     
     console.log('=== Extracted Values ===');
     console.log('hashedEmail:', hashedEmail);
@@ -476,20 +564,51 @@ async function handleOrderCreated(data) {
         hashed_email: hashedEmail,
         // Which identity the order was attributed to, so a bcid-less order is
         // visible as such rather than silently looking the same as a good one.
-        bcid: bcid,
-        attributed_via: bcid ? 'bcid' : (posthogId ? 'posthog_id_merge' : 'hashed_email_only')
+        bcid: (registration && registration.bcid) || bcid,
+        attributed_via: (registration && registration.bcid) || bcid
+            ? 'bcid' : (posthogId ? 'posthog_id_merge' : 'hashed_email_only')
     };
-    
-    console.log('Sending checkout_completed to PostHog with distinct_id:', distinctId);
-    
-    const success = await sendToPostHog('checkout_completed', distinctId, properties);
+
+    // Free registration gets its own event, carrying the registration it belongs
+    // to. Pro keeps checkout_completed.
+    const checkoutEvent = freeRegistration ? 'registration_checkout_completed' : 'checkout_completed';
+    if (freeRegistration) {
+        properties.tier = 'free';
+        properties.reg = reg;
+        properties.device_id = registration ? registration.device_id : null;
+        properties.free_gate_arm = registration ? registration.arm : null;
+        properties.source = source || 'registration_gate';
+    }
+
+    console.log('Sending ' + checkoutEvent + ' to PostHog with distinct_id:', distinctId);
+
+    const success = await sendToPostHog(checkoutEvent, distinctId, properties);
     
     if (success) {
-        console.log('PostHog checkout_completed event sent successfully');
+        console.log('PostHog ' + checkoutEvent + ' event sent successfully');
     } else {
         console.error('Failed to send PostHog event');
     }
     
+    // A free registration is not a purchase, so it must not be labelled as one.
+    if (freeRegistration) {
+        return;
+    }
+
+    // Step 2b: the money event. Deliberately not derived from licence
+    // activation: a key can be activated on a second machine, re-activated
+    // after a reinstall, or handed out by support, none of which is a sale.
+    // `order_created` is the only moment we know a payment actually happened,
+    // and it is also the only one that knows what it was worth.
+    await sendPurchaseToMeta(env, {
+        order,
+        orderId: data.data?.id,
+        email,
+        hashedEmail,
+        bcid,
+        distinctId,
+    });
+
     // Step 3: Set user_type based on product (useful if page view didn't capture it)
     const productName = order?.first_order_item?.product_name || '';
     const isEarlyAccess = productName.toLowerCase().includes('early access');
@@ -538,10 +657,167 @@ async function handleSubscriptionCreated(data) {
     await sendToPostHog('subscription_created', bcid || hashedEmail, properties);
 }
 
+/** Forward a paid Lemon Squeezy order to Meta as a standard `Purchase`.
+ *
+ *  Standard rather than a custom name on purpose: `Purchase` with `value` and
+ *  `currency` is what Ads Manager's ROAS columns, value optimization and
+ *  value-based Lookalikes all read. A custom conversion would count the same
+ *  people and tell Meta nothing about what they were worth. `purchase_completed`
+ *  rides along in custom_data as our own label so it can be reconciled against
+ *  PostHog the same way every other send is.
+ *
+ *  Matching is email-first and that is fine here: fbp/fbc only ever existed in
+ *  the browser and the desktop app, and the pairing record that briefly held
+ *  them is deleted on first launch (see the delete-on-read fan-out in
+ *  /pairings). The hashed email is Meta's strongest single key and the only one
+ *  that survives the buyer switching device between the ad click and the
+ *  checkout, which — given the app is where they convert — is the normal case.
+ *
+ *  The event id is derived from the order id so a Lemon Squeezy retry, or a
+ *  replay of the same webhook, collapses into one conversion at Meta's end. */
+async function sendPurchaseToMeta(env, { order, orderId, email, hashedEmail, bcid, distinctId }) {
+    if (!env.META_PIXEL_ID || !env.META_CAPI_TOKEN) {
+        console.log(JSON.stringify({ evt: 'capi_purchase_skipped', reason: 'not_configured' }));
+        return;
+    }
+
+    const skip = internalOrderReason(env, order, email);
+    if (skip) {
+        console.log(JSON.stringify({ evt: 'capi_purchase_skipped', reason: skip, order_id: orderId }));
+        // Still recorded in PostHog so an internal order is visibly suppressed
+        // rather than looking identical to a send that silently never happened.
+        await sendToPostHog('capi_send_result', distinctId, {
+            ad_platform: 'meta',
+            source: 'worker',
+            trigger: 'order_webhook',
+            event_name: 'Purchase',
+            internal_name: 'purchase_completed',
+            event_id: `ls_order_${orderId}`,
+            ok: false,
+            error: `skipped:${skip}`,
+            order_id: orderId,
+        });
+        return;
+    }
+
+    const userData = {};
+    if (hashedEmail) userData.em = [hashedEmail];
+    if (bcid && BCID_RE.test(bcid)) userData.external_id = bcid;
+
+    const event = {
+        event_name: 'Purchase',
+        event_time: Math.floor(Date.now() / 1000),
+        event_id: `ls_order_${orderId}`,
+        event_source_url: 'https://beatcue.app/',
+        action_source: 'website',
+        user_data: userData,
+        custom_data: {
+            // Lemon Squeezy reports money in cents.
+            value: Number(order.total) / 100,
+            currency: order.currency || 'USD',
+            internal_event_name: 'purchase_completed',
+            order_id: orderId,
+            order_number: order.order_number,
+            content_name: order.first_order_item?.product_name,
+            variant_name: order.first_order_item?.variant_name,
+        },
+    };
+
+    const up = await postEventsToMeta(env, { data: [event] });
+    const ok = !up.unreachable && up.status >= 200 && up.status < 300;
+
+    console.log(JSON.stringify({
+        evt: 'capi_purchase',
+        order_id: orderId,
+        ok,
+        upstream_status: up.status,
+        events_received: up.eventsReceived,
+        fbtrace_id: up.fbtraceId,
+        error: up.error || null,
+        had_em: !!hashedEmail,
+        had_bcid: !!userData.external_id,
+        value: event.custom_data.value,
+        currency: event.custom_data.currency,
+        test_mode: !!env.META_TEST_EVENT_CODE,
+    }));
+
+    // Mirrors what the desktop app reports after its own sends, so every
+    // conversion Meta receives — app-side or worker-side — lands in one table.
+    // Property names match the desktop app's rows so one query covers both.
+    await sendToPostHog('capi_send_result', distinctId, {
+        ad_platform: 'meta',
+        source: 'worker',
+        trigger: 'order_webhook',
+        event_name: 'Purchase',
+        internal_name: 'purchase_completed',
+        event_id: event.event_id,
+        ok,
+        status_code: up.status,
+        ...(ok ? {} : { error: clampString(up.error, 200) || `http_${up.status}` }),
+        had_email: !!hashedEmail,
+        had_bcid: !!userData.external_id,
+        matchable: !!hashedEmail || !!userData.external_id,
+        order_id: orderId,
+        value: event.custom_data.value,
+        currency: event.custom_data.currency,
+    });
+}
+
+/** Why an order must not become a Meta conversion, or null when it should.
+ *
+ *  The desktop app suppresses internal sends by looking for `~/.cue_internal`
+ *  (see AppConfig::isInternalUser). A webhook has no filesystem to consult, so
+ *  the equivalent has to be spelled out here. It matters more server-side than
+ *  it does in PostHog: a PostHog event tagged internal can be filtered at query
+ *  time forever, but a conversion handed to Meta is inside the bid model for
+ *  good and there is no way to take it back.
+ *
+ *  Three independent reasons, each of which has produced a bogus "purchase":
+ *    - Lemon Squeezy test-mode orders, which are not money.
+ *    - A known internal buyer, via the INTERNAL_EMAILS var. This is the direct
+ *      analogue of ~/.cue_internal and the only one that catches a real card
+ *      used to smoke-test the live checkout.
+ *    - A zero total, i.e. a 100%-off comp. Reporting it as a Purchase with
+ *      value 0 is worse than silence once value optimization is switched on:
+ *      it teaches Meta that this person was worth nothing. */
+function internalOrderReason(env, order, email) {
+    if (order?.test_mode === true) return 'test_mode';
+
+    const internal = new Set(
+        String(env.INTERNAL_EMAILS || '')
+            .split(',')
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean)
+    );
+    if (email && internal.has(String(email).trim().toLowerCase())) return 'internal_email';
+
+    // `total` is an integer in cents. Absent/unparseable is treated as zero —
+    // we would have nothing meaningful to report as the value anyway.
+    const totalCents = Number(order?.total);
+    if (!Number.isFinite(totalCents) || totalCents <= 0) return 'zero_total';
+
+    return null;
+}
+
+/** The in-app registration token, from wherever Lemon Squeezy put the checkout
+ *  custom data. */
+function extractReg(data) {
+    const attrs = data.data?.attributes;
+    const reg = data.meta?.custom_data?.reg
+        || attrs?.custom_data?.reg
+        || attrs?.first_order_item?.custom_data?.reg
+        || null;
+    return reg && REG_RE.test(reg) ? reg : null;
+}
+
 /**
  * Handle license_key_created event
+ *
+ * For the Free product bought from an in-app registration, park the key
+ * against the device that minted the reg token; the app collects it on its
+ * next /install/resolve. The raw key never goes to PostHog.
  */
-async function handleLicenseKeyCreated(data) {
+async function handleLicenseKeyCreated(data, env) {
     const license = data.data?.attributes;
     const email = license?.user_email;
     
@@ -549,16 +825,61 @@ async function handleLicenseKeyCreated(data) {
     
     const hashedEmail = await hashEmail(email);
     const bcid = extractBcid(data);
-    
+    const reg = extractReg(data);
+    const productId = license?.product_id != null ? String(license.product_id) : null;
+    const variantId = license?.variant_id != null ? String(license.variant_id) : null;
+    // Only park keys positively identified as the Free product.
+    const tier = productId || variantId ? licenseTierFor(env, { productId, variantId }) : 'unknown';
+
+    let arm = null;
+    let parked = false;
+    let registrationDeviceId = null;
+    let registrationBcid = null;
+    if (tier === 'free' && reg && env.QUOTA_DB && license?.key) {
+        const db = env.QUOTA_DB;
+        await db.prepare(
+            `UPDATE registrations
+                SET pending_license_key = ?2, email_hash = ?3, key_received_at = ?4
+              WHERE reg = ?1 AND completed_at IS NULL`
+        ).bind(reg, license.key, hashedEmail, Date.now()).run();
+
+        const row = await db.prepare(
+            `SELECT r.device_id AS device_id, r.pending_license_key AS parked_key,
+                    i.arm AS arm, i.bcid AS bcid
+               FROM registrations r
+               LEFT JOIN install_resolutions i ON i.device_id = r.device_id
+              WHERE r.reg = ?1`
+        ).bind(reg).first();
+        parked = !!row && row.parked_key === license.key;
+        arm = row ? row.arm : null;
+        if (row) {
+            registrationDeviceId = row.device_id;
+            registrationBcid = row.bcid;
+        }
+    }
+    // A free key is a registration, not a Pro activation, so it gets its own
+    // event tied to the reg token and the device that minted it.
+    const freeRegistration = tier === 'free';
+    const keyEvent = freeRegistration ? 'registration_license_key_created' : 'license_key_created';
+    console.log(JSON.stringify({ evt: keyEvent, tier, has_reg: !!reg, parked }));
+
     const properties = {
         license_id: data.data?.id,
-        license_key: license?.key,  // The actual license key
+        license_key_short: license?.key_short || null,
         status: license?.status,
+        tier,
+        registration_parked: parked,
+        free_gate_arm: arm,
         hashed_email: hashedEmail,
-        bcid: bcid
+        bcid: registrationBcid || bcid
     };
-    
-    await sendToPostHog('license_key_created', bcid || hashedEmail, properties);
+    if (freeRegistration) {
+        properties.reg = reg;
+        properties.device_id = registrationDeviceId;
+        properties.source = 'registration_gate';
+    }
+
+    await sendToPostHog(keyEvent, registrationBcid || bcid || hashedEmail, properties);
 }
 
 // ─── Pairing helpers ──────────────────────────────────────────────────────────
@@ -637,6 +958,76 @@ async function buildAsnKey(cf, os) {
         .map(b => b.toString(16).padStart(2, '0'))
         .join('');
     return `pair:${hex}`;
+}
+
+/** 'granted' | 'denied' | null. Anything else (absent, garbage) is "no answer". */
+function normalizeAdConsent(v) {
+    return v === 'granted' || v === 'denied' ? v : null;
+}
+
+/** Where Google's EU user consent policy applies: the EEA, the UK and
+ *  Switzerland. Mirrors REQUIRES_CONSENT in landing-page/js/google-ads.js. */
+const GADS_CONSENT_COUNTRIES = new Set([
+    'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR',
+    'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK',
+    'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH',
+]);
+
+/** Where the cookie banner is shown: Google's countries plus European
+ *  countries whose own GDPR-style laws expect opt-in for tracking cookies.
+ *  Mirrors BANNER_REGIONS in landing-page/js/google-ads.js. */
+const BANNER_COUNTRIES = new Set([
+    ...GADS_CONSENT_COUNTRIES,
+    'RS', 'ME', 'MK', 'AL', 'BA', 'XK', 'MD', 'UA', 'TR',
+    'AD', 'MC', 'SM', 'VA',
+]);
+
+/** Subdivisions that need the banner although their country doesn't:
+ *  Quebec's Law 25 requires opt-in for profiling trackers. */
+const BANNER_REGIONS = new Set(['CA-QC']);
+
+/** Data Manager `consent` for one upload, or null to leave it out.
+ *
+ *  A recorded answer is always passed on. Without one, the field is left out:
+ *  outside the consent countries that is exactly right, and inside them Google
+ *  treats missing consent as not consented — the conversion is neither
+ *  reported nor bid on, which is the correct outcome for a visitor who never
+ *  answered. */
+function gadsConsentFor(choice) {
+    if (choice === 'granted') return { adUserData: 'CONSENT_GRANTED', adPersonalization: 'CONSENT_GRANTED' };
+    if (choice === 'denied')  return { adUserData: 'CONSENT_DENIED',  adPersonalization: 'CONSENT_DENIED' };
+    return null;
+}
+
+/**
+ * GET /geo  — whether the visitor is somewhere that needs the cookie banner.
+ *
+ * The landing page skips the banner where no consent is required. An unknown
+ * country (no request.cf, or Cloudflare's XX / T1 for Tor) answers "required":
+ * showing the banner to someone who didn't need it costs a click, while
+ * skipping it for someone in the EEA breaks the law.
+ */
+function handleGeo(request) {
+    const cors = pairingsCorsHeaders(request.headers.get('origin') || '');
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    const country = (request.cf && request.cf.country) || null;
+    const regionCode = (request.cf && request.cf.regionCode) || null;
+    const known = !!country && country !== 'XX' && country !== 'T1';
+    return new Response(JSON.stringify({
+        country,
+        consent_required: !known
+            || BANNER_COUNTRIES.has(country)
+            || (!!regionCode && BANNER_REGIONS.has(`${country}-${regionCode}`)),
+    }), {
+        status: 200,
+        headers: {
+            ...cors,
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'private, no-store',
+        },
+    });
 }
 
 function clampString(v, maxLen) {
@@ -775,6 +1166,9 @@ async function handlePairings(request, env, url) {
             gclid:  clampString(body.gclid,  256),
             gbraid: clampString(body.gbraid, 256),
             wbraid: clampString(body.wbraid, 256),
+            // The visitor's cookie-banner answer on advertising. Travels to
+            // the desktop app so its /gads uploads carry the same consent.
+            ad_consent: normalizeAdConsent(body.ad_consent),
             utms:   clampUtms(body.utms),
             ts:     Date.now(),
             os,
@@ -1023,6 +1417,51 @@ function isHexSha256(s) {
     return typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 }
 
+/** POST an already-built `{ data: [...] }` payload to the pixel's events edge.
+ *
+ *  Shared by the /capi proxy and by the Lemon Squeezy order webhook, which
+ *  originates its Purchase server-side and so has no request to proxy. Never
+ *  throws: a transport failure comes back as `unreachable` so each caller can
+ *  decide what to tell its own client. Nothing retries — Meta CAPI is
+ *  best-effort and a double-fire would double-count a conversion. */
+async function postEventsToMeta(env, payload) {
+    if (env.META_TEST_EVENT_CODE) {
+        // Routes these events into the "Test Events" tab in Events Manager
+        // instead of into prod attribution. Set the secret while verifying,
+        // then `wrangler secret delete META_TEST_EVENT_CODE`.
+        payload.test_event_code = env.META_TEST_EVENT_CODE;
+    }
+
+    const graphUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/`
+        + encodeURIComponent(env.META_PIXEL_ID)
+        + `/events?access_token=${encodeURIComponent(env.META_CAPI_TOKEN)}`;
+
+    try {
+        const r = await fetch(graphUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const text = await r.text();
+        let fbtraceId = null;
+        let eventsReceived = null;
+        try {
+            const j = JSON.parse(text);
+            fbtraceId = j.fbtrace_id || null;
+            eventsReceived = typeof j.events_received === 'number' ? j.events_received : null;
+        } catch (_) { /* non-JSON error body — passthrough */ }
+        return { unreachable: false, status: r.status, fbtraceId, eventsReceived };
+    } catch (e) {
+        return {
+            unreachable: true,
+            status: 0,
+            fbtraceId: null,
+            eventsReceived: null,
+            error: String(e && e.message || e),
+        };
+    }
+}
+
 /**
  * POST /capi  — desktop app or browser pushes a single Meta CAPI event.
  *
@@ -1216,46 +1655,24 @@ async function handleCapi(request, env, url) {
     };
 
     const payload = { data: [event] };
-    if (env.META_TEST_EVENT_CODE) {
-        // Routes this single event into the "Test Events" tab in Events
-        // Manager instead of into prod attribution. Set the secret while
-        // verifying, then `wrangler secret delete META_TEST_EVENT_CODE`.
-        payload.test_event_code = env.META_TEST_EVENT_CODE;
-    }
 
     // ── Forward to Meta ──────────────────────────────────────────────────────
-    const graphUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/`
-        + encodeURIComponent(env.META_PIXEL_ID)
-        + `/events?access_token=${encodeURIComponent(env.META_CAPI_TOKEN)}`;
-
-    let upstreamStatus = 0;
-    let upstreamBody = '';
-    let fbtraceId = null;
-    let eventsReceived = null;
-    try {
-        const r = await fetch(graphUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        upstreamStatus = r.status;
-        upstreamBody = await r.text();
-        try {
-            const j = JSON.parse(upstreamBody);
-            fbtraceId = j.fbtrace_id || null;
-            eventsReceived = typeof j.events_received === 'number' ? j.events_received : null;
-        } catch (_) { /* non-JSON error body — passthrough */ }
-    } catch (e) {
+    const up = await postEventsToMeta(env, payload);
+    if (up.unreachable) {
         console.log(JSON.stringify({
             evt: 'capi_upstream_error',
             event_name: eventName,
-            error: String(e && e.message || e),
+            error: up.error,
         }));
         return new Response(JSON.stringify({ ok: false, error: 'upstream_unreachable' }), {
             status: 502,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
         });
     }
+
+    const upstreamStatus = up.status;
+    const fbtraceId      = up.fbtraceId;
+    const eventsReceived = up.eventsReceived;
 
     console.log(JSON.stringify({
         evt: 'capi_forwarded',
@@ -1286,15 +1703,8 @@ async function handleCapi(request, env, url) {
 
 // ─── Google Ads click-conversion upload handler ───────────────────────────────
 
-/** UTC timestamp in the format Google Ads requires:
- *  `yyyy-mm-dd hh:mm:ss+00:00`. */
-function formatGoogleAdsDateTime(date = new Date()) {
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} `
-        + `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}+00:00`;
-}
-
-/** Parse GOOGLE_ADS_CONV_ACTIONS secret (JSON object of event_name → resource). */
+/** Parse GOOGLE_ADS_CONV_ACTIONS secret (JSON object of event_name → conversion
+ *  action). */
 function parseGadsConvActions(raw) {
     if (!raw || typeof raw !== 'string') return null;
     try {
@@ -1306,7 +1716,22 @@ function parseGadsConvActions(raw) {
     }
 }
 
-const GADS_CONV_ACTION_RE = /^customers\/\d+\/conversionActions\/\d+$/;
+/**
+ * The bare conversion action id Data Manager wants as `productDestinationId`,
+ * or '' if the value isn't a conversion action at all.
+ *
+ * Accepts the full `customers/{cid}/conversionActions/{id}` resource name as
+ * well as the bare id, because that is the form the Google Ads UI and
+ * scripts/list-google-ads-conversions.mjs both show, and silently dropping
+ * every conversion because the secret carries the familiar spelling is a bad
+ * trade for a one-line normalisation.
+ */
+function gadsConversionActionId(raw) {
+    const s = clampString(raw, 128);
+    if (/^\d+$/.test(s)) return s;
+    const m = /^customers\/\d+\/conversionActions\/(\d+)$/.exec(s);
+    return m ? m[1] : '';
+}
 
 /**
  * Exchange the long-lived refresh token for a short-lived access token.
@@ -1360,6 +1785,11 @@ async function getGoogleAdsAccessToken(env) {
  *     internal_name:    string  (optional; logged),
  *     value:            number  (optional),
  *     currency:         string  (optional; default ILS to match existing gtag),
+ *     event_source:     string  (optional; APP from the desktop app, else WEB),
+ *     distinct_id:      string  (optional; PostHog id for the browser's
+ *                                capi_send_result row),
+ *     ad_consent:       string  (optional; 'granted' | 'denied' from the
+ *                                cookie banner, or via pairing for the app),
  *     user_data: {
  *       gclid, gbraid, wbraid   (at least one required to upload; else skipped)
  *     }
@@ -1389,9 +1819,13 @@ async function handleGads(request, env, url) {
         });
     }
 
+    // GOOGLE_ADS_DEVELOPER_TOKEN is deliberately absent: Google deprecated
+    // developer tokens on 2026-09-09 and the API servers ignore the header.
+    // Access level now follows the Google Cloud project that owns the OAuth
+    // client, not a token. Requiring one here would make a correctly
+    // configured deployment answer 503.
     const configured = !!(
-        env.GOOGLE_ADS_DEVELOPER_TOKEN
-        && env.GOOGLE_ADS_CLIENT_ID
+        env.GOOGLE_ADS_CLIENT_ID
         && env.GOOGLE_ADS_CLIENT_SECRET
         && env.GOOGLE_ADS_REFRESH_TOKEN
         && env.GOOGLE_ADS_CUSTOMER_ID
@@ -1422,6 +1856,31 @@ async function handleGads(request, env, url) {
         });
     }
 
+    // The desktop app reports every send itself as `capi_send_result`, so a
+    // worker-side row would count its uploads twice. Browser callers have no
+    // other record of the outcome.
+    const requestedSource = (clampString(body.event_source, 16) || '').toUpperCase();
+    const reportsItself = requestedSource === 'APP';
+    const report = async (fields) => {
+        if (reportsItself) return;
+        const distinctId = clampString(body.distinct_id, 200);
+        try {
+            await sendToPostHog('capi_send_result', distinctId || `gads_${body.transaction_id}`, {
+                ad_platform: 'google',
+                source: 'worker',
+                trigger: 'browser',
+                event_name: clampString(body.event_name, 64),
+                internal_name: clampString(body.internal_name, 64),
+                event_id: clampString(body.transaction_id, 96),
+                event_source_url: clampString(body.event_source_url, 2048),
+                ad_consent: normalizeAdConsent(body.ad_consent) || 'unknown',
+                consent_required: GADS_CONSENT_COUNTRIES.has((request.cf && request.cf.country) || ''),
+                ...(distinctId ? {} : { $process_person_profile: false }),
+                ...fields,
+            });
+        } catch (_) { /* telemetry must never fail the upload */ }
+    };
+
     const eventName = clampString(body.event_name, 64);
     if (!eventName || !GADS_EVENT_NAMES.has(eventName)) {
         console.log(JSON.stringify({ evt: 'gads_rejected_event_name', event_name: eventName }));
@@ -1447,13 +1906,14 @@ async function handleGads(request, env, url) {
         });
     }
 
-    const conversionAction = clampString(convActions[eventName], 128);
-    if (!conversionAction || !GADS_CONV_ACTION_RE.test(conversionAction)) {
+    const conversionActionId = gadsConversionActionId(convActions[eventName]);
+    if (!conversionActionId) {
         console.log(JSON.stringify({
             evt: 'gads_unmapped_event',
             event_name: eventName,
             has_key: !!(convActions && convActions[eventName]),
         }));
+        await report({ ok: false, status_code: 200, error: 'skipped:conversion_action_unmapped' });
         // Soft-skip: allowlist includes events we may not have wired yet
         // (e.g. checkout_clicked before a conversion action exists).
         return new Response(JSON.stringify({
@@ -1477,6 +1937,11 @@ async function handleGads(request, env, url) {
             event_name: eventName,
             transaction_id: transactionId,
         }));
+        await report({
+            ok: false, status_code: 200, matchable: false,
+            had_gclid: false, had_gbraid: false, had_wbraid: false,
+            error: 'skipped:no_click_id',
+        });
         return new Response(JSON.stringify({
             ok: true,
             skipped: 'no_click_id',
@@ -1495,27 +1960,48 @@ async function handleGads(request, env, url) {
         });
     }
 
-    const conversion = {
-        conversionAction,
-        conversionDateTime: formatGoogleAdsDateTime(),
-        orderId: transactionId,
+    const adIdentifiers = {};
+    if (gclid)  adIdentifiers.gclid  = gclid;
+    if (gbraid) adIdentifiers.gbraid = gbraid;
+    if (wbraid) adIdentifiers.wbraid = wbraid;
+    const clickKeys = { matchable: true, had_gclid: !!gclid, had_gbraid: !!gbraid, had_wbraid: !!wbraid };
+
+    // The reference docs mark eventSource optional; the service rejects a
+    // request without it (REQUIRED_FIELD_MISSING on events[0].event_source).
+    // Defaults to WEB because the landing-page dual-fire predates the field
+    // and doesn't send one; the desktop app sends APP.
+    const eventSource = GADS_EVENT_SOURCES.has(requestedSource) ? requestedSource : 'WEB';
+
+    const event = {
+        // Google dedupes on this, so a client that retries after a lost
+        // acknowledgement collapses into the original conversion.
+        transactionId,
+        eventTimestamp: new Date().toISOString(),
+        eventSource,
+        adIdentifiers,
     };
-    if (gclid)  conversion.gclid  = gclid;
-    if (gbraid) conversion.gbraid = gbraid;
-    if (wbraid) conversion.wbraid = wbraid;
+    const consent = gadsConsentFor(normalizeAdConsent(body.ad_consent));
+    if (consent) event.consent = consent;
 
     const value = typeof body.value === 'number' && Number.isFinite(body.value)
         ? body.value
         : (typeof body.value === 'string' && body.value !== '' && Number.isFinite(Number(body.value))
             ? Number(body.value) : null);
-    if (value !== null) conversion.conversionValue = value;
-    const currency = clampString(body.currency, 8) || 'ILS';
-    if (value !== null) conversion.currencyCode = currency;
+    if (value !== null) {
+        event.conversionValue = value;
+        // Backstop only: every live caller that sends a value sends a currency
+        // with it. USD here so a caller that forgets inherits the desktop's
+        // convention rather than silently valuing a conversion in the wrong
+        // one. A valueless event sends neither, which lets the conversion
+        // action's own configured value apply.
+        event.currency = clampString(body.currency, 8) || 'USD';
+    }
 
     let accessToken;
     try {
         accessToken = await getGoogleAdsAccessToken(env);
     } catch (_) {
+        await report({ ...clickKeys, ok: false, status_code: 502, error: 'oauth_failed' });
         return new Response(JSON.stringify({ ok: false, error: 'oauth_failed' }), {
             status: 502,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -1524,20 +2010,28 @@ async function handleGads(request, env, url) {
 
     const headers = {
         'Authorization': `Bearer ${accessToken}`,
-        'developer-token': env.GOOGLE_ADS_DEVELOPER_TOKEN,
         'Content-Type': 'application/json',
+    };
+
+    // Data Manager carries the account relationship in the destination rather
+    // than in headers, so there is no login-customer-id here: a manager
+    // account goes in `loginAccount` instead.
+    const destination = {
+        operatingAccount: { accountType: 'GOOGLE_ADS', accountId: customerId },
+        productDestinationId: conversionActionId,
     };
     const loginCustomerId = env.GOOGLE_ADS_LOGIN_CUSTOMER_ID
         ? String(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, '')
         : '';
-    if (loginCustomerId) headers['login-customer-id'] = loginCustomerId;
+    if (loginCustomerId) {
+        destination.loginAccount = { accountType: 'GOOGLE_ADS', accountId: loginCustomerId };
+    }
 
-    const adsUrl = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/`
-        + `customers/${encodeURIComponent(customerId)}:uploadClickConversions`;
+    const adsUrl = `${GOOGLE_DATA_MANAGER_BASE}/events:ingest`;
 
     const payload = {
-        conversions: [conversion],
-        partialFailure: true,
+        destinations: [destination],
+        events: [event],
     };
     // Optional: validate-only mode for dry runs (no attribution).
     if (env.GOOGLE_ADS_VALIDATE_ONLY === '1' || env.GOOGLE_ADS_VALIDATE_ONLY === 'true') {
@@ -1547,7 +2041,7 @@ async function handleGads(request, env, url) {
     let upstreamStatus = 0;
     let upstreamBody = '';
     let partialFailure = null;
-    let results = null;
+    let requestId = null;
     try {
         const r = await fetch(adsUrl, {
             method: 'POST',
@@ -1558,8 +2052,15 @@ async function handleGads(request, env, url) {
         upstreamBody = await r.text();
         try {
             const j = JSON.parse(upstreamBody);
-            partialFailure = j.partialFailureError || null;
-            results = j.results || null;
+            requestId = j.requestId || null;
+            // Data Manager reports a rejected row as fieldWarnings on an
+            // otherwise successful response, and a rejected request as a
+            // top-level error. Both mean the conversion did not land, so both
+            // have to read as a failure here or the client claims its
+            // once-per-install flag for nothing.
+            partialFailure = (Array.isArray(j.fieldWarnings) && j.fieldWarnings.length)
+                ? { message: JSON.stringify(j.fieldWarnings).slice(0, 400) }
+                : (j.error || null);
         } catch (_) { /* non-JSON */ }
     } catch (e) {
         console.log(JSON.stringify({
@@ -1567,6 +2068,7 @@ async function handleGads(request, env, url) {
             event_name: eventName,
             error: String(e && e.message || e),
         }));
+        await report({ ...clickKeys, ok: false, status_code: 0, error: 'upstream_unreachable' });
         return new Response(JSON.stringify({ ok: false, error: 'upstream_unreachable' }), {
             status: 502,
             headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
@@ -1574,9 +2076,9 @@ async function handleGads(request, env, url) {
     }
 
     const httpOk = upstreamStatus >= 200 && upstreamStatus < 300;
-    // partialFailureError present means the conversion itself was rejected
-    // even on HTTP 200 (e.g. CLICK_NOT_FOUND when debug is on). Treat as soft
-    // failure for logging; still return 200 so the browser nav isn't blocked.
+    // A rejection can arrive on an HTTP 200 (e.g. an unrecognised gclid).
+    // Treat as a soft failure for logging; still return 200 so the browser
+    // nav isn't blocked.
     const hasPartialFailure = !!(partialFailure && (
         partialFailure.code || partialFailure.message || (partialFailure.details && partialFailure.details.length)
     ));
@@ -1597,12 +2099,25 @@ async function handleGads(request, env, url) {
             : null,
     }));
 
+    await report({
+        ...clickKeys,
+        ok: httpOk && !hasPartialFailure,
+        status_code: upstreamStatus,
+        request_id: requestId,
+        validate_only: !!(payload.validateOnly),
+        ...(httpOk && !hasPartialFailure ? {} : {
+            error: hasPartialFailure
+                ? clampString(partialFailure.message, 200) || 'partial_failure'
+                : clampString(upstreamBody, 200) || `http_${upstreamStatus}`,
+        }),
+    });
+
     return new Response(JSON.stringify({
         ok: httpOk && !hasPartialFailure,
         skipped: null,
         upstream_status: upstreamStatus,
         partial_failure: hasPartialFailure,
-        results_count: Array.isArray(results) ? results.length : 0,
+        request_id: requestId,
     }), {
         // Always 200 on a successful upstream round-trip so keepalive fetches
         // from the landing page don't surface as network errors; ok/partial
@@ -2118,6 +2633,18 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
         return attachSigned(snapshot, env, payload);
     };
 
+    // A test-arm device must register a free key before it can edit anything,
+    // songs it already owns included, matching the lock the app shows.
+    if (await deviceNeedsRegistration(env, db, account.deviceId, nowMs)) {
+        const used = await quotaCountUsed(db, account.deviceId, account.periodStart);
+        const snapshot = quotaSnapshot(account, used, {
+            allowed: false,
+            reason: 'registration_required',
+        });
+        console.log(JSON.stringify({ evt: 'quota_claim', granted: false, reason: 'registration_required' }));
+        return quotaJson(await signClaim(snapshot, false, 'registration_required'), 200, cors);
+    }
+
     // Owning a song is permanent and free to re-open, which preserves the
     // grandfathering the local implementation had: re-analysing something you
     // already have never costs a second slot.
@@ -2130,6 +2657,10 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
         return quotaJson(await signClaim(snapshot, true, 'already_owned'), 200, cors);
     }
 
+    // Pro claims exactly like the free tier, with no limit.
+    const pro = await deviceHasLivePro(db, account.deviceId, nowMs);
+    const claimLimit = pro ? Number.MAX_SAFE_INTEGER : account.effectiveLimit;
+
     // Count and insert in one statement so two claims arriving together can't
     // both pass a separate check. D1 gives no multi-statement transaction here,
     // and a conditional INSERT...SELECT is the cheapest way to stay correct.
@@ -2139,7 +2670,7 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
           WHERE (SELECT COUNT(*) FROM quota_songs
                   WHERE device_id = ?1 AND period_start = ?4) < ?5
          ON CONFLICT(device_id, song_hash) DO NOTHING`
-    ).bind(account.deviceId, songHash, nowMs, account.periodStart, account.effectiveLimit).run();
+    ).bind(account.deviceId, songHash, nowMs, account.periodStart, claimLimit).run();
 
     // Re-read rather than trusting `meta.changes`, whose shape has moved
     // between D1 versions. Two indexed lookups is a fine price for a decision
@@ -2151,13 +2682,19 @@ async function handleQuotaClaim(songHash, env, db, cors, account, nowMs, machine
         evt: 'quota_claim',
         granted,
         used,
-        limit: account.effectiveLimit,
+        limit: pro ? -1 : account.effectiveLimit,
         period_start: account.periodStart,
         rolled: account.rolled,
     }));
 
     const reason = granted ? 'granted' : 'quota_exhausted';
     const snapshot = quotaSnapshot(account, used, { allowed: granted, reason });
+    // -1 is unlimited. The client ignores a snapshot with no positive limit,
+    // so the free-tier counters it caches are left as they were.
+    if (pro) {
+        snapshot.limit = -1;
+        snapshot.remaining = -1;
+    }
     return quotaJson(await signClaim(snapshot, granted, reason), 200, cors);
 }
 
@@ -2233,6 +2770,8 @@ async function handleQuotaState(body, env, db, cors, account, nowMs, ctx, machin
         owned_truncated: ownedTruncated,
         seeded,
         account_created: account.created,
+        // UI hint only; the claim above is what actually enforces it.
+        registration_required: await deviceNeedsRegistration(env, db, account.deviceId, nowMs),
     });
 
     // The owned list must be inside the signed payload, not just the body —
@@ -2347,6 +2886,35 @@ const LICENSE_MAX_BODY_BYTES = 4 * 1024;
 const LICENSE_KEY_RE = /^[A-Za-z0-9-]{8,128}$/;
 const INSTANCE_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 
+/** "BeatCue - Free". Compiled in as a floor under FREE_PRODUCT_IDS /
+ *  FREE_VARIANT_IDS: the failure mode of a missing var must be "free key stays
+ *  free", never "free key signs pro". */
+const DEFAULT_FREE_PRODUCT_IDS = ['1385673'];
+const DEFAULT_FREE_VARIANT_IDS = ['2164536'];
+
+function idSet(raw, defaults) {
+    const set = new Set(defaults);
+    String(raw || '').split(',').map(s => s.trim()).filter(Boolean).forEach(s => set.add(s));
+    return set;
+}
+
+/** Tier a Lemon Squeezy key entitles, from the product/variant it was sold
+ *  under. Anything not configured as free is a paid product. A response with
+ *  neither id can't prove a paid product, so it keeps the tier already stored
+ *  for this device and otherwise falls to free. */
+function licenseTierFor(env, lic, storedTier) {
+    if (!lic.productId && !lic.variantId) {
+        const tier = storedTier === 'pro' || storedTier === 'free' ? storedTier : 'free';
+        console.log(JSON.stringify({ evt: 'license_tier_ids_missing', stored_tier: storedTier || null, tier }));
+        return tier;
+    }
+    const freeProducts = idSet(env.FREE_PRODUCT_IDS, DEFAULT_FREE_PRODUCT_IDS);
+    const freeVariants = idSet(env.FREE_VARIANT_IDS, DEFAULT_FREE_VARIANT_IDS);
+    if (lic.productId && freeProducts.has(lic.productId)) return 'free';
+    if (lic.variantId && freeVariants.has(lic.variantId)) return 'free';
+    return 'pro';
+}
+
 /** POST to a Lemon Squeezy License API action as form-urlencoded (what that API
  *  expects). Returns the parsed JSON plus the HTTP status; throws only on a
  *  transport failure, which the caller turns into "serve the cache". */
@@ -2381,16 +2949,19 @@ function parseLsLicense(json) {
         email:      meta.customer_email || null,
         name:       meta.customer_name || null,
         orderId:    meta.order_id != null ? String(meta.order_id) : null,
+        productId:  meta.product_id != null ? String(meta.product_id) : null,
+        variantId:  meta.variant_id != null ? String(meta.variant_id) : null,
         error:      (json && json.error) || null,
     };
 }
 
-async function licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs) {
+async function licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier) {
     await db.prepare(
         `INSERT INTO license_activations
             (device_id, machine_id, license_key, instance_id, status, ends_at,
-             email, name, order_id, created_at, last_validated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
+             email, name, order_id, created_at, last_validated_at,
+             tier, product_id, variant_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?11, ?12, ?13)
          ON CONFLICT(device_id) DO UPDATE SET
             machine_id  = ?2,
             license_key = ?3,
@@ -2400,14 +2971,18 @@ async function licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs) {
             email       = COALESCE(?7, email),
             name        = COALESCE(?8, name),
             order_id    = COALESCE(?9, order_id),
-            last_validated_at = ?10`
+            last_validated_at = ?10,
+            tier        = ?11,
+            product_id  = COALESCE(?12, product_id),
+            variant_id  = COALESCE(?13, variant_id)`
     ).bind(deviceId, machineId || null, licenseKey, lic.instanceId,
-           lic.status, lic.endsAt || 0, lic.email, lic.name, lic.orderId, nowMs).run();
+           lic.status, lic.endsAt || 0, lic.email, lic.name, lic.orderId, nowMs,
+           tier, lic.productId || null, lic.variantId || null).run();
 }
 
-/** Sign a pro entitlement from a resolved licence verdict. */
-async function signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic) {
-    const payload = entitlementBase(deviceId, machineId, 'pro', nonce, nowMs);
+/** Sign a licence entitlement ('pro' or 'free') from a resolved verdict. */
+async function signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier) {
+    const payload = entitlementBase(deviceId, machineId, tier, nonce, nowMs);
     payload.license = {
         status:      lic.status || 'active',
         ends_at:     lic.endsAt || 0,
@@ -2416,6 +2991,24 @@ async function signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic) {
         instance_id: lic.instanceId || '',
     };
     return signEntitlement(env, payload);
+}
+
+/** Bookkeeping once a device holds a working free key: the arm row records
+ *  when, the registration that delivered it closes, and the key is linked to
+ *  the quota account (hashed; the raw key lives only in license_activations). */
+async function recordFreeKeyActivated(db, deviceId, licenseKey, nowMs) {
+    await db.prepare(
+        `UPDATE install_resolutions
+            SET key_activated_at = COALESCE(key_activated_at, ?2)
+          WHERE device_id = ?1`
+    ).bind(deviceId, nowMs).run();
+
+    await db.prepare(
+        `UPDATE registrations SET completed_at = ?3
+          WHERE device_id = ?1 AND pending_license_key = ?2 AND completed_at IS NULL`
+    ).bind(deviceId, licenseKey, nowMs).run();
+
+    await quotaLinkIdentity(db, 'license', await sha256LowerHex(licenseKey), deviceId, nowMs);
 }
 
 /** Shape of a "not licensed" answer: no signed token, so the client stays in
@@ -2479,7 +3072,7 @@ async function handleLicense(request, env, url, ctx) {
 
     const row = await db.prepare(
         `SELECT device_id, machine_id, license_key, instance_id, status, ends_at,
-                email, name, order_id, last_validated_at
+                email, name, order_id, last_validated_at, tier
            FROM license_activations WHERE device_id = ?1`
     ).bind(deviceId).first();
 
@@ -2488,7 +3081,7 @@ async function handleLicense(request, env, url, ctx) {
             return await handleLicenseDeactivate(env, db, cors, body, row, deviceId);
         }
         if (action === 'activate') {
-            return await handleLicenseActivate(env, db, cors, body, deviceId, machineId, nonce, nowMs);
+            return await handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs);
         }
         if (action === 'validate') {
             return await handleLicenseValidate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs);
@@ -2503,7 +3096,14 @@ async function handleLicense(request, env, url, ctx) {
     }
 }
 
-async function handleLicenseActivate(env, db, cors, body, deviceId, machineId, nonce, nowMs) {
+/** Tier previously stored for this exact key on this device. Rows from before
+ *  the tier column held only paid keys. */
+function storedTierFor(row, licenseKey) {
+    if (!row || row.license_key !== licenseKey) return null;
+    return row.tier || 'pro';
+}
+
+async function handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs) {
     const licenseKey = clampString(body.license_key, 128);
     if (!licenseKey || !LICENSE_KEY_RE.test(licenseKey)) {
         return quotaJson({ ok: false, error: 'invalid_license_key' }, 400, cors);
@@ -2523,12 +3123,14 @@ async function handleLicenseActivate(env, db, cors, body, deviceId, machineId, n
         return licenseDenied(lic.error || 'activation_failed', lic.status, cors);
     }
 
-    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs);
+    const tier = licenseTierFor(env, lic, storedTierFor(row, licenseKey));
+    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier);
+    if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 
-    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic);
-    console.log(JSON.stringify({ evt: 'license_activate_ok', status: lic.status, has_instance: !!lic.instanceId }));
+    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier);
+    console.log(JSON.stringify({ evt: 'license_activate_ok', status: lic.status, tier, has_instance: !!lic.instanceId }));
     return quotaJson({
-        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt,
+        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt, tier,
         email: lic.email, name: lic.name, order_id: lic.orderId,
         instance_id: lic.instanceId, signed,
     }, 200, cors);
@@ -2567,10 +3169,11 @@ async function handleLicenseValidate(env, db, cors, body, row, deviceId, machine
                 status: row.status, endsAt: Number(row.ends_at) || 0, instanceId: row.instance_id,
                 email: row.email, name: row.name, orderId: row.order_id,
             };
-            const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, cached);
-            console.log(JSON.stringify({ evt: 'license_validate_cached', reason: 'upstream_unreachable' }));
+            const tier = row.tier || 'pro';
+            const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, cached, tier);
+            console.log(JSON.stringify({ evt: 'license_validate_cached', reason: 'upstream_unreachable', tier }));
             return quotaJson({ ok: true, valid: true, status: cached.status, ends_at: cached.endsAt,
-                               cached: true, signed }, 200, cors);
+                               tier, cached: true, signed }, 200, cors);
         }
         throw e;
     }
@@ -2591,12 +3194,14 @@ async function handleLicenseValidate(env, db, cors, body, row, deviceId, machine
     }
 
     lic.instanceId = instanceId;
-    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs);
+    const tier = licenseTierFor(env, lic, storedTierFor(row, licenseKey));
+    await licenseUpsert(db, deviceId, machineId, licenseKey, lic, nowMs, tier);
+    if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 
-    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic);
-    console.log(JSON.stringify({ evt: 'license_validate_ok', status: lic.status }));
+    const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier);
+    console.log(JSON.stringify({ evt: 'license_validate_ok', status: lic.status, tier }));
     return quotaJson({
-        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt,
+        ok: true, valid: true, status: lic.status, ends_at: lic.endsAt, tier,
         email: lic.email, name: lic.name, order_id: lic.orderId,
         instance_id: lic.instanceId, signed,
     }, 200, cors);
@@ -2630,6 +3235,250 @@ async function handleLicenseDeactivate(env, db, cors, body, row, deviceId) {
     await db.prepare(`DELETE FROM license_activations WHERE device_id = ?1`).bind(deviceId).run();
     console.log(JSON.stringify({ evt: 'license_deactivate', deactivated }));
     return quotaJson({ ok: true, deactivated }, 200, cors);
+}
+
+// ─── Free-key gate: install resolution + in-app registration ─────────────────
+//
+// Every install asks the worker once per launch whether it must register. The
+// answer depends on a sticky per-device arm:
+//
+//   existing — account predates EXPERIMENT_START. Keyless free tier as today,
+//              never gated; excluded from the experiment's analysis.
+//   control  — new device, hash outside TEST_PERCENT. Keyless free tier as
+//              today: nothing to activate, nothing to register.
+//   test     — new device, hash inside TEST_PERCENT. Must register a free key
+//              from inside the app before editing.
+//
+// The key a test device registers comes back through the webhook, keyed by a
+// one-time reg token the app itself minted and sent to checkout, so nothing
+// depends on matching the browser to the machine.
+
+const INSTALL_MAX_BODY_BYTES = 4 * 1024;
+const REG_RE = /^rg_[A-Za-z0-9_-]{16,40}$/;
+
+/** A reg token stays reusable (repeated "Activate free plan" clicks within a
+ *  session share one) for this long before a fresh one is minted. */
+const REG_REUSE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Parse EXPERIMENT_START as ms epoch or an ISO date. 0 means "not started". */
+function experimentStartMs(env) {
+    const raw = String(env.EXPERIMENT_START || '').trim();
+    if (!raw) return 0;
+    if (/^\d+$/.test(raw)) return Number(raw);
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function testPercent(env) {
+    const n = Number(env.TEST_PERCENT);
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(100, Math.max(0, Math.floor(n)));
+}
+
+function gateEnabled(env) {
+    return String(env.GATE_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
+/** Deterministic 0-99 bucket for a device, so the arm is reproducible from the
+ *  device id and salt alone (and a lost row re-derives the same arm). */
+async function experimentBucket(env, deviceId) {
+    const hex = await sha256LowerHex((env.EXPERIMENT_SALT || 'free-key-gate-v1') + ':' + deviceId);
+    return parseInt(hex.slice(0, 8), 16) % 100;
+}
+
+async function assignArm(env, db, deviceId) {
+    const startMs = experimentStartMs(env);
+    if (!startMs) return 'existing';
+
+    const account = await db.prepare(
+        `SELECT created_at FROM quota_accounts WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    if (account && Number(account.created_at) < startMs) return 'existing';
+
+    return (await experimentBucket(env, deviceId)) < testPercent(env) ? 'test' : 'control';
+}
+
+/** True when this device holds an active, unexpired Pro licence. */
+async function deviceHasLivePro(db, deviceId, nowMs) {
+    const lic = await db.prepare(
+        `SELECT tier, status, ends_at FROM license_activations WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    return !!lic && (lic.tier || 'pro') === 'pro' && lic.status === 'active'
+        && (!Number(lic.ends_at) || Number(lic.ends_at) > nowMs);
+}
+
+/** True for a test-arm device with the gate on and no live licence. Old app
+ *  builds never call /install/resolve, have no arm row, and are never gated. */
+async function deviceNeedsRegistration(env, db, deviceId, nowMs) {
+    if (!gateEnabled(env)) return false;
+
+    const res = await db.prepare(
+        `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    if (!res || res.arm !== 'test') return false;
+
+    const lic = await db.prepare(
+        `SELECT status, ends_at FROM license_activations WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    const licenseLive = !!lic && lic.status === 'active'
+        && (!Number(lic.ends_at) || Number(lic.ends_at) > nowMs);
+    return !licenseLive;
+}
+
+function randomToken(prefix, bytes = 18) {
+    const raw = new Uint8Array(bytes);
+    crypto.getRandomValues(raw);
+    return prefix + bytesToB64u(raw);
+}
+
+async function handleInstall(request, env, url) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    if (request.method !== 'POST') {
+        return quotaJson({ ok: false, error: 'method_not_allowed' }, 405, cors);
+    }
+
+    const db = env.QUOTA_DB;
+    if (!db) {
+        console.error('QUOTA_DB binding missing — install routes need the D1 database.');
+        return quotaJson({ ok: false, error: 'db_unavailable' }, 503, cors);
+    }
+
+    let body;
+    try {
+        body = await readJsonBounded(request, INSTALL_MAX_BODY_BYTES);
+    } catch (e) {
+        return quotaJson({ ok: false, error: e.message }, e.statusCode || 400, cors);
+    }
+
+    const deviceId = clampString(body.device_id, 64);
+    if (!deviceId || !QUOTA_ID_RE.test(deviceId)) {
+        return quotaJson({ ok: false, error: 'invalid_device_id' }, 400, cors);
+    }
+
+    const nowMs = Date.now();
+
+    if (url.pathname === '/install/resolve') {
+        return handleInstallResolve(env, db, cors, body, deviceId, nowMs);
+    }
+    if (url.pathname === '/install/registration') {
+        return handleInstallRegistration(env, db, cors, deviceId, nowMs);
+    }
+    return quotaJson({ ok: false, error: 'not_found' }, 404, cors);
+}
+
+/**
+ * POST /install/resolve { device_id, bcid?, platform?, app_version? }
+ *   → { ok, action: 'activate' | 'gate' | 'none', arm, license_key?, tier? }
+ *
+ *   activate — the free key this device registered has arrived: activate it
+ *              through /license/activate.
+ *   gate     — test arm without a key: block editing until the user registers.
+ *   none     — nothing to do: the device already holds a live key, or it is
+ *              control / existing and stays on the keyless free tier.
+ */
+async function handleInstallResolve(env, db, cors, body, deviceId, nowMs) {
+    const bcid = (() => {
+        const v = clampString(body.bcid, 80);
+        return v && BCID_RE.test(v) ? v : null;
+    })();
+    const platform   = clampString(body.platform, 32);
+    const appVersion = clampString(body.app_version, 32);
+
+    let res = await db.prepare(
+        `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+    ).bind(deviceId).first();
+
+    let assignedNow = false;
+    if (!res) {
+        const arm = await assignArm(env, db, deviceId);
+        await db.prepare(
+            `INSERT INTO install_resolutions
+                (device_id, arm, bcid, platform, app_version, assigned_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(device_id) DO NOTHING`
+        ).bind(deviceId, arm, bcid, platform, appVersion, nowMs).run();
+        res = await db.prepare(
+            `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+        ).bind(deviceId).first();
+        assignedNow = true;
+    } else {
+        await db.prepare(
+            `UPDATE install_resolutions
+                SET bcid = COALESCE(bcid, ?2),
+                    platform = COALESCE(?3, platform),
+                    app_version = COALESCE(?4, app_version)
+              WHERE device_id = ?1`
+        ).bind(deviceId, bcid, platform, appVersion).run();
+    }
+
+    const arm = res.arm;
+    const reply = (action, extra = {}) => {
+        console.log(JSON.stringify({ evt: 'install_resolve', arm, action, assigned_now: assignedNow }));
+        return quotaJson({ ok: true, action, arm, assigned_now: assignedNow,
+                           gate_enabled: gateEnabled(env), ...extra }, 200, cors);
+    };
+
+    const lic = await db.prepare(
+        `SELECT tier, status, ends_at FROM license_activations WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    const licenseLive = !!lic && lic.status === 'active'
+        && (!Number(lic.ends_at) || Number(lic.ends_at) > nowMs);
+    if (licenseLive) {
+        return reply('none', { tier: lic.tier || 'pro' });
+    }
+
+    if (arm === 'test' && gateEnabled(env)) {
+        const pending = await db.prepare(
+            `SELECT pending_license_key FROM registrations
+              WHERE device_id = ?1 AND pending_license_key IS NOT NULL AND completed_at IS NULL
+              ORDER BY key_received_at DESC LIMIT 1`
+        ).bind(deviceId).first();
+        if (pending) {
+            return reply('activate', { tier: 'free', license_key: pending.pending_license_key });
+        }
+        return reply('gate');
+    }
+
+    // control, existing, or test with the gate switched off: keyless free tier.
+    return reply('none');
+}
+
+/**
+ * POST /install/registration { device_id } → { ok, reg }
+ *
+ * Minted when the user clicks "Activate free plan". The app appends it to the
+ * /get URL; /plans forwards it as checkout[custom][reg].
+ */
+async function handleInstallRegistration(env, db, cors, deviceId, nowMs) {
+    const res = await db.prepare(
+        `SELECT arm FROM install_resolutions WHERE device_id = ?1`
+    ).bind(deviceId).first();
+    if (!res) {
+        return quotaJson({ ok: false, error: 'unresolved_device' }, 409, cors);
+    }
+
+    const reusable = await db.prepare(
+        `SELECT reg FROM registrations
+          WHERE device_id = ?1 AND completed_at IS NULL AND pending_license_key IS NULL
+            AND created_at > ?2
+          ORDER BY created_at DESC LIMIT 1`
+    ).bind(deviceId, nowMs - REG_REUSE_WINDOW_MS).first();
+    if (reusable) {
+        return quotaJson({ ok: true, reg: reusable.reg, reused: true }, 200, cors);
+    }
+
+    const reg = randomToken('rg_');
+    await db.prepare(
+        `INSERT INTO registrations (reg, device_id, created_at) VALUES (?1, ?2, ?3)`
+    ).bind(reg, deviceId, nowMs).run();
+
+    console.log(JSON.stringify({ evt: 'install_registration', arm: res.arm }));
+    return quotaJson({ ok: true, reg, reused: false }, 200, cors);
 }
 
 /**
@@ -2690,12 +3539,20 @@ async function route(request, env, ctx) {
         return handleLicense(request, env, url, ctx);
     }
 
+    if (url.pathname === '/install/resolve' || url.pathname === '/install/registration') {
+        return handleInstall(request, env, url);
+    }
+
     if (url.pathname === '/capi') {
         return handleCapi(request, env, url);
     }
 
     if (url.pathname === '/gads') {
         return handleGads(request, env, url);
+    }
+
+    if (url.pathname === '/geo') {
+        return handleGeo(request);
     }
 
     return new Response('Not found', { status: 404 });

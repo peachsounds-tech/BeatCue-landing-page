@@ -59,6 +59,8 @@ function makeD1(db) {
 const sqlite = new DatabaseSync(':memory:');
 sqlite.exec(readFileSync(join(here, '..', 'migrations', '0001_quota.sql'), 'utf8'));
 sqlite.exec(readFileSync(join(here, '..', 'migrations', '0002_license.sql'), 'utf8'));
+sqlite.exec(readFileSync(join(here, '..', 'migrations', '0004_install_resolutions.sql'), 'utf8'));
+sqlite.exec(readFileSync(join(here, '..', 'migrations', '0005_install_tables.sql'), 'utf8'));
 
 // ─── Signing key for the test env ─────────────────────────────────────────────
 // A throwaway Ed25519 pair: the worker signs with the private half (via the
@@ -121,7 +123,8 @@ globalThis.fetch = async (url, init) => {
         }
 
         const lk   = { status: 'active', expires_at: null };
-        const meta = { customer_email: 'buyer@example.com', customer_name: 'Buyer', order_id: 42 };
+        const meta = { customer_email: 'buyer@example.com', customer_name: 'Buyer', order_id: 42,
+                       product_id: 1295253, variant_id: 2146438 };
 
         if (action === 'activate') {
             return jsonResponse({ activated: true, error: null, license_key: lk,
