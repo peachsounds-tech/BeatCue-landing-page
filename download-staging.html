@@ -4,6 +4,7 @@
     <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script src="/js/google-ads.js"></script>
+    <script src="/js/identity.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -113,9 +114,14 @@
         try {
             var params = new URLSearchParams(window.location.search);
             var fromUrl = params.get('bcid') || params.get('ph_id');
-            var b = normalize(sessionStorage.getItem('cue_bcid'))
-                 || normalize(fromUrl)
+            // localStorage so a later visit (or the checkout tab) keeps the
+            // same browser identity. An explicit ?bcid= (the hand-off email,
+            // the app) still wins.
+            var b = normalize(fromUrl)
+                 || normalize(localStorage.getItem('cue_bcid'))
+                 || normalize(sessionStorage.getItem('cue_bcid'))
                  || mint();
+            localStorage.setItem('cue_bcid', b);
             sessionStorage.setItem('cue_bcid', b);
             return b;
         } catch (e) {
@@ -396,6 +402,7 @@
             let changed = false;
             if (cleanUrl.searchParams.has('bcid')) { cleanUrl.searchParams.delete('bcid'); changed = true; }
             if (cleanUrl.searchParams.has('ph_id')) { cleanUrl.searchParams.delete('ph_id'); changed = true; }
+            if (cleanUrl.searchParams.has('aid')) { cleanUrl.searchParams.delete('aid'); changed = true; }
             if (changed) history.replaceState(null, '', cleanUrl.toString());
         } catch (e) { /* ignore */ }
         
@@ -420,6 +427,7 @@
         const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
 
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
+        if (window.CueIdentity) window.CueIdentity.attach(posthog, cueBcid);
         posthog.register({ page_version: CUE_PAGE_VERSION });
         
         if (isInternalTester) {

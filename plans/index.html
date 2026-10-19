@@ -4,6 +4,7 @@
     <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script src="/js/google-ads.js"></script>
+    <script src="/js/identity.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -541,6 +542,10 @@
         var params  = new URLSearchParams(window.location.search);
         var bcid    = resolveBcid();
         var hadBcid = !!(params.get('bcid') || params.get('ph_id'));
+        // An app that has no account yet (first launch offline) sends its
+        // hardware id as ?bcid=hw_…; resolveBcid() can't use it, but the
+        // webhook maps it back to that device via checkout[custom][posthog_id].
+        var appDeviceId = /^hw_[0-9a-f]{16}$/.test(params.get('bcid') || '') ? params.get('bcid') : null;
         var srcParam = params.get('source') || 'plans';
         window.__cue_bcid = bcid;
 
@@ -651,6 +656,7 @@
                 u.searchParams.set('discount', '0');
                 if (emailParam) u.searchParams.set('checkout[email]', emailParam);
                 if (bcid)       u.searchParams.set('checkout[custom][bcid]', bcid);
+                if (appDeviceId) u.searchParams.set('checkout[custom][posthog_id]', appDeviceId);
                 if (srcParam)   u.searchParams.set('checkout[custom][source]', srcParam);
                 var regParam = params.get('reg');
                 if (regParam)   u.searchParams.set('checkout[custom][reg]', regParam);
@@ -658,7 +664,7 @@
                     var v = params.get(k);
                     if (v) u.searchParams.set(k, v);
                 });
-                return u.toString();
+                return window.CueIdentity ? window.CueIdentity.decorateCheckout(u.toString()) : u.toString();
             } catch (e) {
                 return baseUrl;
             }
@@ -724,6 +730,7 @@
                 person_profiles: 'identified_only',
                 bootstrap: { distinctID: bcid }
             });
+            if (window.CueIdentity) window.CueIdentity.attach(posthog, bcid);
             posthog.register({ page_version: (window.CUE_PAGE_VERSION || 'plans'), page: 'plans' });
 
             var loadProps = attributionProps();
@@ -750,7 +757,7 @@
                     body: JSON.stringify({
                         api_key: POSTHOG_API_KEY,
                         event: eventName,
-                        distinct_id: bcid,
+                        distinct_id: (window.CueIdentity && window.CueIdentity.accountId()) || bcid,
                         timestamp: new Date().toISOString(),
                         properties: props
                     })
