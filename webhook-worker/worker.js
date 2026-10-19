@@ -65,6 +65,31 @@ const PAIRINGS_MAX_BODY_BYTES = 4 * 1024;
  *  applyPairing() validator. */
 const BCID_RE = /^bc_[A-Za-z0-9-]{8,64}$/;
 
+// ─── Mobile → desktop email hand-off ──────────────────────────────────────────
+
+/** Where the emailed link lands. download.html adopts the bcid from the URL,
+ *  so the desktop visit continues the phone visitor's PostHog identity. */
+const HANDOFF_DOWNLOAD_URL = 'https://beatcue.app/download';
+
+/** Sender used when HANDOFF_EMAIL_FROM is unset. The domain must be verified
+ *  with the email provider or every send fails. */
+const HANDOFF_DEFAULT_FROM = 'BeatCue <download@beatcue.app>';
+
+/** Small copy of icon.png for emails; the original is 1.3 MB. Published with
+ *  the landing page, so it must be live before the template references it. */
+const HANDOFF_EMAIL_LOGO_URL = 'https://beatcue.app/email/logo.png';
+
+/** One address gets at most this many emails per day; extra requests answer
+ *  success without sending, so the form can't be used to spam a stranger. */
+const HANDOFF_MAX_PER_EMAIL_PER_DAY = 3;
+
+/** One IP may request at most this many emails per hour. */
+const HANDOFF_MAX_PER_IP_PER_HOUR = 10;
+
+/** Deliberately loose: the provider is the real validator. This only rejects
+ *  input that can't be an address so we don't spend a send on it. */
+const HANDOFF_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 // ─── Free-tier quota constants ────────────────────────────────────────────────
 
 /** Fallback when `quota_config.default_limit` is missing or unparseable.
@@ -1410,6 +1435,24 @@ async function sha256LowerHex(s) {
         .join('');
 }
 
+/** sha256 hex of an email normalized the way Google's Data Manager requires:
+ *  lowercase, all whitespace removed, and for gmail.com / googlemail.com the
+ *  dots and any +tag stripped from the local part. Differs from Meta's
+ *  normalization (sha256LowerHex), so the two hashes aren't interchangeable. */
+async function googleEmailHash(email) {
+    if (typeof email !== 'string') return null;
+    let e = email.replace(/\s+/g, '').toLowerCase();
+    const at = e.lastIndexOf('@');
+    if (at < 1) return null;
+    let local = e.slice(0, at);
+    const domain = e.slice(at + 1);
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+        local = local.split('+')[0].replace(/\./g, '');
+        e = `${local}@${domain}`;
+    }
+    return sha256LowerHex(e);
+}
+
 /** Validate that a string already looks like a 64-char hex sha256. We accept
  *  pre-hashed values from the desktop app (it has EmailHasher already) so we
  *  don't move plaintext email more times than necessary. */
@@ -1703,8 +1746,8 @@ async function handleCapi(request, env, url) {
 
 // ─── Google Ads click-conversion upload handler ───────────────────────────────
 
-/** Parse GOOGLE_ADS_CONV_ACTIONS secret (JSON object of event_name → conversion
- *  action). */
+/** Parse GOOGLE_ADS_CONV_ACTIONS (wrangler.toml var; JSON object of
+ *  event_name → conversion action). */
 function parseGadsConvActions(raw) {
     if (!raw || typeof raw !== 'string') return null;
     try {
@@ -1791,14 +1834,17 @@ async function getGoogleAdsAccessToken(env) {
  *     ad_consent:       string  (optional; 'granted' | 'denied' from the
  *                                cookie banner, or via pairing for the app),
  *     user_data: {
- *       gclid, gbraid, wbraid   (at least one required to upload; else skipped)
+ *       gclid, gbraid, wbraid   (click ids),
+ *       em_raw                  (plaintext email; worker normalizes + hashes
+ *                                for enhanced conversions)
  *     }
  *   }
  *
  * Maps event_name → conversion action via GOOGLE_ADS_CONV_ACTIONS JSON secret,
  * refreshes an OAuth access token, and calls
- * customers:uploadClickConversions. Returns skipped when no click id is
- * present (organic traffic) so the client can always dual-fire safely.
+ * customers:uploadClickConversions. Returns skipped when there is neither a
+ * click id nor an email (organic traffic) so the client can always dual-fire
+ * safely.
  */
 async function handleGads(request, env, url) {
     const origin = request.headers.get('origin') || '';
@@ -1930,8 +1976,9 @@ async function handleGads(request, env, url) {
     const gclid  = clampString(ud.gclid,  256);
     const gbraid = clampString(ud.gbraid, 256);
     const wbraid = clampString(ud.wbraid, 256);
+    const emHashed = await googleEmailHash(clampString(ud.em_raw, 256));
 
-    if (!gclid && !gbraid && !wbraid) {
+    if (!gclid && !gbraid && !wbraid && !emHashed) {
         console.log(JSON.stringify({
             evt: 'gads_skipped_no_click_id',
             event_name: eventName,
@@ -1964,7 +2011,9 @@ async function handleGads(request, env, url) {
     if (gclid)  adIdentifiers.gclid  = gclid;
     if (gbraid) adIdentifiers.gbraid = gbraid;
     if (wbraid) adIdentifiers.wbraid = wbraid;
-    const clickKeys = { matchable: true, had_gclid: !!gclid, had_gbraid: !!gbraid, had_wbraid: !!wbraid };
+    const clickKeys = {
+        matchable: true, had_gclid: !!gclid, had_gbraid: !!gbraid, had_wbraid: !!wbraid, had_em: !!emHashed,
+    };
 
     // The reference docs mark eventSource optional; the service rejects a
     // request without it (REQUIRED_FIELD_MISSING on events[0].event_source).
@@ -1978,8 +2027,11 @@ async function handleGads(request, env, url) {
         transactionId,
         eventTimestamp: new Date().toISOString(),
         eventSource,
-        adIdentifiers,
     };
+    if (Object.keys(adIdentifiers).length) event.adIdentifiers = adIdentifiers;
+    // Enhanced conversions: lets Google match the conversion to a signed-in
+    // user when there is no click id, and strengthens the match when there is.
+    if (emHashed) event.userData = { userIdentifiers: [{ emailAddress: emHashed }] };
     const consent = gadsConsentFor(normalizeAdConsent(body.ad_consent));
     if (consent) event.consent = consent;
 
@@ -2033,6 +2085,7 @@ async function handleGads(request, env, url) {
         destinations: [destination],
         events: [event],
     };
+    if (emHashed) payload.encoding = 'HEX';
     // Optional: validate-only mode for dry runs (no attribution).
     if (env.GOOGLE_ADS_VALIDATE_ONLY === '1' || env.GOOGLE_ADS_VALIDATE_ONLY === 'true') {
         payload.validateOnly = true;
@@ -2092,6 +2145,7 @@ async function handleGads(request, env, url) {
         had_gclid: !!gclid,
         had_gbraid: !!gbraid,
         had_wbraid: !!wbraid,
+        had_em: !!emHashed,
         partial_failure: hasPartialFailure,
         validate_only: !!(payload.validateOnly),
         partial_failure_message: hasPartialFailure
@@ -3481,6 +3535,328 @@ async function handleInstallRegistration(env, db, cors, deviceId, nowMs) {
     return quotaJson({ ok: true, reg, reused: false }, 200, cors);
 }
 
+// ─── Mobile → desktop email hand-off ──────────────────────────────────────────
+
+function handoffJson(body, status, cors) {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: { ...cors, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    });
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+}
+
+/** The /download link the email carries. Keeps the visitor's original UTMs so
+ *  the eventual install is still credited to the ad that brought them, and
+ *  adds handoff=email so the desktop visit can be told apart from a direct one. */
+function buildHandoffDownloadUrl(bcid, clickIds, utms) {
+    const u = new URL(HANDOFF_DOWNLOAD_URL);
+    u.searchParams.set('bcid', bcid);
+    for (const [k, v] of Object.entries(clickIds)) if (v) u.searchParams.set(k, v);
+    for (const [k, v] of Object.entries(utms || {})) if (v) u.searchParams.set(k, v);
+    u.searchParams.set('handoff', 'email');
+    return u.toString();
+}
+
+function handoffEmailContent(downloadUrl) {
+    const href = escapeHtml(downloadUrl);
+    const subject = 'Your BeatCue download link';
+    const text = [
+        'Here is your BeatCue download link.',
+        '',
+        'Open it on your Mac or Windows computer to install BeatCue:',
+        downloadUrl,
+        '',
+        'Free to try. No credit card needed.',
+        '',
+        'You are getting this email because you asked for the download link on beatcue.app.',
+    ].join('\n');
+    // Brand palette and font from landing-page/index.html (dark theme). Email
+    // clients can't do gradient text, so the wordmark splits into two colors.
+    const font = `'Sora',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif`;
+    const html = `<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#0A0A0F;font-family:${font};color:#FFFFFF;">
+<div style="display:none;max-height:0;overflow:hidden;">Open this on your Mac or PC to install BeatCue.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#0A0A0F" style="background:#0A0A0F;padding:36px 16px;">
+<tr><td align="center">
+
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+<tr>
+<td style="vertical-align:middle;padding-right:10px;"><img src="${HANDOFF_EMAIL_LOGO_URL}" width="40" height="40" alt="" style="display:block;border:0;"></td>
+<td style="vertical-align:middle;font-family:${font};font-size:22px;font-weight:600;letter-spacing:-0.01em;"><span style="color:#FF6B35;">Beat</span><span style="color:#4A90D9;">Cue</span></td>
+</tr>
+</table>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#1E1E2A" style="max-width:480px;background:#1E1E2A;border:1px solid #2A2A38;border-radius:20px;overflow:hidden;">
+<tr><td height="4" bgcolor="#FF6B35" style="height:4px;line-height:4px;font-size:0;background:#FF6B35;background-image:linear-gradient(135deg,#FF6B35 0%,#4A90D9 100%);">&nbsp;</td></tr>
+<tr><td style="padding:36px 28px 32px;text-align:center;">
+<p style="margin:0 0 14px;font-family:${font};font-size:14px;font-weight:600;color:#A0A0B0;">Perfect <span style="color:#4A90D9;">music.</span> Wrong <span style="color:#FF6B35;">timings?</span></p>
+<p style="margin:0 0 10px;font-family:${font};font-size:26px;line-height:1.25;font-weight:700;color:#FFFFFF;">Your download is ready</p>
+<p style="margin:0 0 28px;font-family:${font};font-size:16px;line-height:1.55;color:#A0A0B0;">Open this email on your <strong style="color:#FFFFFF;">Mac or Windows</strong> computer and hit the button to install BeatCue.</p>
+<a href="${href}" style="display:inline-block;background:#4A90D9;color:#FFFFFF;text-decoration:none;font-family:${font};font-size:17px;font-weight:600;padding:16px 36px;border-radius:10px;">Download BeatCue</a>
+<p style="margin:22px 0 0;font-family:${font};font-size:13px;color:#6B6B7B;">Free to try &middot; No credit card needed &middot; macOS &amp; Windows</p>
+</td></tr>
+<tr><td style="padding:0 28px 28px;text-align:center;">
+<p style="margin:0;padding-top:20px;border-top:1px solid #2A2A38;font-family:${font};font-size:12px;line-height:1.6;color:#6B6B7B;word-break:break-all;">Button not working? Paste this link into your browser:<br><a href="${href}" style="color:#6BA5E5;">${href}</a></p>
+</td></tr>
+</table>
+
+<p style="margin:22px 0 0;font-family:${font};font-size:12px;color:#6B6B7B;">You asked for this link on <a href="https://beatcue.app" style="color:#6B6B7B;">beatcue.app</a>.</p>
+</td></tr>
+</table>
+</body></html>`;
+    return { subject, text, html };
+}
+
+/** Sends through Resend's HTTP API. Returns { ok, id, error }. */
+async function sendHandoffEmail(env, to, content) {
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+            'authorization': `Bearer ${env.RESEND_API_KEY}`,
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+            from: env.HANDOFF_EMAIL_FROM || HANDOFF_DEFAULT_FROM,
+            to: [to],
+            subject: content.subject,
+            html: content.html,
+            text: content.text,
+            tags: [{ name: 'flow', value: 'mobile_handoff' }],
+        }),
+    });
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* non-JSON error body */ }
+    if (!res.ok) {
+        return { ok: false, error: `resend_${res.status}:${clampString(data && data.message, 160) || ''}` };
+    }
+    return { ok: true, id: (data && data.id) || null };
+}
+
+/** Whether the visitor's advertising-consent answer lets their email hash go
+ *  to Meta / Google. Where the cookie banner is required, silence is not
+ *  consent; elsewhere only an explicit "no" (or GPC, which the page reports
+ *  as denied) withholds it. */
+function adEmailAllowed(adConsent, country, regionCode) {
+    if (adConsent === 'denied') return false;
+    const bannerRequired = !country || country === 'XX' || country === 'T1'
+        || BANNER_COUNTRIES.has(country)
+        || (!!regionCode && BANNER_REGIONS.has(`${country}-${regionCode}`));
+    return !bannerRequired || adConsent === 'granted';
+}
+
+/** Runs one of this worker's own JSON handlers (handleCapi / handleGads) as if
+ *  the visitor's browser had called it, carrying their IP and user agent so
+ *  the ad platforms match on the real device rather than the worker. */
+function internalJsonRequest(path, payload, request) {
+    const headers = { 'content-type': 'application/json' };
+    const ip = request.headers.get('cf-connecting-ip');
+    const ua = request.headers.get('user-agent');
+    if (ip) headers['cf-connecting-ip'] = ip;
+    if (ua) headers['user-agent'] = ua;
+    const url = `https://internal${path}`;
+    return { req: new Request(url, { method: 'POST', headers, body: JSON.stringify(payload) }), url: new URL(url) };
+}
+
+/**
+ * Meta `Lead` + Google `send_to_desktop` for a sent hand-off email, with the
+ * email as a match key. The page fires the Pixel / gtag halves with the same
+ * event_id / transaction_id, so each platform dedupes to one conversion.
+ */
+async function fireHandoffConversions(request, env, body, email, bcid, clickIds) {
+    const cf = request.cf || {};
+    const adConsent = normalizeAdConsent(body.ad_consent);
+    const emRaw = adEmailAllowed(adConsent, cf.country, cf.regionCode) ? email : undefined;
+    const sourceUrl = clampString(body.event_source_url, 2048) || 'https://beatcue.app/';
+    const leadEventId = clampString(body.lead_event_id, 96) || randomToken('lead_');
+    const gadsTxId = clampString(body.gads_transaction_id, 96) || randomToken('gtx_');
+
+    const meta = internalJsonRequest('/capi', {
+        event_name: 'Lead',
+        event_id: leadEventId,
+        event_source_url: sourceUrl,
+        action_source: 'website',
+        internal_name: 'handoff_email_sent',
+        user_data: {
+            fbp: clampString(body.fbp, 256),
+            fbc: clampString(body.fbc, 256),
+            fbclid: clickIds.fbclid,
+            external_id: bcid,
+            em_raw: emRaw,
+        },
+        custom_data: { content_name: 'BeatCue Download Link Email' },
+    }, request);
+
+    const google = internalJsonRequest('/gads', {
+        event_name: 'send_to_desktop',
+        transaction_id: gadsTxId,
+        event_source_url: sourceUrl,
+        internal_name: 'handoff_email_sent',
+        distinct_id: bcid,
+        ad_consent: adConsent,
+        value: 1.0,
+        currency: 'ILS',
+        user_data: {
+            gclid: clickIds.gclid,
+            gbraid: clickIds.gbraid,
+            wbraid: clickIds.wbraid,
+            em_raw: emRaw,
+        },
+    }, request);
+
+    const results = await Promise.allSettled([
+        handleCapi(meta.req, env, meta.url),
+        handleGads(google.req, env, google.url),
+    ]);
+    console.log(JSON.stringify({
+        evt: 'handoff_conversions',
+        bcid_prefix: bcid.slice(0, 8),
+        had_em: !!emRaw,
+        meta_status: results[0].status === 'fulfilled' ? results[0].value.status : 'error',
+        google_status: results[1].status === 'fulfilled' ? results[1].value.status : 'error',
+    }));
+}
+
+/**
+ * POST /handoff/email
+ *   { email, bcid, fbclid?, gclid?, gbraid?, wbraid?, utms?, device?, placement?, page_version?,
+ *     fbp?, fbc?, ad_consent?, event_source_url?, lead_event_id?, gads_transaction_id? }
+ *   → { ok: true } | { ok: false, error }
+ *
+ * The mobile landing page's main CTA. Mails the visitor a /download link that
+ * carries their bcid, so opening it on the desktop continues the same PostHog
+ * person and the pairing / ad-attribution chain behind it.
+ */
+async function handleHandoffEmail(request, env, ctx) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    if (request.method !== 'POST') {
+        return handoffJson({ ok: false, error: 'method_not_allowed' }, 405, cors);
+    }
+    if (origin && !PAIRINGS_ALLOWED_ORIGINS.has(origin)) {
+        return handoffJson({ ok: false, error: 'forbidden_origin' }, 403, cors);
+    }
+    if (!env.RESEND_API_KEY || !env.QUOTA_DB) {
+        console.error('handoff_email: RESEND_API_KEY or QUOTA_DB missing');
+        return handoffJson({ ok: false, error: 'email_unavailable' }, 503, cors);
+    }
+
+    let body;
+    try {
+        body = await readJsonBounded(request);
+    } catch (e) {
+        return handoffJson({ ok: false, error: e.message }, e.statusCode || 400, cors);
+    }
+
+    const email = (clampString(body.email, 254) || '').trim().toLowerCase();
+    if (!HANDOFF_EMAIL_RE.test(email)) {
+        return handoffJson({ ok: false, error: 'invalid_email' }, 400, cors);
+    }
+    const bcid = clampString(body.bcid, 96);
+    if (!bcid || !BCID_RE.test(bcid)) {
+        return handoffJson({ ok: false, error: 'invalid_bcid' }, 400, cors);
+    }
+
+    const db = env.QUOTA_DB;
+    const nowMs = Date.now();
+    const clientIp = request.headers.get('cf-connecting-ip') || '';
+    const emailHash = await hashEmail(email);
+    const ipHash = clientIp ? (await sha256LowerHex(`handoff|${clientIp}`)).slice(0, 32) : null;
+
+    if (ipHash) {
+        const ipRow = await db.prepare(
+            `SELECT COUNT(*) AS n FROM handoff_emails WHERE ip_hash = ?1 AND created_at > ?2`
+        ).bind(ipHash, nowMs - 60 * 60 * 1000).first();
+        if (ipRow && ipRow.n >= HANDOFF_MAX_PER_IP_PER_HOUR) {
+            console.log(JSON.stringify({ evt: 'handoff_email_ip_limited' }));
+            return handoffJson({ ok: false, error: 'rate_limited' }, 429, cors);
+        }
+    }
+    const emailRow = await db.prepare(
+        `SELECT COUNT(*) AS n FROM handoff_emails WHERE email_hash = ?1 AND sent = 1 AND created_at > ?2`
+    ).bind(emailHash, nowMs - 24 * 60 * 60 * 1000).first();
+    if (emailRow && emailRow.n >= HANDOFF_MAX_PER_EMAIL_PER_DAY) {
+        console.log(JSON.stringify({ evt: 'handoff_email_address_limited' }));
+        return handoffJson({ ok: true, throttled: true }, 200, cors);
+    }
+
+    const clickIds = {
+        fbclid: clampString(body.fbclid, 256),
+        gclid:  clampString(body.gclid,  256),
+        gbraid: clampString(body.gbraid, 256),
+        wbraid: clampString(body.wbraid, 256),
+    };
+    const utms = clampUtms(body.utms) || {};
+    const device = clampString(body.device, 32);
+    const placement = clampString(body.placement, 32);
+    const country = (request.cf && request.cf.country) || null;
+    const downloadUrl = buildHandoffDownloadUrl(bcid, clickIds, utms);
+
+    const result = await sendHandoffEmail(env, email, handoffEmailContent(downloadUrl));
+
+    // One conversion per address, ever: resends and "change email" retries
+    // shouldn't teach the ad platforms that one person is several leads.
+    const firstSend = result.ok && !(await db.prepare(
+        `SELECT 1 FROM handoff_emails WHERE email_hash = ?1 AND sent = 1 LIMIT 1`
+    ).bind(emailHash).first());
+
+    await db.prepare(
+        `INSERT INTO handoff_emails
+            (email, email_hash, bcid, ip_hash, country, device, placement, utms, click_ids,
+             download_url, sent, provider_id, error, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`
+    ).bind(
+        email, emailHash, bcid, ipHash, country, device, placement,
+        JSON.stringify(utms), JSON.stringify(clickIds), downloadUrl,
+        result.ok ? 1 : 0, result.id || null, result.error || null, nowMs
+    ).run();
+
+    console.log(JSON.stringify({
+        evt: result.ok ? 'handoff_email_sent' : 'handoff_email_failed',
+        bcid_prefix: bcid.slice(0, 8),
+        country,
+        error: result.error || null,
+    }));
+
+    ctx.waitUntil(sendToPostHog(result.ok ? 'download_link_emailed' : 'download_link_email_failed', bcid, {
+        ...utms,
+        hashed_email: emailHash,
+        email_domain: email.split('@')[1],
+        device,
+        placement,
+        page_version: clampString(body.page_version, 32),
+        has_fbclid: !!clickIds.fbclid,
+        has_gclid: !!(clickIds.gclid || clickIds.gbraid || clickIds.wbraid),
+        error: result.error || undefined,
+        $set: { hashed_email: emailHash, handoff_email_requested: true },
+    }, clientIp).catch(() => {}));
+
+    if (!result.ok) {
+        return handoffJson({ ok: false, error: 'send_failed' }, 502, cors);
+    }
+    if (firstSend) {
+        ctx.waitUntil(fireHandoffConversions(request, env, body, email, bcid, clickIds).catch(e => {
+            console.log(JSON.stringify({ evt: 'handoff_conversions_error', error: String(e && e.message || e) }));
+        }));
+    }
+    return handoffJson({ ok: true, conversion: firstSend }, 200, cors);
+}
+
 /**
  * Cloudflare Worker entry point
  */
@@ -3545,6 +3921,10 @@ async function route(request, env, ctx) {
 
     if (url.pathname === '/capi') {
         return handleCapi(request, env, url);
+    }
+
+    if (url.pathname === '/handoff/email') {
+        return handleHandoffEmail(request, env, ctx);
     }
 
     if (url.pathname === '/gads') {
