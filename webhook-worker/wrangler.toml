@@ -43,6 +43,24 @@ EXPERIMENT_SALT = "free-key-gate-v1"
 # free tier on its next resolve, with no app release.
 GATE_ENABLED = "false"
 
+# ─── Google Ads conversion actions ────────────────────────────────────────────
+# JSON map of event_name → conversion action that /gads uploads to. Bare id or
+# full `customers/{cid}/conversionActions/{id}` resource name. Ids aren't
+# sensitive, so the map lives here rather than in a secret, where it couldn't
+# be read back and every edit risked dropping an entry.
+#
+# Each must be an UPLOAD_CLICKS ("Import from clicks") action in the account
+# that serves the ads. Website actions (Purchase 7682163987, Request quote
+# 7694918564) back the browser gtag calls and can't take /gads uploads.
+# Unmapped events soft-skip with skipped:"conversion_action_unmapped".
+#
+#   first_track_imported       Secondary
+#   first_activation_finished  the paid conversion, carries value
+#   new_project_created        once per song claimed
+#   send_to_desktop            "offline (Upload)", mobile "email me the link";
+#                              keep Secondary, the page's gtag reports it too
+GOOGLE_ADS_CONV_ACTIONS = '{"first_track_imported":"7838436673","first_activation_finished":"7840353503","new_project_created":"7840347020","send_to_desktop":"7854750623"}'
+
 # Secret variables (set via `wrangler secret put NAME`):
 #
 #   LEMONSQUEEZY_WEBHOOK_SECRET    Lemon Squeezy → /webhook/lemonsqueezy HMAC.
@@ -81,12 +99,7 @@ GATE_ENABLED = "false"
 #                                  scripts/get-google-ads-refresh-token.mjs.
 #   GOOGLE_ADS_CUSTOMER_ID         Ads customer ID (digits only, no dashes).
 #   GOOGLE_ADS_LOGIN_CUSTOMER_ID   Optional MCC / manager customer ID.
-#   GOOGLE_ADS_CONV_ACTIONS        JSON map of event_name → conversion action.
-#                                  Bare id or full resource name, e.g.
-#                                  {"first_track_imported":"7838436673",
-#                                   "new_project_created":"customers/123/conversionActions/789"}
-#                                  Each must be an UPLOAD_CLICKS action in the
-#                                  account that serves the ads.
+#   (GOOGLE_ADS_CONV_ACTIONS is a plain var above, not a secret.)
 #   GOOGLE_ADS_VALIDATE_ONLY       Optional. Set to "1" to dry-run uploads
 #                                  (validateOnly=true, no attribution).
 #
@@ -95,6 +108,16 @@ GATE_ENABLED = "false"
 #                                  songs or a clean period. /quota/grant
 #                                  returns 503 while unset, so the endpoint is
 #                                  inert until you deliberately enable it.
+#
+#   RESEND_API_KEY                 Resend API key for POST /handoff/email, the
+#                                  mobile landing page's "email me the download
+#                                  link" form. The route returns 503 while
+#                                  unset. Needs migration 0006 applied.
+#
+#   HANDOFF_EMAIL_FROM             Optional sender for the hand-off email, e.g.
+#                                  "BeatCue <download@beatcue.app>" (the
+#                                  default). Its domain must be verified in
+#                                  Resend.
 #
 #   ENTITLEMENT_SIGNING_KEY        Base64 PKCS8 Ed25519 private key used to sign
 #                                  entitlement tokens for both the quota and

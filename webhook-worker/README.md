@@ -408,14 +408,16 @@ Landing pages dual-fire key conversions: browser `gtag('event','conversion',{tra
 > the data source → pick a category. The listing script checks the type and
 > refuses to suggest a mapping that would fail.
 >
-> The secret accepts either the bare conversion action id (`7838436673`, what
+> `GOOGLE_ADS_CONV_ACTIONS` is a plain var in `wrangler.toml`, not a secret:
+> conversion ids aren't sensitive, and a secret can't be read back to edit.
+> It accepts either the bare conversion action id (`7838436673`, what
 > Data Manager calls `productDestinationId`) or the full
 > `customers/{cid}/conversionActions/{id}` resource name, which the worker
 > normalises.
 
 Map the existing browser conversion labels to those resource names:
 
-| Landing `event_name` | Browser `send_to` | Secret key in `GOOGLE_ADS_CONV_ACTIONS` |
+| Landing `event_name` | Browser `send_to` | Key in `GOOGLE_ADS_CONV_ACTIONS` |
 |---|---|---|
 | `send_to_desktop` | `AW-18317916073/1x2-COL5tNQcEKnv1J5E` | `send_to_desktop` |
 | `trial_download` | `AW-18317916073/H-gBCKTHnNUcEKnv1J5E` | `trial_download` |
@@ -447,8 +449,8 @@ Never make both names of one pair Primary (e.g. `activation_finished` and
 
 Until a key is present in `GOOGLE_ADS_CONV_ACTIONS` the worker soft-skips it
 with `ok:true, skipped:"conversion_action_unmapped"`, so the desktop can ship
-ahead of the Ads account config. Switching one on is a secret update, not a
-worker deploy.
+ahead of the Ads account config. Switching one on is an edit to
+`GOOGLE_ADS_CONV_ACTIONS` in `wrangler.toml` plus `wrangler deploy`.
 
 Note the asymmetry with Meta: `/gads` uploads click conversions only, so an
 install that never carried a `gclid`/`gbraid`/`wbraid` cannot be attributed on
@@ -468,10 +470,7 @@ wrangler secret put GOOGLE_ADS_CUSTOMER_ID
 # Optional if using an MCC:
 # wrangler secret put GOOGLE_ADS_LOGIN_CUSTOMER_ID
 
-# JSON map — paste as a single line when prompted:
-wrangler secret put GOOGLE_ADS_CONV_ACTIONS
-# Example value:
-# {"send_to_desktop":"customers/1234567890/conversionActions/111","trial_download":"customers/1234567890/conversionActions/222"}
+# The event → conversion map is GOOGLE_ADS_CONV_ACTIONS in wrangler.toml.
 
 # Optional dry-run (validateOnly, no attribution):
 # wrangler secret put GOOGLE_ADS_VALIDATE_ONLY   # value: 1
@@ -595,7 +594,7 @@ Check PostHog for events with `$lib: cloudflare-worker` property.
 | `GOOGLE_ADS_REFRESH_TOKEN` | OAuth refresh token | Required for `/gads` |
 | `GOOGLE_ADS_CUSTOMER_ID` | Ads customer ID (no dashes) | Required for `/gads` |
 | `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | MCC manager customer ID | Optional |
-| `GOOGLE_ADS_CONV_ACTIONS` | JSON map `event_name` → conversion action resource | Required for `/gads` |
+| `GOOGLE_ADS_CONV_ACTIONS` | JSON map `event_name` → conversion action (plain var in `wrangler.toml`) | Required for `/gads` |
 | `GOOGLE_ADS_VALIDATE_ONLY` | `"1"` / `"true"` → dry-run uploads | Optional |
 
 ## Local Development

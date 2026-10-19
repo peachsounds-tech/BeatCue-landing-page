@@ -198,7 +198,7 @@ async function main() {
     if (Object.keys(suggested).length) {
         console.log('\nSuggested GOOGLE_ADS_CONV_ACTIONS JSON:\n');
         console.log(JSON.stringify(suggested, null, 2));
-        console.log('\nSet with:\n  npx wrangler secret put GOOGLE_ADS_CONV_ACTIONS\n');
+        console.log('\nPaste into GOOGLE_ADS_CONV_ACTIONS in wrangler.toml, then `npx wrangler deploy`.\n');
     } else if (uploadables === 0) {
         console.log('\nNo UPLOAD_CLICKS conversion actions exist in these accounts, so nothing'
             + '\ncan receive an offline click conversion yet. Create them in Google Ads under'
