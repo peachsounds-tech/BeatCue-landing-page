@@ -412,6 +412,18 @@
 
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         posthog.register({ page_version: CUE_PAGE_VERSION });
+
+        // Arrived from the mobile hand-off email: tag every event on this
+        // visit so the email → desktop download funnel can be measured.
+        try {
+            var handoffUrl = new URL(window.location.href);
+            var handoffChannel = handoffUrl.searchParams.get('handoff');
+            if (handoffChannel) {
+                posthog.register_for_session({ handoff_channel: handoffChannel });
+                handoffUrl.searchParams.delete('handoff');
+                history.replaceState(null, '', handoffUrl.toString());
+            }
+        } catch (e) { /* ignore */ }
         
         if (isInternalTester) {
             posthog.register({ is_internal: true });
