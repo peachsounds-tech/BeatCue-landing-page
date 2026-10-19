@@ -2445,6 +2445,289 @@
             letter-spacing: 0.01em;
         }
 
+        /* Mobile "email me the download link" hand-off */
+        .handoff-form {
+            width: 100%;
+            max-width: 420px;
+            margin: 0 auto;
+        }
+
+        .handoff-lead {
+            margin: 0 0 0.7rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        .handoff-input {
+            display: block;
+            width: 100%;
+            height: 54px;
+            padding: 0 16px;
+            box-sizing: border-box;
+            /* 16px stops iOS Safari from zooming the page on focus. */
+            font-size: 16px;
+            font-family: inherit;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            border: 1.5px solid var(--border-light);
+            border-radius: 12px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        [data-theme="dark"] .handoff-input {
+            border-color: rgba(255, 255, 255, 0.14);
+        }
+
+        .handoff-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .handoff-input:focus {
+            border-color: var(--wave-blue);
+            box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.22);
+        }
+
+        .handoff-input.invalid {
+            border-color: #ef4444;
+        }
+
+        .handoff-submit {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            height: 54px;
+            margin-top: 10px;
+            font-size: 17px;
+            font-weight: 600;
+            font-family: inherit;
+            color: #fff;
+            background: var(--wave-blue);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(74, 144, 217, 0.35);
+            transition: transform 0.12s ease, opacity 0.15s ease;
+        }
+
+        .handoff-submit:active {
+            transform: scale(0.98);
+        }
+
+        .handoff-submit[disabled] {
+            opacity: 0.75;
+            cursor: default;
+        }
+
+        .handoff-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: handoffSpin 0.7s linear infinite;
+        }
+
+        @keyframes handoffSpin {
+            to { transform: rotate(360deg); }
+        }
+
+        .handoff-msg {
+            margin: 8px 2px 0;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .handoff-msg:empty {
+            display: none;
+        }
+
+        .handoff-msg.error {
+            color: #ef4444;
+        }
+
+        .handoff-suggest {
+            padding: 0;
+            font: inherit;
+            font-weight: 600;
+            color: var(--wave-blue);
+            background: none;
+            border: none;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .handoff-micro {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0.3rem 0.5rem;
+            margin: 10px 0 0;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .handoff-micro svg {
+            display: block;
+        }
+
+        .handoff-alt {
+            display: block;
+            margin: 10px auto 0;
+            padding: 6px;
+            font: inherit;
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            background: none;
+            border: none;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .handoff-success {
+            text-align: center;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        .handoff-success-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 10px;
+            color: #22c55e;
+            background: rgba(34, 197, 94, 0.12);
+            border-radius: 50%;
+        }
+
+        .handoff-success-title {
+            margin: 0 0 4px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .handoff-success-sub {
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .handoff-success-sub strong {
+            color: var(--text-primary);
+            overflow-wrap: anywhere;
+        }
+
+        .handoff-sheet:has(.handoff-success) .handoff-sheet-title,
+        .handoff-sheet:has(.handoff-success) .handoff-sheet-sub {
+            display: none;
+        }
+
+        .handoff-sheet-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 10010;
+            background: rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .handoff-sheet-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .handoff-sheet {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10011;
+            padding: 12px 20px calc(22px + env(safe-area-inset-bottom));
+            background: var(--bg-primary);
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+            transform: translateY(110%);
+            transition: transform 0.25s ease;
+        }
+
+        .handoff-sheet.open {
+            transform: none;
+        }
+
+        .handoff-sheet-handle {
+            width: 40px;
+            height: 4px;
+            margin: 0 auto 14px;
+            background: var(--border-light);
+            border-radius: 2px;
+        }
+
+        [data-theme="dark"] .handoff-sheet-handle {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .handoff-sheet-close {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            font-size: 22px;
+            line-height: 36px;
+            color: var(--text-secondary);
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .handoff-sheet-title {
+            margin: 0 0 4px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--text-primary);
+        }
+
+        .handoff-sheet-sub {
+            margin: 0 0 16px;
+            font-size: 0.9rem;
+            line-height: 1.45;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .handoff-sticky {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            bottom: calc(12px + env(safe-area-inset-bottom));
+            z-index: 9000;
+            transform: translateY(160%);
+            transition: transform 0.25s ease;
+        }
+
+        .handoff-sticky.show {
+            transform: none;
+        }
+
+        .handoff-sticky .handoff-submit {
+            margin-top: 0;
+        }
+
         .cta-button {
             display: inline-flex;
             align-items: center;
@@ -6949,20 +7232,37 @@
                 return u.toString();
             }
 
-            function trackSendToComputer(method) {
+            function makeCueTransactionId() {
+                return (crypto.randomUUID
+                    ? crypto.randomUUID()
+                    : String(Date.now()) + Math.random().toString(36).slice(2));
+            }
+
+            // method = 'native_share' | 'copy' | 'email'. For 'email' the
+            // worker already sent the server-side halves (with the email hash)
+            // under ids.leadEventId / ids.gadsTxId, so the browser reuses
+            // those ids for dedupe.
+            function trackSendToComputer(method, ids) {
+                var isEmail = method === 'email' && ids;
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });
                     fbq('trackCustom', 'send_to_computer', { content_name: 'BeatCue Send to Computer', content_category: method });
+                    if (isEmail) fbq('track', 'Lead', { content_name: 'BeatCue Download Link Email' }, { eventID: ids.leadEventId });
                 }
                 if (typeof gtag === 'function') {
                     gtag('event', 'send_to_desktop', { method: method, platform: detectedDevice, source: 'landing_page_v2' });
                     if (GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO && !window.__cue_gads_send_to_desktop_fired) {
                         window.__cue_gads_send_to_desktop_fired = true;
-                        gtag('event', 'conversion', {
+                        if (isEmail && ids.googleEmailHash) {
+                            gtag('set', 'user_data', { sha256_email_address: ids.googleEmailHash });
+                        }
+                        var conversion = {
                             send_to: GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO,
                             value: 1.0,
                             currency: 'ILS'
-                        });
+                        };
+                        if (isEmail) conversion.transaction_id = ids.gadsTxId;
+                        gtag('event', 'conversion', conversion);
                     }
                 }
                 if (typeof posthog !== 'undefined' && posthog.capture) {
@@ -6979,74 +7279,428 @@
                 }).catch(function () {});
             }
 
-            function wireShareCta(btn, labelEl, iconEl) {
-                if (!btn) return;
-                var defaultText = 'Continue on Desktop';
-
-                if (!labelEl || labelEl === btn) {
-                    btn.innerHTML = '<span class="share-cta-icon" aria-hidden="true">' + SHARE_ICON_SVG + '</span><span class="share-cta-label">' + defaultText + '</span>';
-                    labelEl = btn.querySelector('.share-cta-label');
+            // Native share sheet, falling back to the clipboard. Secondary path
+            // under the email form for visitors who won't type an address.
+            function shareHandoffLink(btn) {
+                var defaultText = btn.textContent;
+                var url = buildDesktopHandoffUrl();
+                if (navigator.share) {
+                    navigator.share({ title: 'BeatCue', url: url })
+                        .then(function () { trackSendToComputer('native_share'); })
+                        .catch(function (err) {
+                            if (err && err.name === 'AbortError') return;
+                            copyHandoffLink(url, btn, defaultText);
+                        });
                 } else {
-                    if (iconEl) iconEl.innerHTML = SHARE_ICON_SVG;
-                    else {
-                        var iconSpan = document.createElement('span');
-                        iconSpan.className = 'share-cta-icon';
-                        iconSpan.setAttribute('aria-hidden', 'true');
-                        iconSpan.innerHTML = SHARE_ICON_SVG;
-                        btn.insertBefore(iconSpan, labelEl);
-                    }
-                    labelEl.textContent = defaultText;
+                    copyHandoffLink(url, btn, defaultText);
                 }
+            }
 
-                btn.removeAttribute('href');
-                btn.removeAttribute('target');
-                btn.style.cursor = 'pointer';
-                btn.style.display = 'inline-flex';
-                btn.style.alignItems = 'center';
-                btn.style.gap = '0.5rem';
-                btn.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    var url = buildDesktopHandoffUrl();
-                    if (navigator.share) {
-                        navigator.share({ title: 'BeatCue', url: url })
-                            .then(function () { trackSendToComputer('native_share'); })
-                            .catch(function (err) {
-                                if (err && err.name === 'AbortError') return;
-                                copyHandoffLink(url, labelEl, defaultText);
-                            });
-                    } else {
-                        copyHandoffLink(url, labelEl, defaultText);
+            // ---- Email hand-off: "email me the download link" -------------
+            var HANDOFF_SENT_KEY = 'cue_handoff_email_sent';
+            var HANDOFF_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+            var HANDOFF_CTA_LABEL = 'Email me the download link';
+            var COMMON_EMAIL_DOMAINS = [
+                'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+                'live.com', 'aol.com', 'me.com', 'msn.com', 'protonmail.com', 'proton.me', 'gmx.com'
+            ];
+            var CHECK_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            var MAIL_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
+            var handoffForms = [];
+            var handoffSheet = null;
+
+            function trackHandoff(event, props) {
+                if (typeof posthog === 'undefined' || !posthog.capture) return;
+                posthog.capture(event, Object.assign(
+                    {}, getBaseEventProps(), { device: detectedDevice, source: 'landing_page_v2' }, props || {}));
+            }
+
+            function getSentEmail() {
+                try { return localStorage.getItem(HANDOFF_SENT_KEY); } catch (e) { return null; }
+            }
+
+            function editDistance(a, b) {
+                var prev = [], i, j;
+                for (j = 0; j <= b.length; j++) prev[j] = j;
+                for (i = 1; i <= a.length; i++) {
+                    var cur = [i];
+                    for (j = 1; j <= b.length; j++) {
+                        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
+                            prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
                     }
+                    prev = cur;
+                }
+                return prev[b.length];
+            }
+
+            // "name@gmial.con" -> "name@gmail.com". Only offered, never applied.
+            function suggestEmail(email) {
+                var at = email.lastIndexOf('@');
+                if (at < 1) return null;
+                var domain = email.slice(at + 1);
+                if (COMMON_EMAIL_DOMAINS.indexOf(domain) !== -1) return null;
+                var best = null, bestDist = 3;
+                COMMON_EMAIL_DOMAINS.forEach(function (d) {
+                    var dist = editDistance(domain, d);
+                    if (dist < bestDist) { best = d; bestDist = dist; }
+                });
+                return best ? email.slice(0, at + 1) + best : null;
+            }
+
+            function postHandoffEmail(email, placement, ids) {
+                var g = getGoogleClickIds();
+                var bcid = window.__cue_bcid
+                    || (typeof getOrCreateBcid === 'function' ? getOrCreateBcid() : null);
+                return fetch(PAIRINGS_BASE + '/handoff/email', {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: email,
+                        bcid: bcid,
+                        fbclid: window.__cue_fbclid || null,
+                        gclid: g.gclid || null,
+                        gbraid: g.gbraid || null,
+                        wbraid: g.wbraid || null,
+                        utms: getUtmProps(),
+                        device: detectedDevice,
+                        placement: placement,
+                        page_version: window.CUE_PAGE_VERSION || null,
+                        fbp: getCookie('_fbp') || window.__cue_fbp || null,
+                        fbc: getCookie('_fbc') || window.__cue_fbc || null,
+                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
+                        event_source_url: window.location.href,
+                        lead_event_id: ids.leadEventId,
+                        gads_transaction_id: ids.gadsTxId
+                    })
+                }).then(function (res) {
+                    return res.json().catch(function () { return {}; }).then(function (data) {
+                        if (!res.ok || !data.ok) throw new Error(data.error || ('http_' + res.status));
+                        return data;
+                    });
                 });
             }
 
+            function renderHandoffSuccess(form) {
+                var email = getSentEmail() || '';
+                form.root.innerHTML =
+                    '<div class="handoff-success" role="status">' +
+                        '<div class="handoff-success-icon">' + CHECK_SVG + '</div>' +
+                        '<p class="handoff-success-title">Check your inbox</p>' +
+                        '<p class="handoff-success-sub">We sent the download link to <strong></strong>.<br>Open it on your Mac or PC to install BeatCue.</p>' +
+                        '<p class="handoff-msg">Not there? Check spam or Promotions.</p>' +
+                        '<button type="button" class="handoff-alt">Wrong email? Change it</button>' +
+                    '</div>';
+                form.root.querySelector('strong').textContent = email;
+                form.root.querySelector('.handoff-alt').addEventListener('click', function () {
+                    trackHandoff('handoff_email_change_clicked', { placement: form.placement });
+                    renderHandoffForm(form, email);
+                    form.root.querySelector('.handoff-input').focus();
+                });
+            }
+
+            // Same rule as adEmailAllowed() in the worker: no email hash for an
+            // explicit "no" (or GPC), and where the banner is required, none
+            // without a "yes". An unknown region counts as required.
+            function adEmailAllowed() {
+                var c = window.CueGoogleAds ? CueGoogleAds.consent() : null;
+                if (c === 'denied') return false;
+                var required = true;
+                try { required = sessionStorage.getItem('cue_consent_required') !== 'false'; } catch (e) {}
+                return !required || c === 'granted';
+            }
+
+            // sha256 hex of the email normalized per Google's enhanced
+            // conversions spec (mirrors googleEmailHash() in the worker).
+            function googleEmailHash(email) {
+                if (!window.crypto || !crypto.subtle) return Promise.resolve(null);
+                var e = email.replace(/\s+/g, '').toLowerCase();
+                var at = e.lastIndexOf('@');
+                var local = e.slice(0, at), domain = e.slice(at + 1);
+                if (domain === 'gmail.com' || domain === 'googlemail.com') {
+                    e = local.split('+')[0].replace(/\./g, '') + '@' + domain;
+                }
+                return crypto.subtle.digest('SHA-256', new TextEncoder().encode(e)).then(function (buf) {
+                    return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+                        return ('0' + b.toString(16)).slice(-2);
+                    }).join('');
+                }).catch(function () { return null; });
+            }
+
+            function onHandoffSent(email, placement, data, ids) {
+                try { localStorage.setItem(HANDOFF_SENT_KEY, email); } catch (e) {}
+                handoffForms.forEach(renderHandoffSuccess);
+                updateHandoffSticky();
+                // The worker counts one conversion per address; repeat sends
+                // skip the ad-platform halves so the Pixel / gtag don't add
+                // conversions the server deliberately withheld.
+                if (data.conversion) {
+                    (adEmailAllowed() ? googleEmailHash(email) : Promise.resolve(null)).then(function (hash) {
+                        ids.googleEmailHash = hash;
+                        trackSendToComputer('email', ids);
+                    });
+                }
+                trackHandoff('handoff_email_sent', {
+                    placement: placement,
+                    email_domain: email.split('@')[1],
+                    ad_conversion: !!data.conversion
+                });
+            }
+
+            function renderHandoffForm(form, prefill) {
+                var appleSmall = appleIconSvg.replace('width="18"', 'width="13"').replace('height="18"', 'height="13"');
+                var windowsSmall = windowsIconSvg.replace('width="18"', 'width="13"').replace('height="18"', 'height="13"');
+                form.root.innerHTML =
+                    (form.lead ? '<p class="handoff-lead">' + form.lead + '</p>' : '') +
+                    '<form novalidate>' +
+                        '<input class="handoff-input" type="email" name="email" inputmode="email" autocomplete="email" ' +
+                            'autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" ' +
+                            'placeholder="Your email address" aria-label="Your email address" required>' +
+                        '<button class="handoff-submit" type="submit">' + MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span></button>' +
+                        '<p class="handoff-msg" role="status" aria-live="polite"></p>' +
+                    '</form>' +
+                    '<p class="handoff-micro"><span>Free</span><span>\u00b7</span>' +
+                        '<span style="display:inline-flex;align-items:center;gap:0.25rem">' + appleSmall + ' macOS</span>' +
+                        '<span style="display:inline-flex;align-items:center;gap:0.25rem">' + windowsSmall + ' Windows</span>' +
+                        '<span>\u00b7</span><span>No spam</span></p>' +
+                    '<button type="button" class="handoff-alt">Or share the link another way</button>';
+
+                var formEl = form.root.querySelector('form');
+                var input = form.root.querySelector('.handoff-input');
+                var submit = form.root.querySelector('.handoff-submit');
+                var msg = form.root.querySelector('.handoff-msg');
+                var suggested = null;
+                var warnedFor = null;
+                if (prefill) input.value = prefill;
+
+                function setMessage(text, isError) {
+                    msg.className = 'handoff-msg' + (isError ? ' error' : '');
+                    msg.textContent = text || '';
+                }
+
+                function offerSuggestion(value) {
+                    suggested = suggestEmail(value);
+                    if (!suggested) return false;
+                    msg.className = 'handoff-msg';
+                    msg.textContent = 'Did you mean ';
+                    var fix = document.createElement('button');
+                    fix.type = 'button';
+                    fix.className = 'handoff-suggest';
+                    fix.textContent = suggested;
+                    fix.addEventListener('click', function () {
+                        input.value = suggested;
+                        setMessage('');
+                        trackHandoff('handoff_email_typo_fixed', { placement: form.placement });
+                        input.focus();
+                    });
+                    msg.appendChild(fix);
+                    msg.appendChild(document.createTextNode('?'));
+                    return true;
+                }
+
+                input.addEventListener('focus', function () {
+                    if (form.started) return;
+                    form.started = true;
+                    trackHandoff('handoff_email_started', { placement: form.placement });
+                });
+                input.addEventListener('input', function () {
+                    input.classList.remove('invalid');
+                    if (msg.classList.contains('error')) setMessage('');
+                });
+                input.addEventListener('blur', function () {
+                    var v = input.value.trim().toLowerCase();
+                    if (HANDOFF_EMAIL_RE.test(v)) offerSuggestion(v);
+                });
+
+                formEl.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    if (submit.disabled) return;
+                    var email = input.value.trim().toLowerCase();
+                    if (!HANDOFF_EMAIL_RE.test(email)) {
+                        input.classList.add('invalid');
+                        setMessage(email ? 'That email doesn\u2019t look right. Mind checking it?' : 'Enter your email and we\u2019ll send the link.', true);
+                        trackHandoff('handoff_email_invalid', { placement: form.placement, empty: !email });
+                        input.focus();
+                        return;
+                    }
+                    // A likely typo holds the first send so the suggestion can
+                    // be seen; sending again keeps the address as typed.
+                    if (suggestEmail(email) && warnedFor !== email) {
+                        warnedFor = email;
+                        offerSuggestion(email);
+                        msg.appendChild(document.createTextNode(' Or tap send again to keep yours.'));
+                        trackHandoff('handoff_email_typo_warned', { placement: form.placement });
+                        return;
+                    }
+                    trackHandoff('handoff_email_submitted', {
+                        placement: form.placement,
+                        email_domain: email.split('@')[1],
+                        typo_suggested: !!suggestEmail(email)
+                    });
+                    submit.disabled = true;
+                    submit.innerHTML = '<span class="handoff-spinner" aria-hidden="true"></span><span>Sending\u2026</span>';
+                    input.blur();
+                    var conversionIds = { leadEventId: makeCueTransactionId(), gadsTxId: makeCueTransactionId() };
+                    postHandoffEmail(email, form.placement, conversionIds).then(function (data) {
+                        onHandoffSent(email, form.placement, data, conversionIds);
+                    }).catch(function (err) {
+                        var reason = (err && err.message) || 'network_error';
+                        trackHandoff('handoff_email_failed', { placement: form.placement, error: reason });
+                        submit.disabled = false;
+                        submit.innerHTML = MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span>';
+                        if (reason === 'invalid_email') {
+                            input.classList.add('invalid');
+                            setMessage('That email doesn\u2019t look right. Mind checking it?', true);
+                        } else if (reason === 'rate_limited') {
+                            setMessage('Too many tries. Wait a few minutes, or share the link below.', true);
+                        } else {
+                            setMessage('Couldn\u2019t send right now. Try again, or share the link below.', true);
+                        }
+                    });
+                });
+
+                form.root.querySelector('.handoff-alt').addEventListener('click', function (e) {
+                    trackHandoff('handoff_share_fallback_clicked', { placement: form.placement });
+                    shareHandoffLink(e.currentTarget);
+                });
+            }
+
+            function createHandoffForm(container, placement, lead) {
+                var form = { root: document.createElement('div'), placement: placement, lead: lead, started: false };
+                form.root.className = 'handoff-form';
+                container.appendChild(form.root);
+                handoffForms.push(form);
+                if (getSentEmail()) renderHandoffSuccess(form);
+                else renderHandoffForm(form);
+                return form;
+            }
+
+            function getHandoffSheet() {
+                if (handoffSheet) return handoffSheet;
+                var backdrop = document.createElement('div');
+                backdrop.className = 'handoff-sheet-backdrop';
+                var sheet = document.createElement('div');
+                sheet.className = 'handoff-sheet';
+                sheet.setAttribute('role', 'dialog');
+                sheet.setAttribute('aria-modal', 'true');
+                sheet.setAttribute('aria-label', 'Get BeatCue on your computer');
+                sheet.innerHTML =
+                    '<div class="handoff-sheet-handle"></div>' +
+                    '<button type="button" class="handoff-sheet-close" aria-label="Close">\u00d7</button>' +
+                    '<p class="handoff-sheet-title">Get BeatCue on your computer</p>' +
+                    '<p class="handoff-sheet-sub">BeatCue is a desktop app. We\u2019ll email you the free download link so you can install it on your Mac or PC.</p>';
+                document.body.appendChild(backdrop);
+                document.body.appendChild(sheet);
+                var form = createHandoffForm(sheet, 'sheet');
+
+                // Keep the sheet above the on-screen keyboard (iOS Safari
+                // doesn't shrink the layout viewport for it).
+                if (window.visualViewport) {
+                    var vv = window.visualViewport;
+                    var fit = function () {
+                        sheet.style.bottom = Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 'px';
+                    };
+                    vv.addEventListener('resize', fit);
+                    vv.addEventListener('scroll', fit);
+                }
+
+                function close() {
+                    sheet.classList.remove('open');
+                    backdrop.classList.remove('open');
+                    var input = sheet.querySelector('.handoff-input');
+                    if (input) input.blur();
+                    updateHandoffSticky();
+                }
+                backdrop.addEventListener('click', close);
+                sheet.querySelector('.handoff-sheet-close').addEventListener('click', close);
+
+                handoffSheet = { el: sheet, backdrop: backdrop, form: form, close: close };
+                return handoffSheet;
+            }
+
+            function openHandoffSheet(trigger) {
+                var s = getHandoffSheet();
+                s.form.placement = 'sheet_' + trigger;
+                s.el.classList.add('open');
+                s.backdrop.classList.add('open');
+                updateHandoffSticky();
+                trackHandoff('handoff_email_sheet_opened', { trigger: trigger });
+                // Focus inside the tap handler: iOS only raises the keyboard
+                // for focus() calls made during a user gesture.
+                var input = s.el.querySelector('.handoff-input');
+                if (input) input.focus({ preventScroll: true });
+            }
+
+            var heroHandoffForm = null;
+            var handoffStickyEl = null;
+
+            function updateHandoffSticky() {
+                if (!handoffStickyEl || !heroHandoffForm) return;
+                var heroRect = heroHandoffForm.root.getBoundingClientRect();
+                var banner = document.getElementById('cookieConsentBanner');
+                var bannerVisible = banner && !banner.classList.contains('cookie-banner--hidden');
+                var sheetOpen = handoffSheet && handoffSheet.el.classList.contains('open');
+                var show = heroRect.bottom < 0 && !getSentEmail() && !bannerVisible && !sheetOpen;
+                handoffStickyEl.classList.toggle('show', show);
+            }
+
             function setupMobileHandoffCtas() {
-                var subtitle = 'Send the link to yourself and download it on your editing computer.';
-                var appleSmall = appleIconSvg.replace('width="18"', 'width="14"').replace('height="18"', 'height="14"');
-                var windowsSmall = windowsIconSvg.replace('width="18"', 'width="14"').replace('height="18"', 'height="14"');
-                var supportHtml =
-                    '<span class="mobile-handoff-platform"><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin</span>' +
-                    '<span class="mobile-handoff-sep">\u00b7</span>' +
-                    '<span class="mobile-handoff-platform">' + appleSmall + ' macOS</span>' +
-                    '<span class="mobile-handoff-sep">\u00b7</span>' +
-                    '<span class="mobile-handoff-platform">' + windowsSmall + ' Windows</span>';
-                var noteHtml =
-                    '<span class="mobile-handoff-sub">' + subtitle + '</span>' +
-                    '<span class="mobile-handoff-platforms">' + supportHtml + '</span>';
-                wireShareCta(
-                    heroDownloadBtn,
-                    document.getElementById('heroDownloadLabel') || heroDownloadBtn,
-                    document.getElementById('heroDownloadIcon')
-                );
-                wireShareCta(pricingDownloadBtn, pricingDownloadBtn);
-                sectionDownloadBtns.forEach(function (btn) {
-                    wireShareCta(btn, btn);
+                // Hero: the email field itself is the CTA, no extra tap.
+                var heroCtas = heroDownloadBtn && heroDownloadBtn.parentElement;
+                if (heroCtas) {
+                    heroCtas.innerHTML = '';
+                    heroCtas.style.display = 'block';
+                    heroCtas.style.width = '100%';
+                    var onDevice = /phone/.test(detectedDevice) ? 'On your phone? '
+                        : /ipad|tablet/.test(detectedDevice) ? 'On a tablet? ' : '';
+                    heroHandoffForm = createHandoffForm(heroCtas, 'hero',
+                        onDevice + 'We\u2019ll email you the link for your Mac or PC.');
+                    if (heroNote) heroNote.style.display = 'none';
+                    trackHandoff('handoff_email_form_viewed', { placement: 'hero', already_sent: !!getSentEmail() });
+                }
+
+                // Other CTAs open the same form in a bottom sheet.
+                [
+                    [pricingDownloadBtn, 'pricing'],
+                    [beforeAfterDownloadBtn, 'before_after'],
+                    [document.getElementById('manifestoDownloadBtn'), 'manifesto'],
+                    [document.getElementById('premiereDownloadBtn'), 'premiere']
+                ].forEach(function (pair) {
+                    var btn = pair[0];
+                    if (!btn) return;
+                    btn.removeAttribute('href');
+                    btn.removeAttribute('target');
+                    btn.style.cursor = 'pointer';
+                    btn.style.display = 'inline-flex';
+                    btn.style.alignItems = 'center';
+                    btn.style.gap = '0.5rem';
+                    btn.innerHTML = MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span>';
+                    btn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        openHandoffSheet(pair[1]);
+                    });
                 });
-                if (heroNote) heroNote.innerHTML = noteHtml;
-                if (pricingNote) pricingNote.innerHTML = noteHtml;
+                var handoffNote = 'Free \u00b7 We\u2019ll email you the link for your Mac or PC';
+                if (pricingNote) pricingNote.textContent = handoffNote;
                 document.querySelectorAll('.ba-cta-sub, .section-cta-sub').forEach(function (el) {
-                    el.innerHTML = noteHtml;
+                    el.textContent = handoffNote;
                 });
+
+                // Sticky CTA once the hero form has scrolled away.
+                handoffStickyEl = document.createElement('div');
+                handoffStickyEl.className = 'handoff-sticky';
+                handoffStickyEl.innerHTML = '<button type="button" class="handoff-submit">' + MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span></button>';
+                handoffStickyEl.querySelector('button').addEventListener('click', function () {
+                    openHandoffSheet('sticky');
+                });
+                document.body.appendChild(handoffStickyEl);
+                var stickyQueued = false;
+                window.addEventListener('scroll', function () {
+                    if (stickyQueued) return;
+                    stickyQueued = true;
+                    requestAnimationFrame(function () { stickyQueued = false; updateHandoffSticky(); });
+                }, { passive: true });
             }
 
             function formatHeroInstallNote(platformSuffix) {
