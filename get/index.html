@@ -25,8 +25,9 @@
         // Legacy entry point. Older shipped app builds (and any old ad/email
         // links) open beatcue.app/get. Instead of dropping straight into a
         // single LemonSqueezy product, forward to the /plans chooser so the
-        // buyer picks Pro or Lifetime. Query params (email, bcid, click-ids)
-        // are carried through untouched; /plans maps them onto checkout links.
+        // buyer picks Pro or Lifetime. Query params (email, aid, bcid,
+        // click-ids) are carried through untouched; /plans maps them onto
+        // checkout links.
         const PLANS_URL = '/plans';
         const POSTHOG_API_KEY  = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
@@ -77,7 +78,8 @@
                 body: JSON.stringify({
                     api_key: POSTHOG_API_KEY,
                     event: 'get_redirect_to_plans',
-                    distinct_id: bcid || ('anon_get_' + Date.now()),
+                    distinct_id: (/^acct_[0-9a-f]{32}$/.test(params.get('aid') || '') ? params.get('aid') : null)
+                        || bcid || ('anon_get_' + Date.now()),
                     timestamp: new Date().toISOString(),
                     properties: {
                         $lib: 'web-get',

@@ -25,3 +25,6 @@ node_modules/
 *.backup
 *~
 
+
+# Identity backfill plans (contain hashed identifiers)
+webhook-worker/identity_backfill*.csv

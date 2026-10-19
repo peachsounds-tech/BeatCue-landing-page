@@ -399,7 +399,7 @@ async function handleWebhook(request, env) {
         if (eventName === 'order_created') {
             await handleOrderCreated(data, env);
         } else if (eventName === 'subscription_created') {
-            await handleSubscriptionCreated(data);
+            await handleSubscriptionCreated(data, env);
         } else if (eventName === 'license_key_created') {
             await handleLicenseKeyCreated(data, env);
         }
@@ -413,56 +413,9 @@ async function handleWebhook(request, env) {
 }
 
 /**
- * Create alias to link anonymous user to identified user using PostHog's $create_alias
- * This links oldAnonymousId to newIdentifiedId (hashed email)
- */
-async function mergeUsers(oldAnonymousId, newIdentifiedId) {
-    if (!oldAnonymousId || !newIdentifiedId) {
-        console.log('Cannot merge: missing oldAnonymousId or newIdentifiedId');
-        return false;
-    }
-    
-    // Don't merge if they're the same
-    if (oldAnonymousId === newIdentifiedId) {
-        console.log('Skipping merge: IDs are the same');
-        return false;
-    }
-    
-    console.log('Creating alias:', { oldAnonymousId, newIdentifiedId });
-    
-    // Use $create_alias to link the anonymous ID to the identified user
-    // distinct_id = hashed email (the primary identity)
-    // alias = anonymous UUID (gets linked to primary)
-    const response = await fetch(`${POSTHOG_HOST}/batch/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            api_key: POSTHOG_API_KEY,
-            batch: [
-                {
-                    event: '$create_alias',
-                    properties: {
-                        distinct_id: newIdentifiedId,
-                        alias: oldAnonymousId,
-                        $lib: 'cloudflare-worker'
-                    },
-                    timestamp: new Date().toISOString()
-                }
-            ]
-        })
-    });
-    
-    const responseText = await response.text();
-    console.log('Alias response status:', response.status, 'body:', responseText);
-    return response.ok;
-}
-
-/**
  * Pull the bcid out of wherever Lemon Squeezy put the checkout custom data.
- * Returns null when the checkout carried no identity, in which case callers fall
- * back to the hashed email and the order has to be merged in afterwards.
+ * Returns null when the checkout carried no identity; the order still resolves
+ * through the buyer's email.
  */
 function extractBcid(data) {
     const attrs = data.data?.attributes;
@@ -470,6 +423,16 @@ function extractBcid(data) {
         || attrs?.custom_data?.bcid
         || attrs?.first_order_item?.custom_data?.bcid
         || null;
+}
+
+/** Identity nodes for an id a checkout carried. Older app builds put their
+ *  `hw_` seed in the bcid field, and posthog_id can be any distinct_id. */
+function checkoutIdNodes(value) {
+    if (typeof value !== 'string' || !value) return [];
+    if (BCID_RE.test(value)) return [{ kind: 'bcid', value }];
+    if (IDENTITY_NODE_RULES.hw.re.test(value)) return [{ kind: 'hw', value }];
+    if (ACCOUNT_ID_RE.test(value)) return [];
+    return [{ kind: 'ph_distinct', value }];
 }
 
 /**
@@ -533,10 +496,9 @@ async function handleOrderCreated(data, env) {
         || firstOrderItemCustomData.posthog_id 
         || null;
     
-    // The bcid is the identity the plugin and the landing page both already key
-    // on. When the checkout carried one we can record the order straight onto
-    // that person, which removes the merge step instead of capturing against a
-    // hashed email and depending on a later $create_alias landing.
+    // The bcid is the id the plugin and the landing page both key on. Along
+    // with the email hash and any account_id the checkout carried, it resolves
+    // the order to one account in the identity graph.
     const bcid = extractBcid(data);
     const reg = extractReg(data);
     const source = extractCustom(data, 'source');
@@ -546,35 +508,30 @@ async function handleOrderCreated(data, env) {
     const freeRegistration = tier === 'free' || !!reg || source === 'registration_gate';
     const registration = freeRegistration ? await registrationContext(env, reg) : null;
 
-    // Who the order gets recorded against. A registration's stored bcid is the
-    // person the app already reports as, so the checkout lands on that person
-    // even when the checkout link dropped the bcid.
-    const distinctId = (registration && registration.bcid) || bcid || hashedEmail;
+    // Who the order gets recorded against: the buyer's identity account. The
+    // email alone anchors one, so an order that lost every id from the
+    // checkout link still lands on the right person once the app activates the
+    // key with the same email.
+    const accountHint = extractCustom(data, 'account_id');
+    const nodes = [
+        { kind: 'email_hash', value: hashedEmail },
+        ...checkoutIdNodes(bcid),
+        ...checkoutIdNodes(registration && registration.bcid),
+        ...checkoutIdNodes(posthogId),
+    ];
+    if (registration && registration.device_id) nodes.push({ kind: 'device', value: registration.device_id });
+    const accountId = await identityLink(env, null, nodes, 'checkout', { accountId: accountHint });
+    const distinctId = accountId || (registration && registration.bcid) || bcid || hashedEmail;
+
+    console.log(JSON.stringify({
+        evt: 'order_identity',
+        had_account_hint: !!accountHint,
+        had_bcid: !!bcid,
+        had_posthog_id: !!posthogId,
+        resolved: !!accountId,
+    }));
     
-    console.log('=== Extracted Values ===');
-    console.log('hashedEmail:', hashedEmail);
-    console.log('posthogId:', posthogId);
-    console.log('bcid:', bcid);
-    console.log('recording order against:', distinctId);
-    
-    // Step 1: Merge only when we fell back to the hashed email. A bcid means the
-    // events already land on the buyer and there is nothing to reconcile.
-    if (bcid) {
-        console.log('bcid present - attributing directly, no merge required');
-    } else if (posthogId && posthogId !== hashedEmail) {
-        console.log('Merging users: connecting OLD anonymous ID to NEW hashed email...');
-        console.log(`  OLD (anonymous): ${posthogId}`);
-        console.log(`  NEW (identified): ${hashedEmail}`);
-        
-        // Use the proper $identify event to merge users
-        const mergeSuccess = await mergeUsers(posthogId, hashedEmail);
-        console.log('Merge result:', mergeSuccess ? 'SUCCESS' : 'FAILED');
-        
-    } else if (!posthogId) {
-        console.log('No bcid or posthog_id in any custom_data location - cannot merge');
-    }
-    
-    // Step 2: Send checkout_completed event (using hashed email as distinct_id)
+    // Send checkout_completed under the account
     const properties = {
         order_id: data.data?.id,
         order_number: order?.order_number,
@@ -587,11 +544,13 @@ async function handleOrderCreated(data, env) {
         anonymous_posthog_id: posthogId,
         // Include hashed email for verification
         hashed_email: hashedEmail,
-        // Which identity the order was attributed to, so a bcid-less order is
-        // visible as such rather than silently looking the same as a good one.
+        // Which identity the order was attributed to, so an order that arrived
+        // with no ids is visible as such rather than looking like a good one.
         bcid: (registration && registration.bcid) || bcid,
-        attributed_via: (registration && registration.bcid) || bcid
-            ? 'bcid' : (posthogId ? 'posthog_id_merge' : 'hashed_email_only')
+        account_id: accountId,
+        attributed_via: accountHint ? 'account_id'
+            : (registration && registration.bcid) || bcid ? 'bcid'
+            : posthogId ? 'posthog_id' : 'hashed_email_only'
     };
 
     // Free registration gets its own event, carrying the registration it belongs
@@ -661,7 +620,7 @@ async function handleOrderCreated(data, env) {
 /**
  * Handle subscription_created event
  */
-async function handleSubscriptionCreated(data) {
+async function handleSubscriptionCreated(data, env) {
     const subscription = data.data?.attributes;
     const email = subscription?.user_email;
     
@@ -669,6 +628,9 @@ async function handleSubscriptionCreated(data) {
     
     const hashedEmail = await hashEmail(email);
     const bcid = extractBcid(data);
+    const accountId = await identityLink(env, null,
+        [{ kind: 'email_hash', value: hashedEmail }, ...checkoutIdNodes(bcid)],
+        'checkout', { accountId: extractCustom(data, 'account_id') });
     
     const properties = {
         subscription_id: data.data?.id,
@@ -676,10 +638,11 @@ async function handleSubscriptionCreated(data) {
         product_name: subscription?.product_name,
         variant_name: subscription?.variant_name,
         hashed_email: hashedEmail,
-        bcid: bcid
+        bcid: bcid,
+        account_id: accountId
     };
     
-    await sendToPostHog('subscription_created', bcid || hashedEmail, properties);
+    await sendToPostHog('subscription_created', accountId || bcid || hashedEmail, properties);
 }
 
 /** Forward a paid Lemon Squeezy order to Meta as a standard `Purchase`.
@@ -904,7 +867,408 @@ async function handleLicenseKeyCreated(data, env) {
         properties.source = 'registration_gate';
     }
 
-    await sendToPostHog(keyEvent, registrationBcid || bcid || hashedEmail, properties);
+    const nodes = [
+        { kind: 'email_hash', value: hashedEmail },
+        ...checkoutIdNodes(bcid),
+        ...checkoutIdNodes(registrationBcid),
+    ];
+    if (registrationDeviceId) nodes.push({ kind: 'device', value: registrationDeviceId });
+    if (license?.key) nodes.push({ kind: 'license', value: await sha256LowerHex(license.key) });
+    const accountId = await identityLink(env, null, nodes, 'checkout',
+                                         { accountId: extractCustom(data, 'account_id') });
+    properties.account_id = accountId;
+
+    await sendToPostHog(keyEvent, accountId || registrationBcid || bcid || hashedEmail, properties);
+}
+
+// ─── Identity graph ───────────────────────────────────────────────────────────
+//
+// Every surface (download page, desktop app, Premiere panel, Lemon Squeezy)
+// reports the identifiers it holds; this section decides which account they
+// belong to. See migrations/0007_identity.sql for the model.
+//
+// The rules that keep PostHog clean:
+//   • `acct_<hex>` is the only distinct_id any client ever identifies as.
+//   • Clients never alias or identify with any other id. Merging the anonymous
+//     ids into the account person is done here, with $merge_dangerously, which
+//     PostHog accepts whether or not the alias person was already identified.
+//   • Two accounts proven to be one person merge into the older one, once,
+//     recorded in identity_merges.
+
+const ACCOUNT_ID_RE = /^acct_[0-9a-f]{32}$/;
+const IDENTITY_MAX_BODY_BYTES = 4 * 1024;
+const IDENTITY_MAX_NODES = 24;
+const IDENTITY_MAX_HOPS = 16;
+
+/** `posthog`: the value has been (or may be) used as a PostHog distinct_id, so
+ *  its person must be folded into the account's.
+ *  `anchor`: a durable identifier that may mint an account on first sight. A
+ *  web bcid on its own may not — most visitors never install, and an account
+ *  is only worth having once something can be tied to it. */
+const IDENTITY_NODE_RULES = {
+    bcid:        { re: BCID_RE,                          posthog: true,  anchor: false },
+    hw:          { re: /^hw_[0-9a-f]{16}$/,              posthog: true,  anchor: true  },
+    device:      { re: QUOTA_ID_RE,                      posthog: false, anchor: true  },
+    install:     { re: BCID_RE,                          posthog: false, anchor: false },
+    panel:       { re: /^panel_[A-Za-z0-9_-]{4,96}$/,    posthog: true,  anchor: false },
+    email_hash:  { re: QUOTA_ID_RE,                      posthog: true,  anchor: true  },
+    license:     { re: QUOTA_ID_RE,                      posthog: false, anchor: true  },
+    store_cid:   { re: /^[A-Za-z0-9_.:~-]{1,200}$/,      posthog: false, anchor: false },
+    ph_distinct: { re: /^[A-Za-z0-9_.:@~-]{1,200}$/,     posthog: true,  anchor: false },
+};
+
+const IDENTITY_EVIDENCE = new Set([
+    'device', 'store_cid', 'ip_asn', 'url_handoff', 'checkout', 'email',
+    'email_handoff', 'license', 'quota', 'install', 'panel_bridge', 'backfill',
+    'client',
+]);
+
+function identityEvidence(v) {
+    const s = typeof v === 'string' ? v.trim() : '';
+    return IDENTITY_EVIDENCE.has(s) ? s : 'client';
+}
+
+/** Validated, de-duplicated nodes. A device id always brings its `hw_` seed
+ *  along: the app derives one from the other, so the server can too. */
+function identityNormalizeNodes(raw) {
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set();
+    const out = [];
+    const push = (kind, value) => {
+        const key = kind + ':' + value;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({ kind, value });
+    };
+    for (const n of raw.slice(0, IDENTITY_MAX_NODES)) {
+        if (!n || typeof n !== 'object') continue;
+        const rule = IDENTITY_NODE_RULES[n.kind];
+        if (!rule) continue;
+        const value = clampString(n.value, 200);
+        if (!value || !rule.re.test(value)) continue;
+        push(n.kind, value);
+        if (n.kind === 'device') push('hw', 'hw_' + value.slice(0, 16));
+    }
+    return out;
+}
+
+function mintAccountId() {
+    const raw = new Uint8Array(16);
+    crypto.getRandomValues(raw);
+    return 'acct_' + [...raw].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Live root of an account, compressing the path behind it. Null when the
+ *  account does not exist. */
+async function identityRoot(db, accountId) {
+    const chain = [];
+    let cur = accountId;
+    for (let i = 0; i < IDENTITY_MAX_HOPS; i++) {
+        const row = await db.prepare(
+            `SELECT merged_into FROM accounts WHERE account_id = ?1`
+        ).bind(cur).first();
+        if (!row) return chain.length ? cur : null;
+        if (!row.merged_into) break;
+        chain.push(cur);
+        cur = row.merged_into;
+    }
+    if (chain.length > 1) {
+        for (const a of chain) {
+            await db.prepare(
+                `UPDATE accounts SET merged_into = ?2 WHERE account_id = ?1`
+            ).bind(a, cur).run();
+        }
+    }
+    return cur;
+}
+
+/** Merge live roots into the oldest. Deterministic, so two workers racing on
+ *  the same evidence pick the same winner. */
+async function identityMergeAccounts(db, roots, evidence, nowMs) {
+    const rows = [];
+    for (const r of roots) {
+        const row = await db.prepare(
+            `SELECT account_id, created_at FROM accounts WHERE account_id = ?1`
+        ).bind(r).first();
+        if (row) rows.push({ id: row.account_id, at: Number(row.created_at) });
+    }
+    rows.sort((a, b) => (a.at - b.at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const winner = rows[0].id;
+    const losers = rows.slice(1).map(r => r.id);
+    for (const loser of losers) {
+        await db.prepare(
+            `UPDATE accounts SET merged_into = ?2 WHERE account_id = ?1 AND merged_into IS NULL`
+        ).bind(loser, winner).run();
+        await db.prepare(
+            `INSERT INTO identity_merges (loser, winner, evidence, ph_linked, at)
+             VALUES (?1, ?2, ?3, 0, ?4)
+             ON CONFLICT(loser) DO NOTHING`
+        ).bind(loser, winner, evidence, nowMs).run();
+        await db.prepare(
+            `UPDATE identity_nodes SET account_id = ?2 WHERE account_id = ?1`
+        ).bind(loser, winner).run();
+    }
+    return { winner, losers };
+}
+
+/**
+ * Attach nodes to their account, minting or merging as the evidence demands.
+ *
+ *   accountId — an account the caller already holds (app cache, `?aid=`,
+ *               checkout custom data). Treated as one more node.
+ *
+ * Returns `{ accountId, created, mergedFrom }`, or null when nothing here can
+ * anchor an account (an unlinked web visitor).
+ */
+async function identityResolve(db, rawNodes, evidence, opts = {}) {
+    const nowMs = opts.nowMs || Date.now();
+    const nodes = identityNormalizeNodes(rawNodes);
+    const hint = typeof opts.accountId === 'string' && ACCOUNT_ID_RE.test(opts.accountId)
+        ? opts.accountId : null;
+    if (!nodes.length && !hint) return null;
+
+    const collectRoots = async () => {
+        const roots = new Set();
+        if (hint) {
+            const r = await identityRoot(db, hint);
+            if (r) roots.add(r);
+        }
+        for (const n of nodes) {
+            const row = await db.prepare(
+                `SELECT account_id FROM identity_nodes WHERE kind = ?1 AND value = ?2`
+            ).bind(n.kind, n.value).first();
+            if (!row) continue;
+            const r = await identityRoot(db, row.account_id);
+            if (r) roots.add(r);
+        }
+        return [...roots];
+    };
+
+    const mergedFrom = [];
+    let roots = await collectRoots();
+    let minted = null;
+    let accountId;
+
+    if (!roots.length) {
+        if (!nodes.some(n => IDENTITY_NODE_RULES[n.kind].anchor)) return null;
+        minted = mintAccountId();
+        await db.prepare(
+            `INSERT INTO accounts (account_id, merged_into, created_at) VALUES (?1, NULL, ?2)`
+        ).bind(minted, nowMs).run();
+        accountId = minted;
+    } else if (roots.length === 1) {
+        accountId = roots[0];
+    } else {
+        const m = await identityMergeAccounts(db, roots, evidence, nowMs);
+        accountId = m.winner;
+        mergedFrom.push(...m.losers);
+    }
+
+    for (const n of nodes) {
+        await db.prepare(
+            `INSERT INTO identity_nodes (kind, value, account_id, evidence, ph_linked, created_at)
+             VALUES (?1, ?2, ?3, ?4, 0, ?5)
+             ON CONFLICT(kind, value) DO NOTHING`
+        ).bind(n.kind, n.value, accountId, evidence, nowMs).run();
+    }
+
+    // D1 has no transaction here: a concurrent resolve can claim one of these
+    // nodes for another account between our read and our insert. Re-reading
+    // turns that race into an ordinary merge instead of a silent split.
+    roots = await collectRoots();
+    if (roots.length > 1) {
+        const m = await identityMergeAccounts(db, roots, evidence, nowMs);
+        accountId = m.winner;
+        mergedFrom.push(...m.losers);
+    } else if (roots.length === 1) {
+        accountId = roots[0];
+    }
+
+    return { accountId, created: minted !== null && minted === accountId, mergedFrom };
+}
+
+/** Fold anonymous ids (and merged-away accounts) into the account's PostHog
+ *  person. Idempotent; anything that fails stays pending for the next resolve. */
+async function identityFlushPostHog(db, accountId) {
+    const pending = (await db.prepare(
+        `SELECT kind, value FROM identity_nodes WHERE account_id = ?1 AND ph_linked = 0`
+    ).bind(accountId).all()).results || [];
+    const merges = (await db.prepare(
+        `SELECT loser FROM identity_merges WHERE winner = ?1 AND ph_linked = 0`
+    ).bind(accountId).all()).results || [];
+
+    const aliases = [];
+    for (const p of pending) {
+        if (IDENTITY_NODE_RULES[p.kind]?.posthog && p.value !== accountId) aliases.push(p.value);
+    }
+    for (const m of merges) aliases.push(m.loser);
+
+    if (aliases.length && !(await posthogMergeInto(accountId, aliases))) return false;
+
+    for (const p of pending) {
+        await db.prepare(
+            `UPDATE identity_nodes SET ph_linked = 1 WHERE kind = ?1 AND value = ?2`
+        ).bind(p.kind, p.value).run();
+    }
+    for (const m of merges) {
+        await db.prepare(
+            `UPDATE identity_merges SET ph_linked = 1 WHERE loser = ?1`
+        ).bind(m.loser).run();
+    }
+    return true;
+}
+
+async function posthogMergeInto(accountId, aliases) {
+    const timestamp = new Date().toISOString();
+    try {
+        const response = await fetch(`${POSTHOG_HOST}/batch/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_key: POSTHOG_API_KEY,
+                batch: aliases.map(alias => ({
+                    event: '$merge_dangerously',
+                    distinct_id: accountId,
+                    properties: { alias, $lib: 'cloudflare-worker' },
+                    timestamp,
+                })),
+            }),
+        });
+        return response.ok;
+    } catch (e) {
+        console.log(JSON.stringify({ evt: 'identity_posthog_merge_failed', error: String(e && e.message || e) }));
+        return false;
+    }
+}
+
+/**
+ * The one entry point every route uses. Never throws: identity is bookkeeping
+ * and must not fail a quota claim or a webhook. Returns the account id or null.
+ */
+async function identityLink(env, ctx, nodes, evidence, opts = {}) {
+    const db = env && env.QUOTA_DB;
+    if (!db) return null;
+    const ev = identityEvidence(evidence);
+    let result;
+    try {
+        result = await identityResolve(db, nodes, ev, opts);
+    } catch (e) {
+        console.log(JSON.stringify({ evt: 'identity_resolve_error', evidence: ev, error: String(e && e.message || e) }));
+        return null;
+    }
+    if (!result) return null;
+
+    const followUp = (async () => {
+        if (result.mergedFrom.length) {
+            console.log(JSON.stringify({ evt: 'identity_accounts_merged', evidence: ev, merged: result.mergedFrom.length }));
+            await sendToPostHog('identity_accounts_merged', result.accountId, {
+                merged_from: result.mergedFrom,
+                evidence: ev,
+            });
+        }
+        await identityFlushPostHog(db, result.accountId);
+    })().catch(e => {
+        console.log(JSON.stringify({ evt: 'identity_followup_error', error: String(e && e.message || e) }));
+    });
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(followUp);
+    else await followUp;
+
+    return result.accountId;
+}
+
+/** Nodes describing an install, as every device-keyed route knows it. */
+function deviceNodes(deviceId, bcid) {
+    const nodes = [{ kind: 'device', value: deviceId }];
+    if (bcid) nodes.push({ kind: 'bcid', value: bcid });
+    return nodes;
+}
+
+/**
+ * POST /identity/resolve
+ *   { account_id?, nodes: [{ kind, value }], evidence?, client? }
+ *   → { ok, account_id | null }
+ *
+ * Called by the desktop app on every launch and whenever it learns a new id,
+ * by the download page on an `?aid=` hand-off, and by the Premiere panel's
+ * host app on its behalf. A null account means nothing here could anchor one
+ * yet; the caller keeps its anonymous id and asks again later.
+ */
+async function handleIdentity(request, env, ctx) {
+    const origin = request.headers.get('origin') || '';
+    const cors = pairingsCorsHeaders(origin);
+
+    if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: cors });
+    }
+    if (request.method !== 'POST') {
+        return quotaJson({ ok: false, error: 'method_not_allowed' }, 405, cors);
+    }
+    if (origin && !PAIRINGS_ALLOWED_ORIGINS.has(origin)) {
+        return quotaJson({ ok: false, error: 'forbidden_origin' }, 403, cors);
+    }
+    if (!env.QUOTA_DB) {
+        return quotaJson({ ok: false, error: 'db_unavailable' }, 503, cors);
+    }
+
+    let body;
+    try {
+        body = await readJsonBounded(request, IDENTITY_MAX_BODY_BYTES);
+    } catch (e) {
+        return quotaJson({ ok: false, error: e.message }, e.statusCode || 400, cors);
+    }
+
+    const evidence = identityEvidence(body && body.evidence);
+    const accountId = await identityLink(env, ctx, body && body.nodes, evidence, {
+        accountId: body && body.account_id,
+    });
+
+    console.log(JSON.stringify({
+        evt: 'identity_resolve',
+        client: clampString(body && body.client, 16),
+        evidence,
+        nodes: Array.isArray(body && body.nodes) ? body.nodes.length : 0,
+        resolved: !!accountId,
+    }));
+    return quotaJson({ ok: true, account_id: accountId }, 200, cors);
+}
+
+const IDENTITY_BACKFILL_MAX_BYTES = 256 * 1024;
+const IDENTITY_BACKFILL_MAX_GROUPS = 100;
+
+/**
+ * POST /identity/backfill { admin_token, groups: [[{ kind, value }, ...], ...] }
+ *   → { ok, results: [account_id | null, ...] }
+ *
+ * One-off migration of historical links, driven by
+ * scripts/identity_backfill.mjs. Each group is a set of nodes known to be one
+ * person; resolving it mints, links or merges exactly as live traffic would.
+ * Requires QUOTA_ADMIN_TOKEN.
+ */
+async function handleIdentityBackfill(request, env, ctx) {
+    if (request.method !== 'POST') {
+        return quotaJson({ ok: false, error: 'method_not_allowed' }, 405, {});
+    }
+    if (!env.QUOTA_ADMIN_TOKEN || !env.QUOTA_DB) {
+        return quotaJson({ ok: false, error: 'admin_disabled' }, 503, {});
+    }
+
+    let body;
+    try {
+        body = await readJsonBounded(request, IDENTITY_BACKFILL_MAX_BYTES);
+    } catch (e) {
+        return quotaJson({ ok: false, error: e.message }, e.statusCode || 400, {});
+    }
+    if (clampString(body && body.admin_token, 256) !== env.QUOTA_ADMIN_TOKEN) {
+        return quotaJson({ ok: false, error: 'forbidden' }, 403, {});
+    }
+    const groups = Array.isArray(body.groups) ? body.groups.slice(0, IDENTITY_BACKFILL_MAX_GROUPS) : [];
+
+    const results = [];
+    for (const nodes of groups) {
+        results.push(await identityLink(env, ctx, nodes, 'backfill'));
+    }
+    console.log(JSON.stringify({ evt: 'identity_backfill', groups: groups.length, resolved: results.filter(Boolean).length }));
+    return quotaJson({ ok: true, results }, 200, {});
 }
 
 // ─── Pairing helpers ──────────────────────────────────────────────────────────
@@ -1097,7 +1461,7 @@ async function readJsonBounded(request, maxBytes = PAIRINGS_MAX_BODY_BYTES) {
  *                           first launch
  *   OPTIONS /pairings*    — CORS preflight
  */
-async function handlePairings(request, env, url) {
+async function handlePairings(request, env, url, ctx) {
     const origin = request.headers.get('origin') || '';
     const cors = pairingsCorsHeaders(origin);
 
@@ -1352,9 +1716,18 @@ async function handlePairings(request, env, url) {
         // field, so PairingClient.parseString("via") always yielded "".
         // Strip `_alts`/`_alt` (server-only sibling-key linkage) before
         // handing the payload to the desktop.
+        // Every hit links, heuristic ones included: an IP/ASN match merges the
+        // install into the visitor's account, tagged so it can be audited.
+        let accountId = null;
+        const claimDeviceId = clampString(body && body.device_id, 64);
+        if (claimedBcid && BCID_RE.test(claimedBcid) && claimDeviceId && QUOTA_ID_RE.test(claimDeviceId)) {
+            accountId = await identityLink(env, ctx, deviceNodes(claimDeviceId, claimedBcid),
+                                           hitVia === 'bcid' ? 'store_cid' : 'ip_asn');
+        }
+
         const outObj = (parsed && typeof parsed === 'object') ? parsed : {};
         const { _alts, _alt, ...publicFields } = outObj;
-        const responseJson = JSON.stringify({ ...publicFields, via: hitVia });
+        const responseJson = JSON.stringify({ ...publicFields, via: hitVia, account_id: accountId });
 
         return new Response(responseJson, {
             status: 200,
@@ -2442,6 +2815,7 @@ function quotaSnapshot(account, used, extra = {}) {
         period_end: addOneCalendarMonthUtc(account.periodStart),
         server_time: Date.now(),
         bcid: account.canonicalBcid,
+        account_id: account.accountId || null,
         ...extra,
     };
 }
@@ -2658,6 +3032,8 @@ async function handleQuota(request, env, url, ctx) {
         }
     }
 
+    account.accountId = await identityLink(env, ctx, deviceNodes(deviceId, bcid), 'quota', { nowMs });
+
     if (url.pathname === '/quota/claim') {
         return handleQuotaClaim(songHash, env, db, cors, account, nowMs, machineId, nonce);
     }
@@ -2797,15 +3173,14 @@ async function handleQuotaState(body, env, db, cors, account, nowMs, ctx, machin
     // narrator.
     const clientClaimsFirstLaunch = body.first_launch === true;
     if (clientClaimsFirstLaunch && !account.created && ctx) {
-        // Attribute to the account's original bcid when we have one — that's the
-        // identity the install was minted with, and the reason it's stored on the
-        // account at all. Without one the only handle is the device id, which
-        // makes an unlinked person; `identified_by` keeps those filterable rather
-        // than silently mixed in with real users.
-        const distinctId = account.canonicalBcid || `hw_${account.deviceId.slice(0, 16)}`;
+        // Attribute to the identity account, which every surface reports as.
+        // The bcid and device-id fallbacks only apply when the identity graph is
+        // unreachable; `identified_by` keeps those filterable rather than
+        // silently mixed in with real users.
+        const distinctId = account.accountId || account.canonicalBcid || `hw_${account.deviceId.slice(0, 16)}`;
 
         ctx.waitUntil(sendToPostHog('quota_device_wiped', distinctId, {
-            identified_by:     account.canonicalBcid ? 'bcid' : 'device_id',
+            identified_by:     account.accountId ? 'account' : account.canonicalBcid ? 'bcid' : 'device_id',
             device_age_days:   Math.max(0, Math.round((nowMs - account.createdAt) / 86400000)),
             songs_used:        await quotaCountUsed(db, account.deviceId, account.periodStart),
             quota_limit:       account.effectiveLimit,
@@ -3135,10 +3510,10 @@ async function handleLicense(request, env, url, ctx) {
             return await handleLicenseDeactivate(env, db, cors, body, row, deviceId);
         }
         if (action === 'activate') {
-            return await handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs);
+            return await handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs, ctx);
         }
         if (action === 'validate') {
-            return await handleLicenseValidate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs);
+            return await handleLicenseValidate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs, ctx);
         }
         return quotaJson({ ok: false, error: 'not_found' }, 404, cors);
     } catch (e) {
@@ -3157,7 +3532,17 @@ function storedTierFor(row, licenseKey) {
     return row.tier || 'pro';
 }
 
-async function handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs) {
+/** A live licence ties the device to the buyer's email and to every other
+ *  device that activates the same key. The raw key never enters the graph. */
+async function licenseIdentityLink(env, ctx, deviceId, licenseKey, email, nowMs) {
+    const nodes = deviceNodes(deviceId, null);
+    const licenseHash = await sha256LowerHex(licenseKey);
+    if (licenseHash) nodes.push({ kind: 'license', value: licenseHash });
+    if (email) nodes.push({ kind: 'email_hash', value: await hashEmail(email) });
+    return identityLink(env, ctx, nodes, 'license', { nowMs });
+}
+
+async function handleLicenseActivate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs, ctx) {
     const licenseKey = clampString(body.license_key, 128);
     if (!licenseKey || !LICENSE_KEY_RE.test(licenseKey)) {
         return quotaJson({ ok: false, error: 'invalid_license_key' }, 400, cors);
@@ -3182,15 +3567,16 @@ async function handleLicenseActivate(env, db, cors, body, row, deviceId, machine
     if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 
     const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier);
+    const accountId = await licenseIdentityLink(env, ctx, deviceId, licenseKey, lic.email, nowMs);
     console.log(JSON.stringify({ evt: 'license_activate_ok', status: lic.status, tier, has_instance: !!lic.instanceId }));
     return quotaJson({
         ok: true, valid: true, status: lic.status, ends_at: lic.endsAt, tier,
         email: lic.email, name: lic.name, order_id: lic.orderId,
-        instance_id: lic.instanceId, signed,
+        instance_id: lic.instanceId, signed, account_id: accountId,
     }, 200, cors);
 }
 
-async function handleLicenseValidate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs) {
+async function handleLicenseValidate(env, db, cors, body, row, deviceId, machineId, nonce, nowMs, ctx) {
     const licenseKey = row ? row.license_key : clampString(body.license_key, 128);
     if (!licenseKey || !LICENSE_KEY_RE.test(licenseKey)) {
         return quotaJson({ ok: false, error: 'invalid_license_key' }, 400, cors);
@@ -3253,11 +3639,12 @@ async function handleLicenseValidate(env, db, cors, body, row, deviceId, machine
     if (tier === 'free') await recordFreeKeyActivated(db, deviceId, licenseKey, nowMs);
 
     const signed = await signLicenseToken(env, deviceId, machineId, nonce, nowMs, lic, tier);
+    const accountId = await licenseIdentityLink(env, ctx, deviceId, licenseKey, lic.email, nowMs);
     console.log(JSON.stringify({ evt: 'license_validate_ok', status: lic.status, tier }));
     return quotaJson({
         ok: true, valid: true, status: lic.status, ends_at: lic.endsAt, tier,
         email: lic.email, name: lic.name, order_id: lic.orderId,
-        instance_id: lic.instanceId, signed,
+        instance_id: lic.instanceId, signed, account_id: accountId,
     }, 200, cors);
 }
 
@@ -3385,7 +3772,7 @@ function randomToken(prefix, bytes = 18) {
     return prefix + bytesToB64u(raw);
 }
 
-async function handleInstall(request, env, url) {
+async function handleInstall(request, env, url, ctx) {
     const origin = request.headers.get('origin') || '';
     const cors = pairingsCorsHeaders(origin);
 
@@ -3417,7 +3804,7 @@ async function handleInstall(request, env, url) {
     const nowMs = Date.now();
 
     if (url.pathname === '/install/resolve') {
-        return handleInstallResolve(env, db, cors, body, deviceId, nowMs);
+        return handleInstallResolve(env, db, cors, body, deviceId, nowMs, ctx);
     }
     if (url.pathname === '/install/registration') {
         return handleInstallRegistration(env, db, cors, deviceId, nowMs);
@@ -3435,7 +3822,7 @@ async function handleInstall(request, env, url) {
  *   none     — nothing to do: the device already holds a live key, or it is
  *              control / existing and stays on the keyless free tier.
  */
-async function handleInstallResolve(env, db, cors, body, deviceId, nowMs) {
+async function handleInstallResolve(env, db, cors, body, deviceId, nowMs, ctx) {
     const bcid = (() => {
         const v = clampString(body.bcid, 80);
         return v && BCID_RE.test(v) ? v : null;
@@ -3470,11 +3857,13 @@ async function handleInstallResolve(env, db, cors, body, deviceId, nowMs) {
         ).bind(deviceId, bcid, platform, appVersion).run();
     }
 
+    const accountId = await identityLink(env, ctx, deviceNodes(deviceId, bcid), 'install', { nowMs });
+
     const arm = res.arm;
     const reply = (action, extra = {}) => {
         console.log(JSON.stringify({ evt: 'install_resolve', arm, action, assigned_now: assignedNow }));
         return quotaJson({ ok: true, action, arm, assigned_now: assignedNow,
-                           gate_enabled: gateEnabled(env), ...extra }, 200, cors);
+                           gate_enabled: gateEnabled(env), account_id: accountId, ...extra }, 200, cors);
     };
 
     const lic = await db.prepare(
@@ -3553,9 +3942,10 @@ function escapeHtml(s) {
 /** The /download link the email carries. Keeps the visitor's original UTMs so
  *  the eventual install is still credited to the ad that brought them, and
  *  adds handoff=email so the desktop visit can be told apart from a direct one. */
-function buildHandoffDownloadUrl(bcid, clickIds, utms) {
+function buildHandoffDownloadUrl(bcid, clickIds, utms, accountId) {
     const u = new URL(HANDOFF_DOWNLOAD_URL);
     u.searchParams.set('bcid', bcid);
+    if (accountId) u.searchParams.set('aid', accountId);
     for (const [k, v] of Object.entries(clickIds)) if (v) u.searchParams.set(k, v);
     for (const [k, v] of Object.entries(utms || {})) if (v) u.searchParams.set(k, v);
     u.searchParams.set('handoff', 'email');
@@ -3805,7 +4195,12 @@ async function handleHandoffEmail(request, env, ctx) {
     const device = clampString(body.device, 32);
     const placement = clampString(body.placement, 32);
     const country = (request.cf && request.cf.country) || null;
-    const downloadUrl = buildHandoffDownloadUrl(bcid, clickIds, utms);
+    // The email is what carries this person from the phone to the PC, so the
+    // account is minted now and rides along in the link.
+    const accountId = await identityLink(env, ctx,
+        [{ kind: 'bcid', value: bcid }, { kind: 'email_hash', value: emailHash }],
+        'email_handoff', { nowMs });
+    const downloadUrl = buildHandoffDownloadUrl(bcid, clickIds, utms, accountId);
 
     const result = await sendHandoffEmail(env, email, handoffEmailContent(downloadUrl));
 
@@ -3833,7 +4228,7 @@ async function handleHandoffEmail(request, env, ctx) {
         error: result.error || null,
     }));
 
-    ctx.waitUntil(sendToPostHog(result.ok ? 'download_link_emailed' : 'download_link_email_failed', bcid, {
+    ctx.waitUntil(sendToPostHog(result.ok ? 'download_link_emailed' : 'download_link_email_failed', accountId || bcid, {
         ...utms,
         hashed_email: emailHash,
         email_domain: email.split('@')[1],
@@ -3895,8 +4290,16 @@ async function route(request, env, ctx) {
         return handleWebhook(request, env);
     }
 
+    if (url.pathname === '/identity/resolve') {
+        return handleIdentity(request, env, ctx);
+    }
+
+    if (url.pathname === '/identity/backfill') {
+        return handleIdentityBackfill(request, env, ctx);
+    }
+
     if (url.pathname === '/pairings' || url.pathname === '/pairings/claim') {
-        return handlePairings(request, env, url);
+        return handlePairings(request, env, url, ctx);
     }
 
     if (url.pathname.startsWith('/pairings/claimed/')) {
@@ -3916,7 +4319,7 @@ async function route(request, env, ctx) {
     }
 
     if (url.pathname === '/install/resolve' || url.pathname === '/install/registration') {
-        return handleInstall(request, env, url);
+        return handleInstall(request, env, url, ctx);
     }
 
     if (url.pathname === '/capi') {
