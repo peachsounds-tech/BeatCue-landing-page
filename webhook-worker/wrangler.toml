@@ -54,14 +54,29 @@ GATE_ENABLED = "false"
 # 7694918564) back the browser gtag calls and can't take /gads uploads.
 # Unmapped events soft-skip with skipped:"conversion_action_unmapped".
 #
-#   first_track_imported       Secondary
-#   first_activation_finished  the paid conversion, carries value
-#   new_project_created        once per song claimed
-#   send_to_desktop            "offline (Upload)", mobile "email me the link";
-#                              keep Secondary, the page's gtag reports it too
-#   funnel_value               not mapped yet. Create it as Count: Every, values
-#                              per conversion, the campaign's only Primary.
-GOOGLE_ADS_CONV_ACTIONS = '{"first_track_imported":"7838436673","first_activation_finished":"7840353503","new_project_created":"7840347020","send_to_desktop":"7854750623"}'
+# The funnel, in order, with the value each upload carries:
+#
+#   trial_download                 $0.09. The page's gtag reports the same
+#                                  download to the website "Request quote"
+#                                  action, so keep one of the two Secondary.
+#   first_app_launched             $0.14
+#   first_track_imported           no value; Secondary
+#   first_premiere_panel_connected $1.97
+#   new_project_created            $0.87, $1.24, $2.51 along the free-project
+#                                  ladder. Count: Every.
+#   first_activation_started       $0.91
+#   first_activation_finished      the order's own total, in its own currency
+#   send_to_desktop                mobile "email me the link". The page's gtag
+#                                  reports it too, same caveat as the download.
+#   funnel_value                   deliberately unmapped. Google sums value
+#                                  across primary actions, so the steps above
+#                                  already add up to the funnel; mapping this
+#                                  beside them counts every step twice.
+#
+# The ids below are the UPLOAD_CLICKS actions created 2026-10-20. They replaced
+# an earlier set (first_activation_finished 7840353503, new_project_created
+# 7840347020, send_to_desktop 7854750623) which now receives nothing.
+GOOGLE_ADS_CONV_ACTIONS = '{"trial_download":"7859691784","first_app_launched":"7859696374","first_track_imported":"7838436673","first_premiere_panel_connected":"7859682708","new_project_created":"7859560475","first_activation_started":"7859694420","first_activation_finished":"7859686206","send_to_desktop":"7859678595"}'
 
 # Secret variables (set via `wrangler secret put NAME`):
 #
