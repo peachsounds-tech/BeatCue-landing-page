@@ -196,6 +196,12 @@ const CAPI_CUSTOM_EVENTS = new Set([
     // can optimize on the tier that was picked.
     'plan_clicked',
 
+    // The one conversion value-optimized campaigns bid on. The desktop sends
+    // it beside every valued funnel step, carrying that step's share of the
+    // $20 activation in custom_data.value, so maximizing its value maximizes
+    // the funnel's. internal_event_name says which step it came from.
+    'funnel_value',
+
     // Pre-first_ spellings. In-field builds still send these; keep them
     // accepted so a 400 does not burn a conversion during the cutover.
     'app_launched',
@@ -286,6 +292,10 @@ const GADS_EVENT_NAMES = new Set([
     'export_intent',
     'activation_started',
     'activation_finished',
+
+    // Every valued funnel step, each carrying its share of the activation's
+    // value. Bid on this alone: beside a step's own action it counts twice.
+    'funnel_value',
 ]);
 
 /** Module-scoped OAuth access-token cache. Workers may reuse the isolate

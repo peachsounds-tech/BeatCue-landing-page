@@ -59,6 +59,8 @@ GATE_ENABLED = "false"
 #   new_project_created        once per song claimed
 #   send_to_desktop            "offline (Upload)", mobile "email me the link";
 #                              keep Secondary, the page's gtag reports it too
+#   funnel_value               not mapped yet. Create it as Count: Every, values
+#                              per conversion, the campaign's only Primary.
 GOOGLE_ADS_CONV_ACTIONS = '{"first_track_imported":"7838436673","first_activation_finished":"7840353503","new_project_created":"7840347020","send_to_desktop":"7854750623"}'
 
 # Secret variables (set via `wrangler secret put NAME`):
