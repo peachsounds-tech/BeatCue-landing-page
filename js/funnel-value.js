@@ -25,6 +25,9 @@
  * hand-off link dedupes into the first conversion on both platforms. The
  * Pixel half carries the same id, so Meta keeps one of the two.
  *
+ * No email is sent from here: the worker finds it by bcid when the visitor
+ * gave one in the hand-off form, and attaches it if their ad consent allows.
+ *
  * Each send is also captured in PostHog as `funnel_value_sent`, with the click
  * ids and cookies the ad platforms received (the touch's UTMs come along as
  * super properties, see attribution.js), so a conversion the platforms didn't
@@ -102,6 +105,7 @@
             event_source_url: url,
             action_source: 'website',
             internal_name: step,
+            ad_consent: window.CueGoogleAds ? window.CueGoogleAds.consent() : null,
             user_data: {
                 fbp: fbp,
                 fbc: fbc,

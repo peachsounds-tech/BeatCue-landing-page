@@ -318,6 +318,14 @@ async function hashEmail(email) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Identity nodes for an email: the hash every platform shares, and Google's. */
+async function emailNodes(email, hashedEmail) {
+    const nodes = [{ kind: 'email_hash', value: hashedEmail || await hashEmail(email) }];
+    const google = await googleEmailHash(email);
+    if (google) nodes.push({ kind: 'email_hash_g', value: google });
+    return nodes;
+}
+
 /**
  * Verify Lemon Squeezy webhook signature
  */
@@ -524,7 +532,7 @@ async function handleOrderCreated(data, env) {
     // key with the same email.
     const accountHint = extractCustom(data, 'account_id');
     const nodes = [
-        { kind: 'email_hash', value: hashedEmail },
+        ...await emailNodes(email, hashedEmail),
         ...checkoutIdNodes(bcid),
         ...checkoutIdNodes(registration && registration.bcid),
         ...checkoutIdNodes(posthogId),
@@ -639,7 +647,7 @@ async function handleSubscriptionCreated(data, env) {
     const hashedEmail = await hashEmail(email);
     const bcid = extractBcid(data);
     const accountId = await identityLink(env, null,
-        [{ kind: 'email_hash', value: hashedEmail }, ...checkoutIdNodes(bcid)],
+        [...await emailNodes(email, hashedEmail), ...checkoutIdNodes(bcid)],
         'checkout', { accountId: extractCustom(data, 'account_id') });
     
     const properties = {
@@ -878,7 +886,7 @@ async function handleLicenseKeyCreated(data, env) {
     }
 
     const nodes = [
-        { kind: 'email_hash', value: hashedEmail },
+        ...await emailNodes(email, hashedEmail),
         ...checkoutIdNodes(bcid),
         ...checkoutIdNodes(registrationBcid),
     ];
@@ -922,6 +930,10 @@ const IDENTITY_NODE_RULES = {
     install:     { re: BCID_RE,                          posthog: false, anchor: false },
     panel:       { re: /^panel_[A-Za-z0-9_-]{4,96}$/,    posthog: true,  anchor: false },
     email_hash:  { re: QUOTA_ID_RE,                      posthog: true,  anchor: true  },
+    // Google's normalization of the same address (see googleEmailHash). Kept
+    // so /gads can send an email the worker saw only at checkout or license
+    // time, without storing the address itself.
+    email_hash_g: { re: /^[0-9a-f]{64}$/,                posthog: false, anchor: false },
     license:     { re: QUOTA_ID_RE,                      posthog: false, anchor: true  },
     store_cid:   { re: /^[A-Za-z0-9_.:~-]{1,200}$/,      posthog: false, anchor: false },
     ph_distinct: { re: /^[A-Za-z0-9_.:@~-]{1,200}$/,     posthog: true,  anchor: false },
@@ -1843,6 +1855,58 @@ function isHexSha256(s) {
     return typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 }
 
+/**
+ * The email the identity graph holds for whoever `ids` (bcids, install ids)
+ * belong to, as `{ meta, google }` hashes; either may be null.
+ *
+ * Lets a conversion carry the email even when its sender never saw it: the
+ * site's later steps, and the desktop app before a license, know the visitor
+ * only by bcid, while the hand-off form, a checkout or a license tied the
+ * account to an email. `meta` is the `email_hash` node, `google` the
+ * `email_hash_g` node (Google normalizes gmail addresses differently), falling
+ * back to the hand-off table's address for links made before that node
+ * existed. Never throws; the caller decides on consent.
+ */
+async function identityEmailHashes(env, ids) {
+    const none = { meta: null, google: null };
+    const db = env && env.QUOTA_DB;
+    if (!db) return none;
+    try {
+        for (const id of ids) {
+            if (!id || !BCID_RE.test(id)) continue;
+            const node = await db.prepare(
+                `SELECT account_id FROM identity_nodes
+                  WHERE kind IN ('bcid', 'install') AND value = ?1 LIMIT 1`
+            ).bind(id).first();
+            if (!node) continue;
+            const accountId = await identityRoot(db, node.account_id);
+            if (!accountId) continue;
+            const em = await db.prepare(
+                `SELECT value FROM identity_nodes
+                  WHERE account_id = ?1 AND kind = 'email_hash'
+                  ORDER BY created_at DESC LIMIT 1`
+            ).bind(accountId).first();
+            if (!em || !isHexSha256(em.value)) continue;
+            const g = await db.prepare(
+                `SELECT value FROM identity_nodes
+                  WHERE account_id = ?1 AND kind = 'email_hash_g'
+                  ORDER BY created_at DESC LIMIT 1`
+            ).bind(accountId).first();
+            if (g && isHexSha256(g.value)) return { meta: em.value, google: g.value };
+            // Hand-offs from before email_hash_g existed.
+            const sent = await db.prepare(
+                `SELECT email FROM handoff_emails
+                  WHERE email_hash = ?1 AND sent = 1
+                  ORDER BY created_at DESC LIMIT 1`
+            ).bind(em.value).first();
+            return { meta: em.value, google: sent ? await googleEmailHash(sent.email) : null };
+        }
+    } catch (e) {
+        console.log(JSON.stringify({ evt: 'identity_email_lookup_error', error: String(e && e.message || e) }));
+    }
+    return none;
+}
+
 /** POST an already-built `{ data: [...] }` payload to the pixel's events edge.
  *
  *  Shared by the /capi proxy and by the Lemon Squeezy order webhook, which
@@ -1907,12 +1971,14 @@ async function postEventsToMeta(env, payload) {
  *       em_hashed            (already-hashed email; preferred over em_raw),
  *       client_user_agent    (override; falls back to request UA header)
  *     },
+ *     ad_consent:        string  (optional; 'granted' | 'denied', as /gads),
  *     custom_data: { value, currency, ... }
  *   }
  *
  * The worker injects `client_ip_address` from `cf-connecting-ip`, falls back
  * to the request's UA if no override is given, hashes PII (email) only,
- * and forwards a single-event `data:[…]` payload to
+ * fills in the email from the identity graph when the event has none and
+ * adEmailAllowed() permits, and forwards a single-event `data:[…]` payload to
  * https://graph.facebook.com/<v>/<pixel_id>/events.
  *
  * Returns the Graph API status + a trimmed body so the caller can log
@@ -2035,6 +2101,14 @@ async function handleCapi(request, env, url) {
         const emRaw = clampString(ud.em_raw, 256);
         if (emRaw) emHashed = await sha256LowerHex(emRaw);
     }
+    // Same consent rule as the hand-off email that put the address there.
+    let emSource = emHashed ? 'request' : null;
+    const cf = request.cf || {};
+    if (!emHashed && externalIds.length
+        && adEmailAllowed(normalizeAdConsent(body.ad_consent), cf.country, cf.regionCode)) {
+        emHashed = (await identityEmailHashes(env, externalIds)).meta || undefined;
+        if (emHashed) emSource = 'identity';
+    }
 
     const userData = {};
     if (ipHeader) userData.client_ip_address = ipHeader;
@@ -2112,6 +2186,7 @@ async function handleCapi(request, env, url) {
         had_fbc: !!fbc,
         external_id_count: externalIds.length,
         had_em: !!emHashed,
+        em_source: emSource,
         strong_match: hasStrongMatch,
         test_mode: !!env.META_TEST_EVENT_CODE,
     }));
@@ -2219,7 +2294,10 @@ async function getGoogleAdsAccessToken(env) {
  *     user_data: {
  *       gclid, gbraid, wbraid   (click ids),
  *       em_raw                  (plaintext email; worker normalizes + hashes
- *                                for enhanced conversions)
+ *                                for enhanced conversions),
+ *       external_id             (bcid / install id, string or array; with
+ *                                distinct_id, finds the email in the identity
+ *                                graph when em_raw is absent and consent allows)
  *     }
  *   }
  *
@@ -2359,7 +2437,19 @@ async function handleGads(request, env, url) {
     const gclid  = clampString(ud.gclid,  256);
     const gbraid = clampString(ud.gbraid, 256);
     const wbraid = clampString(ud.wbraid, 256);
-    const emHashed = await googleEmailHash(clampString(ud.em_raw, 256));
+    let emHashed = await googleEmailHash(clampString(ud.em_raw, 256));
+    let emSource = emHashed ? 'request' : null;
+    const cf = request.cf || {};
+    if (!emHashed && adEmailAllowed(normalizeAdConsent(body.ad_consent), cf.country, cf.regionCode)) {
+        const ids = [clampString(body.distinct_id, 96)]
+            .concat(Array.isArray(ud.external_id) ? ud.external_id : [ud.external_id])
+            .map(v => clampString(v, 96))
+            .filter(Boolean);
+        if (ids.length) {
+            emHashed = (await identityEmailHashes(env, ids)).google;
+            if (emHashed) emSource = 'identity';
+        }
+    }
 
     if (!gclid && !gbraid && !wbraid && !emHashed) {
         console.log(JSON.stringify({
@@ -2396,6 +2486,7 @@ async function handleGads(request, env, url) {
     if (wbraid) adIdentifiers.wbraid = wbraid;
     const clickKeys = {
         matchable: true, had_gclid: !!gclid, had_gbraid: !!gbraid, had_wbraid: !!wbraid, had_em: !!emHashed,
+        em_source: emSource,
     };
 
     // The reference docs mark eventSource optional; the service rejects a
@@ -2529,6 +2620,7 @@ async function handleGads(request, env, url) {
         had_gbraid: !!gbraid,
         had_wbraid: !!wbraid,
         had_em: !!emHashed,
+        em_source: emSource,
         partial_failure: hasPartialFailure,
         validate_only: !!(payload.validateOnly),
         partial_failure_message: hasPartialFailure
@@ -3548,7 +3640,7 @@ async function licenseIdentityLink(env, ctx, deviceId, licenseKey, email, nowMs)
     const nodes = deviceNodes(deviceId, null);
     const licenseHash = await sha256LowerHex(licenseKey);
     if (licenseHash) nodes.push({ kind: 'license', value: licenseHash });
-    if (email) nodes.push({ kind: 'email_hash', value: await hashEmail(email) });
+    if (email) nodes.push(...await emailNodes(email));
     return identityLink(env, ctx, nodes, 'license', { nowMs });
 }
 
@@ -4208,7 +4300,7 @@ async function handleHandoffEmail(request, env, ctx) {
     // The email is what carries this person from the phone to the PC, so the
     // account is minted now and rides along in the link.
     const accountId = await identityLink(env, ctx,
-        [{ kind: 'bcid', value: bcid }, { kind: 'email_hash', value: emailHash }],
+        [{ kind: 'bcid', value: bcid }, ...await emailNodes(email, emailHash)],
         'email_handoff', { nowMs });
     const downloadUrl = buildHandoffDownloadUrl(bcid, clickIds, utms, accountId);
 

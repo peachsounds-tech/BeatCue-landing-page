@@ -7337,20 +7337,34 @@
                 try { localStorage.setItem(HANDOFF_SENT_KEY, email); } catch (e) {}
                 handoffForms.forEach(renderHandoffSuccess);
                 updateHandoffSticky();
-                // The worker counts one conversion per address; repeat sends
-                // skip the ad-platform halves so the Pixel / gtag don't add
-                // conversions the server deliberately withheld.
-                if (data.conversion) {
-                    (adEmailAllowed() ? googleEmailHash(email) : Promise.resolve(null)).then(function (hash) {
-                        ids.googleEmailHash = hash;
-                        trackSendToComputer('email', ids);
+                registerHandoffEmail(email).then(function () {
+                    // The worker counts one conversion per address; repeat sends
+                    // skip the ad-platform halves so the Pixel / gtag don't add
+                    // conversions the server deliberately withheld.
+                    if (data.conversion) {
+                        (adEmailAllowed() ? googleEmailHash(email) : Promise.resolve(null)).then(function (hash) {
+                            ids.googleEmailHash = hash;
+                            trackSendToComputer('email', ids);
+                        });
+                    }
+                    trackHandoff('handoff_email_sent', {
+                        placement: placement,
+                        email_domain: email.split('@')[1],
+                        ad_conversion: !!data.conversion
                     });
-                }
-                trackHandoff('handoff_email_sent', {
-                    placement: placement,
-                    email_domain: email.split('@')[1],
-                    ad_conversion: !!data.conversion
                 });
+            }
+
+            // Every event from here on carries the email hash (the identity
+            // graph's, so PostHog joins to checkout and the app). Only with
+            // analytics consent, like application_submitted's.
+            function registerHandoffEmail(email) {
+                if (!posthogFullyInitialized || typeof posthog === 'undefined' || !posthog.register) {
+                    return Promise.resolve();
+                }
+                return hashEmail(email).then(function (hash) {
+                    posthog.register({ hashed_email: hash });
+                }).catch(function () {});
             }
 
             function renderHandoffForm(form, prefill) {
