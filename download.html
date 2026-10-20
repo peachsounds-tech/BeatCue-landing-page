@@ -4,6 +4,8 @@
     <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script src="/js/google-ads.js"></script>
+    <script src="/js/funnel-value.js"></script>
+    <script src="/js/attribution.js"></script>
     <script src="/js/identity.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -420,6 +422,7 @@
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         if (window.CueIdentity) window.CueIdentity.attach(posthog, cueBcid);
         posthog.register({ page_version: CUE_PAGE_VERSION });
+        if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: userConsented });
 
         // Arrived from the mobile hand-off email: tag every event on this
         // visit so the email → desktop download funnel can be measured.
@@ -935,6 +938,7 @@
             }
 
             fireGoogleAdsDownloadConversion(platform);
+            if (window.CueFunnelValue) CueFunnelValue.send('download_started');
 
             var props = { ...getBaseEventProps(), page: 'download', platform: platform, url: window.location.href, source: 'free_trial_page' };
             if (platform === 'windows') {

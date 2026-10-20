@@ -5,6 +5,8 @@
     <script>window.CUE_PAGE_VERSION = '4.0.1';</script>
     <!-- Google tag (gtag.js) -->
     <script src="/js/google-ads.js"></script>
+    <script src="/js/funnel-value.js"></script>
+    <script src="/js/attribution.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -639,6 +641,7 @@
             
             posthogPreConsentInitialized = true;
             posthog.register({ page_version: CUE_PAGE_VERSION });
+            if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: false });
 
             if (isInternalTester) {
                 posthog.register({ is_internal: true });
@@ -714,6 +717,7 @@
             
             posthogFullyInitialized = true;
             posthog.register({ page_version: CUE_PAGE_VERSION });
+            if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: true });
 
             // Set person properties for internal tester (only needs to be done once)
             if (isInternalTester) {
@@ -7243,6 +7247,7 @@
             // under ids.leadEventId / ids.gadsTxId, so the browser reuses
             // those ids for dedupe.
             function trackSendToComputer(method, ids) {
+                if (window.CueFunnelValue) CueFunnelValue.send('send_to_computer');
                 var isEmail = method === 'email' && ids;
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });
@@ -7432,20 +7437,34 @@
                 try { localStorage.setItem(HANDOFF_SENT_KEY, email); } catch (e) {}
                 handoffForms.forEach(renderHandoffSuccess);
                 updateHandoffSticky();
-                // The worker counts one conversion per address; repeat sends
-                // skip the ad-platform halves so the Pixel / gtag don't add
-                // conversions the server deliberately withheld.
-                if (data.conversion) {
-                    (adEmailAllowed() ? googleEmailHash(email) : Promise.resolve(null)).then(function (hash) {
-                        ids.googleEmailHash = hash;
-                        trackSendToComputer('email', ids);
+                registerHandoffEmail(email).then(function () {
+                    // The worker counts one conversion per address; repeat sends
+                    // skip the ad-platform halves so the Pixel / gtag don't add
+                    // conversions the server deliberately withheld.
+                    if (data.conversion) {
+                        (adEmailAllowed() ? googleEmailHash(email) : Promise.resolve(null)).then(function (hash) {
+                            ids.googleEmailHash = hash;
+                            trackSendToComputer('email', ids);
+                        });
+                    }
+                    trackHandoff('handoff_email_sent', {
+                        placement: placement,
+                        email_domain: email.split('@')[1],
+                        ad_conversion: !!data.conversion
                     });
-                }
-                trackHandoff('handoff_email_sent', {
-                    placement: placement,
-                    email_domain: email.split('@')[1],
-                    ad_conversion: !!data.conversion
                 });
+            }
+
+            // Every event from here on carries the email hash (the identity
+            // graph's, so PostHog joins to checkout and the app). Only with
+            // analytics consent, like application_submitted's.
+            function registerHandoffEmail(email) {
+                if (!posthogFullyInitialized || typeof posthog === 'undefined' || !posthog.register) {
+                    return Promise.resolve();
+                }
+                return hashEmail(email).then(function (hash) {
+                    posthog.register({ hashed_email: hash });
+                }).catch(function () {});
             }
 
             function renderHandoffForm(form, prefill) {
