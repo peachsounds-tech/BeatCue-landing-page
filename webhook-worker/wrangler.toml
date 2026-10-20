@@ -50,33 +50,31 @@ GATE_ENABLED = "false"
 # be read back and every edit risked dropping an entry.
 #
 # Each must be an UPLOAD_CLICKS ("Import from clicks") action in the account
-# that serves the ads. Website actions (Purchase 7682163987, Request quote
-# 7694918564) back the browser gtag calls and can't take /gads uploads.
-# Unmapped events soft-skip with skipped:"conversion_action_unmapped".
+# that serves the ads. Unmapped events soft-skip with
+# skipped:"conversion_action_unmapped"; an upload to a *removed* action fails
+# instead, so an action removed in the Ads UI has to be dropped from here.
 #
 # The funnel, in order, with the value each upload carries:
 #
-#   trial_download                 $0.09. The page's gtag reports the same
-#                                  download to the website "Request quote"
-#                                  action, so keep one of the two Secondary.
+#   trial_download                 $0.09
 #   first_app_launched             $0.14
-#   first_track_imported           no value; Secondary
 #   first_premiere_panel_connected $1.97
 #   new_project_created            $0.87, $1.24, $2.51 along the free-project
 #                                  ladder. Count: Every.
 #   first_activation_started       $0.91
 #   first_activation_finished      the order's own total, in its own currency
-#   send_to_desktop                mobile "email me the link". The page's gtag
-#                                  reports it too, same caveat as the download.
+#   send_to_desktop                mobile "email me the link"
+#   first_track_imported           unmapped: it was never priced, and its
+#                                  action was removed with the old set.
 #   funnel_value                   deliberately unmapped. Google sums value
 #                                  across primary actions, so the steps above
 #                                  already add up to the funnel; mapping this
 #                                  beside them counts every step twice.
 #
-# The ids below are the UPLOAD_CLICKS actions created 2026-10-20. They replaced
-# an earlier set (first_activation_finished 7840353503, new_project_created
-# 7840347020, send_to_desktop 7854750623) which now receives nothing.
-GOOGLE_ADS_CONV_ACTIONS = '{"trial_download":"7859691784","first_app_launched":"7859696374","first_track_imported":"7838436673","first_premiere_panel_connected":"7859682708","new_project_created":"7859560475","first_activation_started":"7859694420","first_activation_finished":"7859686206","send_to_desktop":"7859678595"}'
+# The ids below are the UPLOAD_CLICKS actions created 2026-10-20. Every earlier
+# action was removed in the Ads UI the same day, including the website ones the
+# landing page's gtag conversions still name.
+GOOGLE_ADS_CONV_ACTIONS = '{"trial_download":"7859691784","first_app_launched":"7859696374","first_premiere_panel_connected":"7859682708","new_project_created":"7859560475","first_activation_started":"7859694420","first_activation_finished":"7859686206","send_to_desktop":"7859678595"}'
 
 # Secret variables (set via `wrangler secret put NAME`):
 #
