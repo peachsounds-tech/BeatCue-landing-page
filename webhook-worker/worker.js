@@ -597,6 +597,29 @@ async function handleOrderCreated(data, env) {
         return;
     }
 
+    // What it was worth, for the conversion the app fires later on activation:
+    // by then only "Pro" is known, not the plan and not whether money changed
+    // hands. Recorded even for a $0 grant, which is how an early-access
+    // activation stops reporting itself as a sale.
+    if (env.QUOTA_DB && data.data?.id) {
+        try {
+            await env.QUOTA_DB.prepare(
+                `INSERT INTO order_values
+                    (order_id, account_id, email_hash, total, currency, product_name, variant_name, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 ON CONFLICT(order_id) DO NOTHING`
+            ).bind(
+                String(data.data.id), accountId, hashedEmail,
+                Number(order?.total || 0) / 100, order?.currency || 'USD',
+                order?.first_order_item?.product_name || null,
+                order?.first_order_item?.variant_name || null,
+                Date.now(),
+            ).run();
+        } catch (e) {
+            console.log(JSON.stringify({ evt: 'order_value_store_failed', error: String(e && e.message || e) }));
+        }
+    }
+
     // Step 2b: the money event. Deliberately not derived from licence
     // activation: a key can be activated on a second machine, re-activated
     // after a reinstall, or handed out by support, none of which is a sale.
@@ -1867,26 +1890,35 @@ function isHexSha256(s) {
  * back to the hand-off table's address for links made before that node
  * existed. Never throws; the caller decides on consent.
  */
+/** The live account behind any of `ids` (bcids / install ids), or null. */
+async function accountForIds(db, ids) {
+    for (const id of ids) {
+        if (!id || !BCID_RE.test(id)) continue;
+        const node = await db.prepare(
+            `SELECT account_id FROM identity_nodes
+              WHERE kind IN ('bcid', 'install') AND value = ?1 LIMIT 1`
+        ).bind(id).first();
+        if (!node) continue;
+        const accountId = await identityRoot(db, node.account_id);
+        if (accountId) return accountId;
+    }
+    return null;
+}
+
 async function identityEmailHashes(env, ids) {
     const none = { meta: null, google: null };
     const db = env && env.QUOTA_DB;
     if (!db) return none;
     try {
-        for (const id of ids) {
-            if (!id || !BCID_RE.test(id)) continue;
-            const node = await db.prepare(
-                `SELECT account_id FROM identity_nodes
-                  WHERE kind IN ('bcid', 'install') AND value = ?1 LIMIT 1`
-            ).bind(id).first();
-            if (!node) continue;
-            const accountId = await identityRoot(db, node.account_id);
-            if (!accountId) continue;
+        {
+            const accountId = await accountForIds(db, ids);
+            if (!accountId) return none;
             const em = await db.prepare(
                 `SELECT value FROM identity_nodes
                   WHERE account_id = ?1 AND kind = 'email_hash'
                   ORDER BY created_at DESC LIMIT 1`
             ).bind(accountId).first();
-            if (!em || !isHexSha256(em.value)) continue;
+            if (!em || !isHexSha256(em.value)) return none;
             const g = await db.prepare(
                 `SELECT value FROM identity_nodes
                   WHERE account_id = ?1 AND kind = 'email_hash_g'
@@ -1905,6 +1937,49 @@ async function identityEmailHashes(env, ids) {
         console.log(JSON.stringify({ evt: 'identity_email_lookup_error', error: String(e && e.message || e) }));
     }
     return none;
+}
+
+/**
+ * What the account behind `ids` actually paid, as `{ value, currency, orderId }`,
+ * or null when no order is on record for them.
+ *
+ * The app fires the purchase conversion when a licence activates, and at that
+ * point it knows only "Pro" — so it sends the catalog's flat estimate, the same
+ * number for a monthly plan, a lifetime licence and a free early-access grant.
+ * The order webhook knew the real figure (see order_values), so the conversion
+ * is corrected here on its way through. A $0 order comes back as 0, which is
+ * how an early-access activation stops counting as a sale.
+ *
+ * Never throws: an unknown buyer leaves the app's own value alone.
+ */
+async function purchaseValueFor(env, ids) {
+    const db = env && env.QUOTA_DB;
+    if (!db) return null;
+    try {
+        const accountId = await accountForIds(db, ids);
+        if (!accountId) return null;
+        let row = await db.prepare(
+            `SELECT order_id, total, currency FROM order_values
+              WHERE account_id = ?1 ORDER BY created_at DESC LIMIT 1`
+        ).bind(accountId).first();
+        if (!row) {
+            // Checkouts that carried no ids are only reachable through the
+            // email the buyer later activates with.
+            row = await db.prepare(
+                `SELECT o.order_id AS order_id, o.total AS total, o.currency AS currency
+                   FROM order_values o
+                   JOIN identity_nodes n
+                     ON n.kind = 'email_hash' AND n.value = o.email_hash
+                  WHERE n.account_id = ?1
+                  ORDER BY o.created_at DESC LIMIT 1`
+            ).bind(accountId).first();
+        }
+        if (!row) return null;
+        return { value: Number(row.total), currency: row.currency || 'USD', orderId: row.order_id };
+    } catch (e) {
+        console.log(JSON.stringify({ evt: 'purchase_value_lookup_error', error: String(e && e.message || e) }));
+        return null;
+    }
 }
 
 /** POST an already-built `{ data: [...] }` payload to the pixel's events edge.
@@ -1951,6 +2026,13 @@ async function postEventsToMeta(env, payload) {
         };
     }
 }
+
+/** The one conversion value-optimised campaigns bid on; every valued funnel
+ *  step sends it alongside its own name. */
+const FUNNEL_VALUE_EVENT = 'funnel_value';
+
+/** The purchase step, whichever wire name it travels under. */
+const isPurchaseConversion = body => clampString(body.internal_name, 64) === 'activation_finished';
 
 /**
  * POST /capi  — desktop app or browser pushes a single Meta CAPI event.
@@ -2138,6 +2220,33 @@ async function handleCapi(request, env, url) {
     // ── Build custom_data ────────────────────────────────────────────────────
     const cdIn = (body.custom_data && typeof body.custom_data === 'object') ? body.custom_data : {};
     const customData = { ...cdIn };
+
+    // The app values every activation at the catalog's estimate; the order
+    // webhook knew what was really paid.
+    let valueSource = null;
+    if (isPurchaseConversion(body) && externalIds.length) {
+        const paid = await purchaseValueFor(env, externalIds);
+        if (paid) {
+            customData.value = paid.value;
+            customData.currency = paid.currency;
+            customData.order_id = paid.orderId;
+            valueSource = 'order';
+            // funnel_value is the campaign's bid signal, so a free grant must
+            // not reach it at all: a zero-value conversion is still a
+            // conversion, and it would drag the average down.
+            if (eventName === FUNNEL_VALUE_EVENT && !(paid.value > 0)) {
+                console.log(JSON.stringify({
+                    evt: 'capi_skipped_zero_value', event_name: eventName, order_id: paid.orderId,
+                }));
+                return new Response(JSON.stringify({ ok: true, skipped: 'zero_value' }), {
+                    status: 200,
+                    headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+                });
+            }
+        } else {
+            valueSource = 'app';
+        }
+    }
     if (typeof body.internal_name === 'string' && body.internal_name) {
         customData.internal_event_name = clampString(body.internal_name, 64);
     }
@@ -2187,6 +2296,8 @@ async function handleCapi(request, env, url) {
         external_id_count: externalIds.length,
         had_em: !!emHashed,
         em_source: emSource,
+        value: customData.value,
+        value_source: valueSource,
         strong_match: hasStrongMatch,
         test_mode: !!env.META_TEST_EVENT_CODE,
     }));
@@ -2472,6 +2583,34 @@ async function handleGads(request, env, url) {
         });
     }
 
+    let paidValue = null;
+    let paidCurrency = null;
+    let valueSource = null;
+    if (isPurchaseConversion(body)) {
+        const ids = [clampString(body.distinct_id, 96)]
+            .concat(Array.isArray(ud.external_id) ? ud.external_id : [ud.external_id])
+            .map(v => clampString(v, 96))
+            .filter(Boolean);
+        const paid = ids.length ? await purchaseValueFor(env, ids) : null;
+        if (paid) {
+            paidValue = paid.value;
+            paidCurrency = paid.currency;
+            valueSource = 'order';
+            if (eventName === FUNNEL_VALUE_EVENT && !(paid.value > 0)) {
+                console.log(JSON.stringify({
+                    evt: 'gads_skipped_zero_value', event_name: eventName, order_id: paid.orderId,
+                }));
+                await report({ ok: false, status_code: 200, error: 'skipped:zero_value' });
+                return new Response(JSON.stringify({ ok: true, skipped: 'zero_value' }), {
+                    status: 200,
+                    headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
+                });
+            }
+        } else {
+            valueSource = 'app';
+        }
+    }
+
     const customerId = String(env.GOOGLE_ADS_CUSTOMER_ID).replace(/-/g, '');
     if (!/^\d{6,12}$/.test(customerId)) {
         return new Response(JSON.stringify({ ok: false, error: 'bad_customer_id' }), {
@@ -2509,10 +2648,12 @@ async function handleGads(request, env, url) {
     const consent = gadsConsentFor(normalizeAdConsent(body.ad_consent));
     if (consent) event.consent = consent;
 
-    const value = typeof body.value === 'number' && Number.isFinite(body.value)
-        ? body.value
-        : (typeof body.value === 'string' && body.value !== '' && Number.isFinite(Number(body.value))
-            ? Number(body.value) : null);
+    const value = paidValue !== null
+        ? paidValue
+        : (typeof body.value === 'number' && Number.isFinite(body.value)
+            ? body.value
+            : (typeof body.value === 'string' && body.value !== '' && Number.isFinite(Number(body.value))
+                ? Number(body.value) : null));
     if (value !== null) {
         event.conversionValue = value;
         // Backstop only: every live caller that sends a value sends a currency
@@ -2520,7 +2661,7 @@ async function handleGads(request, env, url) {
         // convention rather than silently valuing a conversion in the wrong
         // one. A valueless event sends neither, which lets the conversion
         // action's own configured value apply.
-        event.currency = clampString(body.currency, 8) || 'USD';
+        event.currency = paidCurrency || clampString(body.currency, 8) || 'USD';
     }
 
     let accessToken;
@@ -2621,6 +2762,8 @@ async function handleGads(request, env, url) {
         had_wbraid: !!wbraid,
         had_em: !!emHashed,
         em_source: emSource,
+        value,
+        value_source: valueSource,
         partial_failure: hasPartialFailure,
         validate_only: !!(payload.validateOnly),
         partial_failure_message: hasPartialFailure
