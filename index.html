@@ -4,6 +4,7 @@
     <script src="/js/page-version.js"></script>
     <!-- Google tag (gtag.js) -->
     <script src="/js/google-ads.js"></script>
+    <script src="/js/funnel-value.js"></script>
     <script src="/js/identity.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -7132,6 +7133,7 @@
             // ids.gadsTxId, so the browser reuses those ids for dedupe and
             // skips its own /gads upload.
             function trackSendToComputer(method, ids) {
+                if (window.CueFunnelValue) CueFunnelValue.send('send_to_computer');
                 var isEmail = method === 'email' && ids;
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });

@@ -1074,7 +1074,11 @@
             // mobile share CTA lives — collapsing the old 2-hop flow into 1.
             // Left as a no-op so a direct /download mobile visit can still
             // copy/share the hand-off link without double-counting conversions.
-            function trackSendToComputer(method) { /* events moved to index.html */ }
+            // Analytics for the hand-off moved to index.html; only the
+            // valued conversion is sent from here.
+            function trackSendToComputer(method) {
+                if (window.CueFunnelValue) CueFunnelValue.send('send_to_computer');
+            }
 
             function copyHandoffLink() {
                 var url = buildDesktopHandoffUrl();
