@@ -4340,8 +4340,10 @@ async function fireHandoffConversions(request, env, body, email, bcid, clickIds)
         internal_name: 'handoff_email_sent',
         distinct_id: bcid,
         ad_consent: adConsent,
-        value: 1.0,
-        currency: 'ILS',
+        // What the hand-off predicts, same as js/funnel-value.js sends for
+        // send_to_computer. It was 1 ILS, ~30× its measured worth.
+        value: 0.01,
+        currency: 'USD',
         user_data: {
             gclid: clickIds.gclid,
             gbraid: clickIds.gbraid,

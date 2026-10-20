@@ -9,6 +9,7 @@
 // page code (`CueGoogleAds.consent()`), which forwards it to /gads and
 // /pairings and on into the desktop app.
 (function () {
+    var WORKER = 'https://peachsounds-webhook.sareldu.workers.dev';
     var STORAGE_KEY = 'cue_analytics_consent';   // shared with the cookie banner
     var CONSENT_DURATION_DAYS = 180;
 
@@ -99,11 +100,39 @@
         return out;
     }
 
+    /** Browser → worker → Google Ads uploadClickConversions. `event_name`
+     *  picks the conversion action on the worker; `value` and `currency` are
+     *  the caller's, since every funnel step is worth something different
+     *  (js/funnel-value.js holds the web ones). A conversion the Ads account
+     *  has no action for soft-skips on the worker. */
+    function conversion(opts) {
+        try {
+            fetch(WORKER + '/gads', {
+                method: 'POST',
+                mode: 'cors',
+                credentials: 'omit',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    event_name: opts.event_name,
+                    transaction_id: opts.transaction_id,
+                    event_source_url: window.location.href,
+                    internal_name: opts.internal_name || null,
+                    distinct_id: (window.posthog && posthog.get_distinct_id) ? posthog.get_distinct_id() : null,
+                    ad_consent: consent(),
+                    value: opts.value,
+                    currency: opts.currency || 'USD',
+                    user_data: clickIds()
+                })
+            }).catch(function () {});
+        } catch (e) { /* never block the click */ }
+    }
+
     /** Calls back with true when the visitor needs the cookie banner (one of
      *  BANNER_REGIONS, or anywhere we can't place them) and false otherwise.
      *  Asks the worker, which reads the country off the request; any failure
      *  or a slow answer means true, so the banner errs towards showing. */
-    var GEO_URL = 'https://peachsounds-webhook.sareldu.workers.dev/geo';
+    var GEO_URL = WORKER + '/geo';
     var GEO_CACHE_KEY = 'cue_consent_required';
     var GEO_TIMEOUT_MS = 1500;
 
@@ -139,6 +168,7 @@
         consent: consent,
         applyConsent: applyConsent,
         clickIds: clickIds,
+        conversion: conversion,
         consentRequired: consentRequired
     };
 })();
