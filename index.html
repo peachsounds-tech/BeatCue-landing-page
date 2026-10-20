@@ -5,6 +5,7 @@
     <!-- Google tag (gtag.js) -->
     <script src="/js/google-ads.js"></script>
     <script src="/js/funnel-value.js"></script>
+    <script src="/js/attribution.js"></script>
     <script src="/js/identity.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
@@ -641,6 +642,7 @@
             
             posthogPreConsentInitialized = true;
             posthog.register({ page_version: CUE_PAGE_VERSION });
+            if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: false });
 
             if (isInternalTester) {
                 posthog.register({ is_internal: true });
@@ -717,6 +719,7 @@
             
             posthogFullyInitialized = true;
             posthog.register({ page_version: CUE_PAGE_VERSION });
+            if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: true });
 
             // Set person properties for internal tester (only needs to be done once)
             if (isInternalTester) {

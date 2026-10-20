@@ -24,6 +24,11 @@
  * click, a second tab, or the same person arriving on the desktop through the
  * hand-off link dedupes into the first conversion on both platforms. The
  * Pixel half carries the same id, so Meta keeps one of the two.
+ *
+ * Each send is also captured in PostHog as `funnel_value_sent`, with the click
+ * ids and cookies the ad platforms received (the touch's UTMs come along as
+ * super properties, see attribution.js), so a conversion the platforms didn't
+ * credit can be checked against what was sent.
  */
 (function () {
     var WORKER = 'https://peachsounds-webhook.sareldu.workers.dev';
@@ -64,6 +69,26 @@
 
         var eventId = 'fv_' + bcid + '_' + step;
         var url = window.location.href;
+        var fbp = cookie('_fbp') || window.__cue_fbp || null;
+        var fbc = cookie('_fbc') || window.__cue_fbc || null;
+        var fbclid = window.__cue_fbclid || null;
+        var g = window.CueGoogleAds ? window.CueGoogleAds.clickIds() : {};
+
+        if (window.posthog && typeof window.posthog.capture === 'function') {
+            window.posthog.capture('funnel_value_sent', {
+                funnel_step: step,
+                value: value,
+                currency: 'USD',
+                event_id: eventId,
+                bcid: bcid,
+                fbclid: fbclid,
+                fbp: fbp,
+                fbc: fbc,
+                gclid: g.gclid || null,
+                gbraid: g.gbraid || null,
+                wbraid: g.wbraid || null
+            });
+        }
 
         if (typeof fbq === 'function') {
             fbq('trackCustom', 'funnel_value',
@@ -78,15 +103,14 @@
             action_source: 'website',
             internal_name: step,
             user_data: {
-                fbp: cookie('_fbp') || window.__cue_fbp || null,
-                fbc: cookie('_fbc') || window.__cue_fbc || null,
-                fbclid: window.__cue_fbclid || null,
+                fbp: fbp,
+                fbc: fbc,
+                fbclid: fbclid,
                 external_id: bcid
             },
             custom_data: { value: value, currency: 'USD', funnel_step: step }
         });
 
-        var g = window.CueGoogleAds ? window.CueGoogleAds.clickIds() : {};
         post('/gads', {
             event_name: 'funnel_value',
             transaction_id: eventId,
