@@ -642,36 +642,6 @@
                 : String(Date.now()) + Math.random().toString(36).slice(2));
         }
 
-        // Browser → worker → Google Ads uploadClickConversions. Shares
-        // transaction_id with the gtag conversion for dedupe.
-        function postGoogleAdsServerConversion(opts) {
-            try {
-                var g = (typeof getGoogleClickIds === 'function') ? getGoogleClickIds() : {};
-                fetch(PAIRINGS_BASE + '/gads', {
-                    method: 'POST',
-                    mode: 'cors',
-                    credentials: 'omit',
-                    keepalive: true,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        event_name: opts.event_name,
-                        transaction_id: opts.transaction_id,
-                        event_source_url: window.location.href,
-                        internal_name: opts.internal_name || null,
-                        distinct_id: (window.posthog && posthog.get_distinct_id) ? posthog.get_distinct_id() : null,
-                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
-                        value: typeof opts.value === 'number' ? opts.value : 1.0,
-                        currency: opts.currency || 'ILS',
-                        user_data: {
-                            gclid:  g.gclid  || null,
-                            gbraid: g.gbraid || null,
-                            wbraid: g.wbraid || null
-                        }
-                    })
-                }).catch(function () {});
-            } catch (e) { /* never block the click */ }
-        }
-
         // Check if Windows downloads should be blocked (force_mac=true)
         const urlParams = new URLSearchParams(window.location.search);
         const forceMac = urlParams.get('force_mac') === 'true';
@@ -868,11 +838,9 @@
         // Google Ads: fire on real desktop download CTAs only (macOS auto-
         // download / Windows Store redirect / manual download link). Mobile
         // visitors do not call this — they hit trackMobileDownloadBlocked /
-        // the share hand-off instead. Uses the page's gtag (AW-18317916073)
-        // directly; no download-converted.html hop.
-        // Google Ads "Request quote" conversion — fires on desktop download CTA.
-        var GOOGLE_ADS_DOWNLOAD_SEND_TO = 'AW-18317916073/H-gBCKTHnNUcEKnv1J5E';
-
+        // the share hand-off instead. Uploaded through the worker, which holds
+        // the conversion action ids; the page's own gtag conversion named a
+        // website action that no longer exists.
         function fireGoogleAdsDownloadConversion(platform) {
             if (window.__cue_gads_download_fired) return;
             window.__cue_gads_download_fired = true;
@@ -884,21 +852,13 @@
                     platform: platform,
                     source: 'download_page'
                 });
-                if (GOOGLE_ADS_DOWNLOAD_SEND_TO) {
-                    gtag('event', 'conversion', {
-                        send_to: GOOGLE_ADS_DOWNLOAD_SEND_TO,
-                        value: 1.0,
-                        currency: 'ILS',
-                        transaction_id: downloadTxId
-                    });
-                }
             }
 
-            postGoogleAdsServerConversion({
+            CueGoogleAds.conversion({
                 event_name: 'trial_download',
                 transaction_id: downloadTxId,
-                value: 1.0,
-                currency: 'ILS',
+                value: CueFunnelValue.valueFor('download_started'),
+                currency: 'USD',
                 internal_name: 'download_page_' + platform
             });
 

@@ -7191,7 +7191,6 @@
             // MOBILE -> DESKTOP HAND-OFF (share download link)
             // Same 1-hop flow as the main landing page.
             // =====================================================
-            var GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO = 'AW-18317916073/1x2-COL5tNQcEKnv1J5E';
             var SHARE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>';
 
             function getGoogleClickIds() {
@@ -7256,19 +7255,18 @@
                 }
                 if (typeof gtag === 'function') {
                     gtag('event', 'send_to_desktop', { method: method, platform: detectedDevice, source: 'landing_page_v2' });
-                    if (GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO && !window.__cue_gads_send_to_desktop_fired) {
-                        window.__cue_gads_send_to_desktop_fired = true;
-                        if (isEmail && ids.googleEmailHash) {
-                            gtag('set', 'user_data', { sha256_email_address: ids.googleEmailHash });
-                        }
-                        var conversion = {
-                            send_to: GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO,
-                            value: 1.0,
-                            currency: 'ILS'
-                        };
-                        if (isEmail) conversion.transaction_id = ids.gadsTxId;
-                        gtag('event', 'conversion', conversion);
-                    }
+                }
+                // The email hand-off is uploaded by the worker, which has the
+                // address to attach; the other methods are uploaded here.
+                if (!isEmail && !window.__cue_gads_send_to_desktop_fired) {
+                    window.__cue_gads_send_to_desktop_fired = true;
+                    CueGoogleAds.conversion({
+                        event_name: 'send_to_desktop',
+                        transaction_id: makeCueTransactionId(),
+                        value: CueFunnelValue.valueFor('send_to_computer'),
+                        currency: 'USD',
+                        internal_name: 'landing_send_to_desktop'
+                    });
                 }
                 if (typeof posthog !== 'undefined' && posthog.capture) {
                     posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: detectedDevice, source: 'landing_page_v2' });
@@ -7405,34 +7403,6 @@
                 });
             }
 
-            // Same rule as adEmailAllowed() in the worker: no email hash for an
-            // explicit "no" (or GPC), and where the banner is required, none
-            // without a "yes". An unknown region counts as required.
-            function adEmailAllowed() {
-                var c = window.CueGoogleAds ? CueGoogleAds.consent() : null;
-                if (c === 'denied') return false;
-                var required = true;
-                try { required = sessionStorage.getItem('cue_consent_required') !== 'false'; } catch (e) {}
-                return !required || c === 'granted';
-            }
-
-            // sha256 hex of the email normalized per Google's enhanced
-            // conversions spec (mirrors googleEmailHash() in the worker).
-            function googleEmailHash(email) {
-                if (!window.crypto || !crypto.subtle) return Promise.resolve(null);
-                var e = email.replace(/\s+/g, '').toLowerCase();
-                var at = e.lastIndexOf('@');
-                var local = e.slice(0, at), domain = e.slice(at + 1);
-                if (domain === 'gmail.com' || domain === 'googlemail.com') {
-                    e = local.split('+')[0].replace(/\./g, '') + '@' + domain;
-                }
-                return crypto.subtle.digest('SHA-256', new TextEncoder().encode(e)).then(function (buf) {
-                    return Array.prototype.map.call(new Uint8Array(buf), function (b) {
-                        return ('0' + b.toString(16)).slice(-2);
-                    }).join('');
-                }).catch(function () { return null; });
-            }
-
             function onHandoffSent(email, placement, data, ids) {
                 try { localStorage.setItem(HANDOFF_SENT_KEY, email); } catch (e) {}
                 handoffForms.forEach(renderHandoffSuccess);
@@ -7442,10 +7412,7 @@
                     // skip the ad-platform halves so the Pixel / gtag don't add
                     // conversions the server deliberately withheld.
                     if (data.conversion) {
-                        (adEmailAllowed() ? googleEmailHash(email) : Promise.resolve(null)).then(function (hash) {
-                            ids.googleEmailHash = hash;
-                            trackSendToComputer('email', ids);
-                        });
+                        trackSendToComputer('email', ids);
                     }
                     trackHandoff('handoff_email_sent', {
                         placement: placement,

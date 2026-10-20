@@ -132,5 +132,11 @@
         });
     }
 
-    window.CueFunnelValue = { send: send };
+    /** What a step is worth, for the step's own conversion action: Google
+     *  gets both this and funnel_value, and they must agree. */
+    function valueFor(step) {
+        return STEP_VALUES[step] || 0;
+    }
+
+    window.CueFunnelValue = { send: send, valueFor: valueFor };
 })();
