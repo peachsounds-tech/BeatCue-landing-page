@@ -725,6 +725,7 @@ async function sendPurchaseToMeta(env, { order, orderId, email, hashedEmail, bci
             ok: false,
             error: `skipped:${skip}`,
             order_id: orderId,
+            bcid: bcid && BCID_RE.test(bcid) ? bcid : null,
         });
         return;
     }
@@ -789,6 +790,7 @@ async function sendPurchaseToMeta(env, { order, orderId, email, hashedEmail, bci
         order_id: orderId,
         value: event.custom_data.value,
         currency: event.custom_data.currency,
+        bcid: userData.external_id || null,
     });
 }
 
@@ -2482,6 +2484,9 @@ async function handleGads(request, env, url) {
     const report = async (fields) => {
         if (reportsItself) return;
         const distinctId = clampString(body.distinct_id, 200);
+        // Read off the body rather than the parsed locals below: this runs on
+        // every exit path, including ones taken before those are assigned.
+        const ids = (body.user_data && typeof body.user_data === 'object') ? body.user_data : {};
         try {
             await sendToPostHog('capi_send_result', distinctId || `gads_${body.transaction_id}`, {
                 ad_platform: 'google',
@@ -2493,6 +2498,18 @@ async function handleGads(request, env, url) {
                 event_source_url: clampString(body.event_source_url, 2048),
                 ad_consent: normalizeAdConsent(body.ad_consent) || 'unknown',
                 consent_required: GADS_CONSENT_COUNTRIES.has((request.cf && request.cf.country) || ''),
+                // What the caller asked us to upload. A send that overrode it
+                // — a purchase priced from its order — reports the uploaded
+                // number instead, through `fields`.
+                value: typeof body.value === 'number' ? body.value : null,
+                currency: clampString(body.currency, 8) || null,
+                // The ids themselves, beside the had_* flags: which click a
+                // conversion should have been credited to is the question an
+                // absent row in Ads Manager raises.
+                gclid: clampString(ids.gclid, 256) || null,
+                gbraid: clampString(ids.gbraid, 256) || null,
+                wbraid: clampString(ids.wbraid, 256) || null,
+                bcid: distinctId || null,
                 ...(distinctId ? {} : { $process_person_profile: false }),
                 ...fields,
             });
@@ -2777,6 +2794,11 @@ async function handleGads(request, env, url) {
         status_code: upstreamStatus,
         request_id: requestId,
         validate_only: !!(payload.validateOnly),
+        // What actually went up, which is the caller's value only when the
+        // worker didn't price it from the order.
+        value,
+        currency: event.currency || null,
+        value_source: valueSource,
         ...(httpOk && !hasPartialFailure ? {} : {
             error: hasPartialFailure
                 ? clampString(partialFailure.message, 200) || 'partial_failure'
