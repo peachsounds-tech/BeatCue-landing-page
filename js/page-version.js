@@ -2,6 +2,10 @@
 // Bump the default once for shared pages; path-specific versions override below.
 (function () {
     var path = (typeof location !== 'undefined' && location.pathname) || '';
+    if (/^\/v5(\/|$)/.test(path)) {
+        window.CUE_PAGE_VERSION = '5.1.0';
+        return;
+    }
     if (/^\/v4(\/|$)/.test(path)) {
         window.CUE_PAGE_VERSION = '4.0.1';
         return;
