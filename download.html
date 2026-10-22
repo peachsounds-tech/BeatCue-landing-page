@@ -518,11 +518,15 @@
                 $set_once: { first_platform: getAcquisitionPlatform() }
             };
 
+            // send_instantly on every capture from this page: a Windows visitor
+            // leaves for the Microsoft Store about half a second from now, well
+            // inside PostHog's batch window, and we'd rather not depend on the
+            // unload beacon catching the queue.
             if (userConsented) {
-                posthog.capture('page_viewed', baseProps);
+                posthog.capture('page_viewed', baseProps, { send_instantly: true });
                 console.log('📊 PostHog: page_viewed tracked (consented, with UTMs)' + (fromCache ? ' [from cache]' : ''));
             } else {
-                posthog.capture('page_viewed', { ...baseProps, screen_width: window.screen.width, screen_height: window.screen.height });
+                posthog.capture('page_viewed', { ...baseProps, screen_width: window.screen.width, screen_height: window.screen.height }, { send_instantly: true });
                 console.log('📊 PostHog: page_viewed tracked (anonymous, with UTMs)' + (fromCache ? ' [from cache]' : ''));
             }
         }
@@ -646,14 +650,15 @@
         const urlParams = new URLSearchParams(window.location.search);
         const forceMac = urlParams.get('force_mac') === 'true';
 
-        // Fire-and-forget: hand the current attribution payload to the worker
-        // so the desktop app can claim it on first launch. Idempotent — repeat
-        // calls just overwrite the same KV entry. Failures are silent because
-        // a missed pairing only costs us a single anonymous app session.
+        // Hand the current attribution payload to the worker so the desktop app
+        // can claim it on first launch. Idempotent — repeat calls just
+        // overwrite the same KV entry. Failures are silent because a missed
+        // pairing only costs us a single anonymous app session. Returns a
+        // promise so the Windows redirect can wait for it; never rejects.
         function postPairing(platform) {
             try {
                 var bcid = window.__cue_bcid;
-                if (!bcid) return;
+                if (!bcid) return Promise.resolve();
 
                 // Re-read at click time as a safety net. By now fbevents.js
                 // has typically had seconds to initialize and write _fbp,
@@ -678,7 +683,7 @@
                     platform: platform
                 };
 
-                fetch(PAIRINGS_BASE + '/pairings', {
+                return fetch(PAIRINGS_BASE + '/pairings', {
                     method: 'POST',
                     mode: 'cors',
                     credentials: 'omit',
@@ -687,6 +692,7 @@
                     body: JSON.stringify(payload)
                 }).catch(function() {});
             } catch (e) { /* never block download on a pairing hiccup */ }
+            return Promise.resolve();
         }
 
         // Tunable: every 3s we ask the worker if this bcid was claimed by a
@@ -842,7 +848,7 @@
         // the conversion action ids; the page's own gtag conversion named a
         // website action that no longer exists.
         function fireGoogleAdsDownloadConversion(platform) {
-            if (window.__cue_gads_download_fired) return;
+            if (window.__cue_gads_download_fired) return Promise.resolve();
             window.__cue_gads_download_fired = true;
 
             var downloadTxId = makeCueTransactionId();
@@ -854,7 +860,7 @@
                 });
             }
 
-            CueGoogleAds.conversion({
+            var upload = CueGoogleAds.conversion({
                 event_name: 'trial_download',
                 transaction_id: downloadTxId,
                 value: CueFunnelValue.valueFor('download_started'),
@@ -863,6 +869,7 @@
             });
 
             console.log('📊 Google Ads: download conversion fired', { platform: platform, transaction_id: downloadTxId });
+            return upload;
         }
 
         function trackMobileDownloadBlocked(platform) {
@@ -885,6 +892,9 @@
             console.log('📊 Google Ads: mobile download blocked (not a conversion)', { platform: platform });
         }
 
+        // Returns a promise that resolves once every upload this fires has
+        // settled, so the Windows redirect can wait for them instead of racing
+        // a fixed timeout. The Pixel is the one call with nothing to wait on.
         function trackDownload(platform) {
             if (typeof fbq === 'function') {
                 var eventData = { 
@@ -897,8 +907,8 @@
                 console.log('📊 Meta Pixel: StartTrial tracked', eventData);
             }
 
-            fireGoogleAdsDownloadConversion(platform);
-            if (window.CueFunnelValue) CueFunnelValue.send('download_started');
+            var sends = [fireGoogleAdsDownloadConversion(platform)];
+            if (window.CueFunnelValue) sends.push(CueFunnelValue.send('download_started'));
 
             var props = { ...getBaseEventProps(), page: 'download', platform: platform, url: window.location.href, source: 'free_trial_page' };
             if (platform === 'windows') {
@@ -909,10 +919,49 @@
                 }
             }
             if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
-            posthog.capture('trial_download_started', props);
+            // send_instantly: this event is the funnel's download step and the
+            // page may navigate to the Store right after, so it must not sit
+            // in PostHog's batch queue.
+            posthog.capture('trial_download_started', props, { send_instantly: true });
 
-            postPairing(platform);
+            sends.push(postPairing(platform));
             startPairingPoll();
+
+            return Promise.all(sends.map(function (p) {
+                return Promise.resolve(p).catch(function () {});
+            }));
+        }
+
+        // The Pixel is fire-and-forget, so there is nothing to wait on for it;
+        // a quarter second is well past the point where fbevents has handed
+        // its request to the network stack.
+        var STORE_PIXEL_FLOOR_MS = 250;
+        // Nothing may strand the visitor on this screen: if an upload hangs or
+        // the worker is down, leave anyway. The uploads are keepalive fetches,
+        // so they still complete after the navigation.
+        var STORE_REDIRECT_CAP_MS = 3000;
+
+        // Leave for the Microsoft Store once `tracked` (trackDownload's promise)
+        // has settled, instead of racing a fixed delay against the uploads.
+        function redirectToStore(tracked) {
+            var startedAt = Date.now();
+            var left = false;
+
+            function leave(reason) {
+                if (left) return;
+                left = true;
+                console.log('📊 Store redirect after ' + (Date.now() - startedAt) + 'ms (' + reason + ')');
+                window.location.href = getWindowsStoreUrl();
+            }
+
+            var pixelFloor = new Promise(function (resolve) {
+                setTimeout(resolve, STORE_PIXEL_FLOOR_MS);
+            });
+            Promise.all([tracked, pixelFloor]).then(
+                function () { leave('uploads settled'); },
+                function () { leave('upload failed'); }
+            );
+            setTimeout(function () { leave('cap reached'); }, STORE_REDIRECT_CAP_MS);
         }
 
         function setupUI(platform) {
@@ -967,6 +1016,13 @@
                     document.getElementById('downloadPageTitle').textContent = 'Opening the Microsoft Store…';
                     document.getElementById('dlSubtitle').textContent = 'Tap Get to install BeatCue \u00b7 Free to use';
 
+                    // The download / install / edit checklist describes the
+                    // macOS .pkg flow and nobody is here long enough to read
+                    // it, so drop the whole card on Windows.
+                    var winChecklist = document.getElementById('dlChecklist');
+                    var winCard = winChecklist && winChecklist.closest('.dl-card');
+                    if (winCard) winCard.style.display = 'none';
+
                     var securityTipEl = document.getElementById('securityTip');
                     if (securityTipEl) securityTipEl.style.display = '';
                     document.getElementById('securityTipHeader').innerHTML = '🎉 You\'re almost in!';
@@ -989,17 +1045,14 @@
 
             if ((platform === 'macos' || platform === 'windows') && !blockWindowsDownload) {
                 if (platform === 'windows') {
-                    // Windows ships via the Microsoft Store. Fire the same
-                    // pixel + PostHog + pairing flow we use for macOS, then
-                    // do a same-tab top-level redirect to the Store. The
-                    // pairing POST uses keepalive:true so it survives the
-                    // navigation. The ~1.5s pause lets the "Opening the
-                    // Microsoft Store…" copy read as intentional rather
-                    // than an instant pop. No popup, no blocker.
-                    trackDownload('windows');
-                    setTimeout(function() {
-                        window.location.href = getWindowsStoreUrl();
-                    }, 1500);
+                    // Windows ships via the Microsoft Store, and every Windows
+                    // CTA on the site now routes through here so the Store
+                    // install is measured like a .pkg download. Fire the same
+                    // pixel + PostHog + pairing flow we use for macOS, then do
+                    // a same-tab top-level redirect to the Store — no popup,
+                    // no blocker. redirectToStore() waits for the uploads to
+                    // settle rather than guessing at a delay.
+                    redirectToStore(trackDownload('windows'));
                     return;
                 }
 
