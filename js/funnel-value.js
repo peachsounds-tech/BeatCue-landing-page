@@ -48,7 +48,7 @@
 
     function post(path, body) {
         try {
-            fetch(WORKER + path, {
+            return fetch(WORKER + path, {
                 method: 'POST',
                 mode: 'cors',
                 credentials: 'omit',
@@ -57,16 +57,19 @@
                 body: JSON.stringify(body)
             }).catch(function () {});
         } catch (e) { /* never block the click */ }
+        return Promise.resolve();
     }
 
+    /** Returns a promise that resolves once both uploads settle — /download
+     *  waits on it before leaving for the Microsoft Store. Never rejects. */
     function send(step) {
         var value = STEP_VALUES[step];
         var bcid = window.__cue_bcid;
-        if (!value || !bcid) return;
+        if (!value || !bcid) return Promise.resolve();
 
         var onceKey = 'cue_funnel_value_once_' + step;
         try {
-            if (localStorage.getItem(onceKey) === '1') return;
+            if (localStorage.getItem(onceKey) === '1') return Promise.resolve();
             localStorage.setItem(onceKey, '1');
         } catch (e) {}
 
@@ -90,7 +93,10 @@
                 gclid: g.gclid || null,
                 gbraid: g.gbraid || null,
                 wbraid: g.wbraid || null
-            });
+            // One event per person per step, so batching buys nothing and
+            // costs the event when the page navigates straight after (the
+            // Store redirect on /download).
+            }, { send_instantly: true });
         }
 
         if (typeof fbq === 'function') {
@@ -99,7 +105,7 @@
                 { eventID: eventId });
         }
 
-        post('/capi', {
+        var capi = post('/capi', {
             event_name: 'funnel_value',
             event_id: eventId,
             event_source_url: url,
@@ -115,7 +121,7 @@
             custom_data: { value: value, currency: 'USD', funnel_step: step }
         });
 
-        post('/gads', {
+        var gads = post('/gads', {
             event_name: 'funnel_value',
             transaction_id: eventId,
             event_source_url: url,
@@ -130,6 +136,8 @@
                 wbraid: g.wbraid || null
             }
         });
+
+        return Promise.all([capi, gads]);
     }
 
     /** What a step is worth, for the step's own conversion action: Google

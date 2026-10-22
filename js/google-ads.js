@@ -104,10 +104,14 @@
      *  picks the conversion action on the worker; `value` and `currency` are
      *  the caller's, since every funnel step is worth something different
      *  (js/funnel-value.js holds the web ones). A conversion the Ads account
-     *  has no action for soft-skips on the worker. */
+     *  has no action for soft-skips on the worker.
+     *
+     *  Returns a promise that resolves once the upload settles, so a caller
+     *  that is about to navigate (the Store redirect on /download) can wait
+     *  for it instead of guessing at a delay. It never rejects. */
     function conversion(opts) {
         try {
-            fetch(WORKER + '/gads', {
+            return fetch(WORKER + '/gads', {
                 method: 'POST',
                 mode: 'cors',
                 credentials: 'omit',
@@ -118,7 +122,13 @@
                     transaction_id: opts.transaction_id,
                     event_source_url: window.location.href,
                     internal_name: opts.internal_name || null,
-                    distinct_id: (window.posthog && posthog.get_distinct_id) ? posthog.get_distinct_id() : null,
+                    // The worker looks the visitor's hashed email up by this id
+                    // for enhanced conversions. Fall back to the bcid: on
+                    // /download the conversion fires before posthog's array
+                    // stub has a distinct id to give, and the two are the same
+                    // value anyway (the bcid bootstraps the distinct id).
+                    distinct_id: ((window.posthog && posthog.get_distinct_id) ? posthog.get_distinct_id() : null)
+                                 || window.__cue_bcid || null,
                     ad_consent: consent(),
                     value: opts.value,
                     currency: opts.currency || 'USD',
@@ -126,6 +136,7 @@
                 })
             }).catch(function () {});
         } catch (e) { /* never block the click */ }
+        return Promise.resolve();
     }
 
     /** Calls back with true when the visitor needs the cookie banner (one of

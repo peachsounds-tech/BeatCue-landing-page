@@ -798,6 +798,12 @@
             --nav-h: 56px;
             --hero-pad-top: 16px;
             --hero-pad-bottom: 24px;
+
+            /* Hero demo video height. Width follows from the video's
+               own aspect ratio, so driving height off the viewport keeps
+               it proportional. The vh term stops it pushing the CTAs off
+               a short window. */
+            --demo-video-h: min(380px, calc((100vw - 4rem) * 0.4755), 62vh);
         }
         
         /* Dark theme */
@@ -1255,7 +1261,7 @@
             animation: fadeInUp 0.8s ease 0.3s both;
             width: 100%;
             max-width: 780px;
-            max-height: 380px;
+            max-height: calc(var(--demo-video-h) + 10px);
         }
         
         .app-screenshot {
@@ -1288,9 +1294,9 @@
         }
         
         .demo-video {
-            width: 100%;
-            height: auto;
-            max-height: 380px;
+            width: auto;
+            height: var(--demo-video-h);
+            max-width: 100%;
             object-fit: contain;
             border-radius: 12px;
             display: block;
@@ -3871,6 +3877,7 @@
                 --section-pad-y: 4.5rem;
                 --section-pad-y-tight: 2rem;
                 --nav-h: 60px;
+                --demo-video-h: min(360px, calc((100vw - 4rem) * 0.4755), 62vh);
             }
             
             .hero {
@@ -3892,12 +3899,7 @@
             }
             
             .hero-visual {
-                max-height: 380px;
                 margin-bottom: 16px;
-            }
-            
-            .demo-video {
-                max-height: 360px;
             }
             
             .hero-ctas {
@@ -3985,6 +3987,7 @@
                 --section-pad-x: calc(var(--scale) * 5);
                 --section-pad-y: calc(var(--scale) * 4);
                 --section-pad-y-tight: calc(var(--scale) * 3);
+                --demo-video-h: min(calc(var(--scale) * 24), 62vh);
             }
             
             /* Hero section */
@@ -4023,11 +4026,6 @@
                 max-height: calc(var(--scale) * 25.5);
                 max-width: calc(var(--scale) * 53);
                 margin-bottom: calc(var(--scale) * 1);
-            }
-            
-            .demo-video {
-                max-height: calc(var(--scale) * 24);
-                width: 100%;
             }
             
             .hero-ctas {
@@ -4447,13 +4445,14 @@
                 margin-left: -4px;
             }
             
-            .hero-visual {
-                margin: 0 0 14px 0;
-                max-height: 220px;
+            :root {
+                /* Hero padding drops to 1rem a side here, so the video
+                   can use more of the width than it does on desktop. */
+                --demo-video-h: min(calc((100vw - 2rem) * 0.4755), 62vh);
             }
             
-            .demo-video {
-                max-height: 200px;
+            .hero-visual {
+                margin: 0 0 14px 0;
             }
             
             .hero-subtitle {
@@ -4661,12 +4660,7 @@
             }
             
             .hero-visual {
-                max-height: 180px;
                 margin: 0 0 12px 0;
-            }
-            
-            .demo-video {
-                max-height: 160px;
             }
             
             .hero-subtitle {
@@ -4760,14 +4754,6 @@
             .hero-badge svg {
                 width: 17px;
                 height: 17px;
-            }
-            
-            .hero-visual {
-                max-height: 150px;
-            }
-            
-            .demo-video {
-                max-height: 140px;
             }
             
             .hero-subtitle {
@@ -5873,7 +5859,6 @@
         </div>
     </footer>
 
-    <script src="/js/microsoft-store.js"></script>
     <script>
         
         // Video sound toggle
@@ -6557,18 +6542,6 @@
             }
         }
         
-        function getMicrosoftStoreUrl() {
-            if (window.CueMicrosoftStore) {
-                // Embed the bcid in the Store cid so the desktop app can
-                // claim attribution via WinRT GetAppPurchaseCampaignIdAsync
-                // on first launch without depending on the IP-pairing
-                // loopback (which gets unreliable behind Store install
-                // queues, deferred installs, and cross-device installs).
-                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps, window.__cue_bcid);
-            }
-            return 'https://apps.microsoft.com/detail/9nrc99fw338g';
-        }
-
         const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
 
         function makeCueTransactionId() {
@@ -6608,84 +6581,6 @@
             return out;
         }
 
-        function postWindowsStorePairing(bcid) {
-            try {
-                // Re-read at click time as a safety net. By now fbevents.js has
-                // typically had seconds to initialize and write _fbp, and our
-                // own pre-created cookie is also persisted. The cached globals
-                // remain a fallback for environments that disallow cookie reads.
-                var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
-                var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
-                var g = window.CueGoogleAds ? CueGoogleAds.clickIds() : {};
-                fetch(PAIRINGS_BASE + '/pairings', {
-                    method: 'POST',
-                    mode: 'cors',
-                    credentials: 'omit',
-                    keepalive: true,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        bcid: bcid,
-                        fbp: freshFbp,
-                        fbc: freshFbc,
-                        fbclid: window.__cue_fbclid || null,
-                        gclid: g.gclid || null,
-                        gbraid: g.gbraid || null,
-                        wbraid: g.wbraid || null,
-                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
-                        utms: (typeof getUtmProps === 'function') ? getUtmProps() : {},
-                        platform: 'windows'
-                    })
-                }).catch(function() {});
-            } catch (e) { /* never block the click on a pairing hiccup */ }
-        }
-
-        function fireWindowsDownloadStarted() {
-            if (typeof fbq === 'function') {
-                fbq('track', 'StartTrial', {
-                    value: '0.00',
-                    currency: 'USD',
-                    content_name: 'BeatCue',
-                    platform: 'windows'
-                });
-            }
-            // Google Ads: fire on the landing-page Windows CTA (these users
-            // never hit download.html — they go straight to the Store).
-            if (!window.__cue_gads_download_fired) {
-                window.__cue_gads_download_fired = true;
-                var downloadTxId = makeCueTransactionId();
-                if (typeof gtag === 'function') {
-                    gtag('event', 'trial_download_started', {
-                        platform: 'windows',
-                        source: 'landing_to_store'
-                    });
-                }
-                CueGoogleAds.conversion({
-                    event_name: 'trial_download',
-                    transaction_id: downloadTxId,
-                    value: CueFunnelValue.valueFor('download_started'),
-                    currency: 'USD',
-                    internal_name: 'landing_windows_store'
-                });
-            }
-            if (typeof posthog !== 'undefined' && posthog.capture) {
-                var props = {
-                    ...(typeof getBaseEventProps === 'function' ? getBaseEventProps() : {}),
-                    page: 'landing',
-                    platform: 'windows',
-                    url: window.location.href,
-                    source: 'landing_to_store',
-                    ms_store_url: getMicrosoftStoreUrl()
-                };
-                if (window.CueMicrosoftStore) {
-                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps, window.__cue_bcid);
-                    if (cid) props.ms_store_cid = cid;
-                }
-                if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
-                posthog.capture('trial_download_started', props);
-            }
-            postWindowsStorePairing(window.__cue_bcid);
-        }
-
         // Same naming as section_viewed (id > first class > tag).
         function getSectionNameFromElement(el) {
             if (!el) return 'unknown';
@@ -6698,8 +6593,8 @@
             return firstClass || section.tagName.toLowerCase();
         }
 
-        // Track trial download click. macOS → download.html with identity;
-        // Windows → Microsoft Store (href set in platform detection below).
+        // Track trial download click. Both platforms go to download.html
+        // carrying the PostHog id; that page owns the download conversions.
         function trackTrialDownloadClick(event) {
             const ua = navigator.userAgent || navigator.platform || '';
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
@@ -6712,11 +6607,6 @@
                     platform: platform,
                     section_name: sectionName
                 });
-            }
-
-            if (platform === 'windows') {
-                fireWindowsDownloadStarted();
-                return;
             }
 
             // Pass anonymous ID to download page so PostHog can preserve identity
@@ -7561,14 +7451,12 @@
             } else if (useMobileHandoff) {
                 setupMobileHandoffCtas();
             } else if (isWindows || forcePlatform === 'windows') {
-                // All download CTAs go straight to the Microsoft Store on Windows.
-                var storeUrl = getMicrosoftStoreUrl();
-                if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', storeUrl);
-                if (pricingDownloadBtn) {
-                    pricingDownloadBtn.setAttribute('href', storeUrl);
-                    pricingDownloadBtn.textContent = 'Download for Windows';
-                }
-                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.setAttribute('href', storeUrl);
+                // Windows CTAs keep their /download href. That page fires the
+                // same StartTrial / funnel_value / trial_download set as the
+                // macOS flow and registers the pairing before forwarding to
+                // the Microsoft Store, so a Store install is measured like a
+                // .pkg download instead of leaving the site untracked.
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download for Windows';
                 if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
                 if (heroNote) heroNote.textContent = 'Free to try \u00b7 Windows 10+';
                 if (pricingNote) pricingNote.textContent = 'Recommended: Windows 10+';
