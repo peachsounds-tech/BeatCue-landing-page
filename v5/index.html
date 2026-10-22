@@ -6666,87 +6666,7 @@
             }
         }
         
-        function getMicrosoftStoreUrl() {
-            if (window.CueMicrosoftStore) {
-                // Embed the bcid in the Store cid so the desktop app can
-                // claim attribution via WinRT GetAppPurchaseCampaignIdAsync
-                // on first launch without depending on the IP-pairing
-                // loopback (which gets unreliable behind Store install
-                // queues, deferred installs, and cross-device installs).
-                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps, window.__cue_bcid);
-            }
-            return 'https://apps.microsoft.com/detail/9nrc99fw338g';
-        }
-
         const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
-
-        function postWindowsStorePairing(bcid) {
-            try {
-                // Re-read at click time as a safety net. By now fbevents.js has
-                // typically had seconds to initialize and write _fbp, and our
-                // own pre-created cookie is also persisted. The cached globals
-                // remain a fallback for environments that disallow cookie reads.
-                var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
-                var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
-                var g = window.CueGoogleAds ? CueGoogleAds.clickIds() : {};
-                fetch(PAIRINGS_BASE + '/pairings', {
-                    method: 'POST',
-                    mode: 'cors',
-                    credentials: 'omit',
-                    keepalive: true,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        bcid: bcid,
-                        fbp: freshFbp,
-                        fbc: freshFbc,
-                        fbclid: window.__cue_fbclid || null,
-                        gclid: g.gclid || null,
-                        gbraid: g.gbraid || null,
-                        wbraid: g.wbraid || null,
-                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
-                        utms: (typeof getUtmProps === 'function') ? getUtmProps() : {},
-                        platform: 'windows'
-                    })
-                }).catch(function() {});
-            } catch (e) { /* never block the click on a pairing hiccup */ }
-        }
-
-        function fireWindowsDownloadStarted() {
-            if (typeof fbq === 'function') {
-                fbq('track', 'StartTrial', {
-                    value: '0.00',
-                    currency: 'USD',
-                    content_name: 'BeatCue',
-                    platform: 'windows'
-                });
-            }
-            // Google Ads: fire on the landing-page Windows CTA (these users
-            // never hit download.html — they go straight to the Store).
-            if (typeof gtag === 'function' && !window.__cue_gads_download_fired) {
-                window.__cue_gads_download_fired = true;
-                gtag('event', 'trial_download_started', {
-                    platform: 'windows',
-                    source: 'landing_v2_to_store'
-                });
-            }
-            if (typeof posthog !== 'undefined' && posthog.capture) {
-                var props = {
-                    ...(typeof getBaseEventProps === 'function' ? getBaseEventProps() : {}),
-                    page: 'landing_v2',
-                    platform: 'windows',
-                    url: window.location.href,
-                    source: 'landing_to_store',
-                    ms_store_url: getMicrosoftStoreUrl()
-                };
-                if (window.CueMicrosoftStore) {
-                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps, window.__cue_bcid);
-                    if (cid) props.ms_store_cid = cid;
-                }
-                if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
-                posthog.capture('trial_download_started', props);
-            }
-            postWindowsStorePairing(window.__cue_bcid);
-        }
 
         // Same naming as section_viewed (id > first class > tag).
         function getSectionNameFromElement(el) {
@@ -6760,8 +6680,8 @@
             return firstClass || section.tagName.toLowerCase();
         }
 
-        // Track trial download click. macOS → download.html with identity;
-        // Windows → Microsoft Store (href set in platform detection below).
+        // Track trial download click. Both platforms go to download.html
+        // carrying the PostHog id; that page owns the download conversions.
         function trackTrialDownloadClick(event) {
             const ua = navigator.userAgent || navigator.platform || '';
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
@@ -6774,11 +6694,6 @@
                     platform: platform,
                     section_name: sectionName
                 });
-            }
-
-            if (platform === 'windows') {
-                fireWindowsDownloadStarted();
-                return;
             }
 
             // Pass anonymous ID to download page so PostHog can preserve identity
@@ -7700,16 +7615,12 @@
             } else if (useMobileHandoff) {
                 setupMobileHandoffCtas();
             } else if (isWindows || forcePlatform === 'windows') {
-                // All download CTAs go straight to the Microsoft Store on Windows.
-                var storeUrl = getMicrosoftStoreUrl();
-                if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', storeUrl);
-                if (pricingDownloadBtn) {
-                    pricingDownloadBtn.setAttribute('href', storeUrl);
-                    setCtaLabel(pricingDownloadBtn, 'Download for Windows');
-                }
-                sectionDownloadBtns.forEach(function (btn) {
-                    btn.setAttribute('href', storeUrl);
-                });
+                // Windows CTAs keep their /download href. That page fires the
+                // same StartTrial / funnel_value / trial_download set as the
+                // macOS flow and registers the pairing before forwarding to
+                // the Microsoft Store, so a Store install is measured like a
+                // .pkg download instead of leaving the site untracked.
+                setCtaLabel(pricingDownloadBtn, 'Download for Windows');
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('Windows 10+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: Windows 10+';
             } else if (isMac || forcePlatform === 'mac') {
