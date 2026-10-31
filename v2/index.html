@@ -2,11 +2,7 @@
 <html lang="en">
 <head>
     <script src="/js/page-version.js"></script>
-    <script>window.CUE_PAGE_VERSION = '4.0.1';</script>
     <!-- Google tag (gtag.js) -->
-    <script src="/js/google-ads.js"></script>
-    <script src="/js/funnel-value.js"></script>
-    <script src="/js/attribution.js"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18317916073"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -246,13 +242,12 @@
              * Store consent decision
              * @param {string} status - 'accepted', 'rejected', or 'dismissed'
              */
-            function storeConsent(status, ads) {
+            function storeConsent(status) {
                 try {
-                    const record = { status: status, timestamp: Date.now() };
-                    // Advertising is its own answer (read by /js/google-ads.js);
-                    // left out when the visitor made no choice about it.
-                    if (typeof ads === 'boolean') record.ads = ads;
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                        status: status,
+                        timestamp: Date.now()
+                    }));
                 } catch (e) {
                     console.warn('CookieConsent: Could not write to localStorage', e);
                 }
@@ -293,20 +288,15 @@
              */
             function shouldShowBanner() {
                 const consent = getStoredConsent();
-                // Show banner if no consent stored OR consent has expired, and
-                // once more for anyone who accepted before advertising was
-                // part of the question.
-                return !consent || isConsentExpired(consent)
-                    || (consent.status === CONSENT_ACCEPTED && typeof consent.ads !== 'boolean');
+                // Show banner if no consent stored OR consent has expired
+                return !consent || isConsentExpired(consent);
             }
             
             /**
              * Accept consent - enables analytics
              */
-            function accept(ads) {
-                const adsGranted = ads !== false;
-                storeConsent(CONSENT_ACCEPTED, adsGranted);
-                if (window.CueGoogleAds) CueGoogleAds.applyConsent(adsGranted);
+            function accept() {
+                storeConsent(CONSENT_ACCEPTED);
                 hideBanner();
                 // Initialize PostHog and track consent event
                 if (typeof initPostHog === 'function') {
@@ -317,10 +307,8 @@
             /**
              * Reject consent - no analytics
              */
-            function reject(ads) {
-                const adsGranted = ads === true;
-                storeConsent(CONSENT_REJECTED, adsGranted);
-                if (window.CueGoogleAds) CueGoogleAds.applyConsent(adsGranted);
+            function reject() {
+                storeConsent(CONSENT_REJECTED);
                 hideBanner();
                 // Track rejection (still in memory mode, no cookies)
                 if (typeof trackConsentDecision === 'function') {
@@ -399,25 +387,15 @@
                     toggle.classList.toggle('cookie-banner__toggle--on', analyticsEnabled);
                 }
             }
-
-            let adsEnabled = true;
-
-            function toggleAds() {
-                adsEnabled = !adsEnabled;
-                const toggle = document.getElementById('adsToggle');
-                if (toggle) {
-                    toggle.classList.toggle('cookie-banner__toggle--on', adsEnabled);
-                }
-            }
             
             /**
              * Save preferences - accept or reject based on toggle state
              */
             function savePreferences() {
                 if (analyticsEnabled) {
-                    accept(adsEnabled);
+                    accept();
                 } else {
-                    reject(adsEnabled);
+                    reject();
                 }
             }
             
@@ -426,22 +404,8 @@
              */
             function init() {
                 if (shouldShowBanner()) {
-                    if (window.CueGoogleAds && CueGoogleAds.consentRequired) {
-                        CueGoogleAds.consentRequired(function (required) {
-                            if (required) {
-                                showBanner();
-                            } else if (typeof initPostHog === 'function') {
-                                // Outside the EEA/UK/Switzerland: no banner,
-                                // analytics as if accepted. Nothing is stored,
-                                // so a later visit from Europe still asks.
-                                initPostHog(false);
-                            }
-                        });
-                    } else {
-                        showBanner();
-                    }
-                }
-                if (shouldLoadAnalytics()) {
+                    showBanner();
+                } else if (shouldLoadAnalytics()) {
                     // User already consented, load analytics
                     if (typeof initPostHog === 'function') {
                         initPostHog(false); // false = returning user
@@ -460,7 +424,6 @@
                 init,
                 togglePreferences,
                 toggleAnalytics,
-                toggleAds,
                 savePreferences
             };
         })();
@@ -476,7 +439,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '4.0.1';
+        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION;
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -505,7 +468,7 @@
         }
 
         function getBaseEventProps() {
-            const props = { ...getUtmProps(), page_version: CUE_PAGE_VERSION };
+            const props = { ...getUtmProps(), page: window.CUE_PAGE || 'landing', page_version: CUE_PAGE_VERSION };
             if (isInternalTester) {
                 props.is_internal = true;
             }
@@ -562,9 +525,9 @@
             const nowIso = new Date().toISOString();
             const referrer = document.referrer || '';
             const personProps = {
-                first_seen_flow: 'landing_v2',
+                first_seen_flow: 'landing',
                 first_seen_at: nowIso,
-                first_landing_page: 'landing_v2',
+                first_landing_page: 'landing',
                 first_landing_page_version: CUE_PAGE_VERSION
             };
             if (utms.utm_source)   personProps.first_utm_source   = utms.utm_source;
@@ -583,8 +546,8 @@
                     $set_once: personProps,
                     $lib: 'web-landing',
                     $lib_version: CUE_PAGE_VERSION,
-                    page: 'landing_v2',
-                    flow: 'landing_v2'
+                    page: 'landing',
+                    flow: 'landing'
                 }
             });
             console.log('📊 PostHog: first-touch identity ($set_once)', personProps);
@@ -640,8 +603,7 @@
             });
             
             posthogPreConsentInitialized = true;
-            posthog.register({ page_version: CUE_PAGE_VERSION });
-            if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: false });
+            posthog.register((window.CuePage && CuePage.superProps()) || { page_version: CUE_PAGE_VERSION, page: window.CUE_PAGE });
 
             if (isInternalTester) {
                 posthog.register({ is_internal: true });
@@ -661,7 +623,7 @@
         function trackConsentDecision(decision) {
             if (typeof posthog !== 'undefined' && posthog.capture) {
                 posthog.capture('consent_' + decision, {
-                    page: 'landing_v2',
+                    page: 'landing',
                     url: window.location.href
                 });
                 console.log('📊 PostHog: consent_' + decision + ' tracked');
@@ -716,8 +678,7 @@
             }
             
             posthogFullyInitialized = true;
-            posthog.register({ page_version: CUE_PAGE_VERSION });
-            if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: true });
+            posthog.register((window.CuePage && CuePage.superProps()) || { page_version: CUE_PAGE_VERSION, page: window.CUE_PAGE });
 
             // Set person properties for internal tester (only needs to be done once)
             if (isInternalTester) {
@@ -796,12 +757,6 @@
             --nav-h: 56px;
             --hero-pad-top: 16px;
             --hero-pad-bottom: 24px;
-
-            /* Hero demo video height. Width follows from the video's
-               own aspect ratio, so driving height off the viewport keeps
-               it proportional. The vh term stops it pushing the CTAs off
-               a short window. */
-            --demo-video-h: min(380px, calc((100vw - 4rem) * 0.4755), 62vh);
         }
         
         /* Dark theme */
@@ -1102,12 +1057,11 @@
         }
         
         .hero-tagline {
-            font-size: clamp(2rem, 4.6vw, 3.4rem);
-            font-weight: 700;
-            line-height: 1.12;
+            font-size: clamp(1.6rem, 3.5vw, 2.5rem);
+            font-weight: 600;
             color: var(--text-primary);
             margin: 0.25rem 0 16px 0;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.01em;
             animation: fadeInUp 0.8s ease 0.25s both;
         }
         
@@ -1215,22 +1169,6 @@
             box-shadow: none;
         }
         
-        .cta-download-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .cta-download-icon svg {
-            display: block;
-        }
-
-        .cta-download-label,
-        #heroDownloadLabel {
-            white-space: nowrap;
-        }
-
         .btn {
             display: inline-flex;
             align-items: center;
@@ -1276,7 +1214,7 @@
             animation: fadeInUp 0.8s ease 0.3s both;
             width: 100%;
             max-width: 780px;
-            max-height: calc(var(--demo-video-h) + 10px);
+            max-height: 380px;
         }
         
         .app-screenshot {
@@ -1309,13 +1247,179 @@
         }
         
         .demo-video {
-            width: auto;
-            height: var(--demo-video-h);
-            max-width: 100%;
+            width: 100%;
+            height: auto;
+            max-height: 380px;
             object-fit: contain;
             border-radius: 12px;
             display: block;
             cursor: pointer;
+        }
+        
+        .video-sound-toggle {
+            position: absolute;
+            bottom: 18px;
+            right: 18px;
+            background: rgba(0, 0, 0, 0.65);
+            color: #ffffff;
+            width: 52px;
+            height: 36px;
+            padding: 0;
+            border-radius: 18px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(4px);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            animation: subtlePulse 2s ease-in-out 3;
+            overflow: hidden;
+        }
+        
+        .video-sound-toggle:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        .video-sound-toggle:focus {
+            outline: 2px solid rgba(255, 107, 53, 0.8);
+            outline-offset: 2px;
+        }
+        
+        .video-sound-toggle.unmuted {
+            background: rgba(255, 107, 53, 0.85);
+            animation: none;
+        }
+        
+        .video-sound-toggle.faded {
+            opacity: 0.4;
+            transition: opacity 0.4s ease;
+        }
+        
+        .video-sound-toggle.faded:hover {
+            opacity: 1;
+        }
+        
+        @keyframes subtlePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+            50% { box-shadow: 0 0 20px 12px rgba(255, 255, 255, 0.9); }
+        }
+        
+        /* Sound wave bars animation - positioned behind text */
+        .sound-bars {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            top: 4px;
+            bottom: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            opacity: 0.35;
+        }
+        
+        .sound-bars .bar {
+            flex: 1;
+            margin: 0 1px;
+            background: #ffffff;
+            border-radius: 2px;
+        }
+        
+        .sound-bars .bar:nth-child(1) {
+            height: 35%;
+            animation: soundBar1 0.3s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(2) {
+            height: 70%;
+            animation: soundBar2 0.35s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(3) {
+            height: 50%;
+            animation: soundBar3 0.25s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(4) {
+            height: 90%;
+            animation: soundBar4 0.4s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(5) {
+            height: 60%;
+            animation: soundBar5 0.28s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(6) {
+            height: 45%;
+            animation: soundBar1 0.32s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(7) {
+            height: 75%;
+            animation: soundBar2 0.38s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(8) {
+            height: 55%;
+            animation: soundBar3 0.33s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(9) {
+            height: 80%;
+            animation: soundBar4 0.27s ease-in-out infinite;
+        }
+        
+        .sound-bars .bar:nth-child(10) {
+            height: 40%;
+            animation: soundBar5 0.36s ease-in-out infinite;
+        }
+        
+        @keyframes soundBar1 {
+            0%, 100% { height: 35%; }
+            50% { height: 80%; }
+        }
+        
+        @keyframes soundBar2 {
+            0%, 100% { height: 70%; }
+            50% { height: 30%; }
+        }
+        
+        @keyframes soundBar3 {
+            0%, 100% { height: 50%; }
+            50% { height: 100%; }
+        }
+        
+        @keyframes soundBar4 {
+            0%, 100% { height: 90%; }
+            50% { height: 40%; }
+        }
+        
+        @keyframes soundBar5 {
+            0%, 100% { height: 60%; }
+            50% { height: 85%; }
+        }
+        
+        /* Red mute line crossing the waves */
+        .mute-line {
+            position: absolute;
+            left: 6px;
+            right: 6px;
+            top: 50%;
+            height: 3px;
+            background: #ff4444;
+            transform: translateY(-50%) rotate(-20deg);
+            z-index: 2;
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+        
+        .video-sound-toggle.unmuted .mute-line {
+            display: none;
+        }
+        
+        .video-sound-toggle.unmuted .sound-bars {
+            opacity: 0.6;
         }
         
         .waveform-bars {
@@ -1982,11 +2086,10 @@
            QUOTES / USE CASES
         ============================================ */
         .quotes-section {
-            padding: var(--section-pad-y) var(--section-pad-x);
+            padding: 4rem 2rem;
             text-align: center;
             background: var(--bg-secondary);
             border-top: 1px solid var(--border-light);
-            scroll-margin-top: calc(var(--nav-h) - 120px);
         }
 
         .quotes-section .section-label {
@@ -2048,74 +2151,13 @@
         }
 
         /* ============================================
-           HANDS-ON MANIFESTO
-        ============================================ */
-        .manifesto-section {
-            padding: 5rem 2rem;
-            text-align: center;
-            background: var(--bg-primary);
-            border-top: 1px solid var(--border-light);
-        }
-
-        .manifesto-container {
-            max-width: 760px;
-            margin: 0 auto;
-        }
-
-        .manifesto-section .section-label {
-            color: var(--peach-orange);
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            margin-bottom: 1rem;
-        }
-
-        .manifesto-text {
-            color: var(--text-secondary);
-            font-size: 1.08rem;
-            line-height: 1.85;
-        }
-
-        .manifesto-text + .manifesto-text {
-            margin-top: 1.2rem;
-        }
-
-        .section-cta {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 0.5rem;
-            margin-top: 2rem;
-        }
-
-        .section-cta-sub {
-            margin: 0;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            opacity: 0.85;
-        }
-
-        .pr-integration-copy .section-cta {
-            align-items: flex-start;
-            margin-top: 2rem;
-        }
-
-        .features .section-cta {
-            margin-top: 2.75rem;
-        }
-
-        @media (max-width: 900px) {
-            .pr-integration-copy .section-cta {
-                align-items: center;
-            }
-        }
-
-        /* ============================================
            ABOUT THE CREATOR
         ============================================ */
-        .creator-section {
+        html.cue-hide-creator .creator-section {
             display: none;
+        }
+
+        .creator-section {
             padding: 5rem 2rem;
             background: var(--bg-primary);
             border-top: 1px solid var(--border-light);
@@ -2453,289 +2495,6 @@
             color: var(--text-secondary);
             opacity: 0.65;
             letter-spacing: 0.01em;
-        }
-
-        /* Mobile "email me the download link" hand-off */
-        .handoff-form {
-            width: 100%;
-            max-width: 420px;
-            margin: 0 auto;
-        }
-
-        .handoff-lead {
-            margin: 0 0 0.7rem;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            text-align: center;
-        }
-
-        .handoff-input {
-            display: block;
-            width: 100%;
-            height: 54px;
-            padding: 0 16px;
-            box-sizing: border-box;
-            /* 16px stops iOS Safari from zooming the page on focus. */
-            font-size: 16px;
-            font-family: inherit;
-            color: var(--text-primary);
-            background: var(--bg-secondary);
-            border: 1.5px solid var(--border-light);
-            border-radius: 12px;
-            outline: none;
-            -webkit-appearance: none;
-            appearance: none;
-            transition: border-color 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        [data-theme="dark"] .handoff-input {
-            border-color: rgba(255, 255, 255, 0.14);
-        }
-
-        .handoff-input::placeholder {
-            color: var(--text-muted);
-        }
-
-        .handoff-input:focus {
-            border-color: var(--wave-blue);
-            box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.22);
-        }
-
-        .handoff-input.invalid {
-            border-color: #ef4444;
-        }
-
-        .handoff-submit {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            width: 100%;
-            height: 54px;
-            margin-top: 10px;
-            font-size: 17px;
-            font-weight: 600;
-            font-family: inherit;
-            color: #fff;
-            background: var(--wave-blue);
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            box-shadow: 0 6px 20px rgba(74, 144, 217, 0.35);
-            transition: transform 0.12s ease, opacity 0.15s ease;
-        }
-
-        .handoff-submit:active {
-            transform: scale(0.98);
-        }
-
-        .handoff-submit[disabled] {
-            opacity: 0.75;
-            cursor: default;
-        }
-
-        .handoff-spinner {
-            width: 18px;
-            height: 18px;
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            border-top-color: #fff;
-            border-radius: 50%;
-            animation: handoffSpin 0.7s linear infinite;
-        }
-
-        @keyframes handoffSpin {
-            to { transform: rotate(360deg); }
-        }
-
-        .handoff-msg {
-            margin: 8px 2px 0;
-            font-size: 0.85rem;
-            line-height: 1.4;
-            text-align: center;
-            color: var(--text-secondary);
-        }
-
-        .handoff-msg:empty {
-            display: none;
-        }
-
-        .handoff-msg.error {
-            color: #ef4444;
-        }
-
-        .handoff-suggest {
-            padding: 0;
-            font: inherit;
-            font-weight: 600;
-            color: var(--wave-blue);
-            background: none;
-            border: none;
-            text-decoration: underline;
-            cursor: pointer;
-        }
-
-        .handoff-micro {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 0.3rem 0.5rem;
-            margin: 10px 0 0;
-            font-size: 0.8rem;
-            line-height: 1.5;
-            color: var(--text-secondary);
-        }
-
-        .handoff-micro svg {
-            display: block;
-        }
-
-        .handoff-alt {
-            display: block;
-            margin: 10px auto 0;
-            padding: 6px;
-            font: inherit;
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            background: none;
-            border: none;
-            text-decoration: underline;
-            cursor: pointer;
-        }
-
-        .handoff-success {
-            text-align: center;
-            animation: fadeInUp 0.3s ease;
-        }
-
-        .handoff-success-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 52px;
-            height: 52px;
-            margin: 0 auto 10px;
-            color: #22c55e;
-            background: rgba(34, 197, 94, 0.12);
-            border-radius: 50%;
-        }
-
-        .handoff-success-title {
-            margin: 0 0 4px;
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-
-        .handoff-success-sub {
-            margin: 0;
-            font-size: 0.9rem;
-            line-height: 1.5;
-            color: var(--text-secondary);
-        }
-
-        .handoff-success-sub strong {
-            color: var(--text-primary);
-            overflow-wrap: anywhere;
-        }
-
-        .handoff-sheet:has(.handoff-success) .handoff-sheet-title,
-        .handoff-sheet:has(.handoff-success) .handoff-sheet-sub {
-            display: none;
-        }
-
-        .handoff-sheet-backdrop {
-            position: fixed;
-            inset: 0;
-            z-index: 10010;
-            background: rgba(0, 0, 0, 0.5);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-        }
-
-        .handoff-sheet-backdrop.open {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        .handoff-sheet {
-            position: fixed;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 10011;
-            padding: 12px 20px calc(22px + env(safe-area-inset-bottom));
-            background: var(--bg-primary);
-            border-radius: 20px 20px 0 0;
-            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
-            transform: translateY(110%);
-            transition: transform 0.25s ease;
-        }
-
-        .handoff-sheet.open {
-            transform: none;
-        }
-
-        .handoff-sheet-handle {
-            width: 40px;
-            height: 4px;
-            margin: 0 auto 14px;
-            background: var(--border-light);
-            border-radius: 2px;
-        }
-
-        [data-theme="dark"] .handoff-sheet-handle {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .handoff-sheet-close {
-            position: absolute;
-            top: 8px;
-            right: 10px;
-            width: 36px;
-            height: 36px;
-            font-size: 22px;
-            line-height: 36px;
-            color: var(--text-secondary);
-            background: none;
-            border: none;
-            cursor: pointer;
-        }
-
-        .handoff-sheet-title {
-            margin: 0 0 4px;
-            font-size: 1.2rem;
-            font-weight: 700;
-            text-align: center;
-            color: var(--text-primary);
-        }
-
-        .handoff-sheet-sub {
-            margin: 0 0 16px;
-            font-size: 0.9rem;
-            line-height: 1.45;
-            text-align: center;
-            color: var(--text-secondary);
-        }
-
-        .handoff-sticky {
-            position: fixed;
-            left: 12px;
-            right: 12px;
-            bottom: calc(12px + env(safe-area-inset-bottom));
-            z-index: 9000;
-            transform: translateY(160%);
-            transition: transform 0.25s ease;
-        }
-
-        .handoff-sticky.show {
-            transform: none;
-        }
-
-        .handoff-sticky .handoff-submit {
-            margin-top: 0;
         }
 
         .cta-button {
@@ -3945,7 +3704,6 @@
                 --section-pad-y: 4.5rem;
                 --section-pad-y-tight: 2rem;
                 --nav-h: 60px;
-                --demo-video-h: min(360px, calc((100vw - 4rem) * 0.4755), 62vh);
             }
             
             .hero {
@@ -3967,7 +3725,12 @@
             }
             
             .hero-visual {
+                max-height: 380px;
                 margin-bottom: 16px;
+            }
+            
+            .demo-video {
+                max-height: 360px;
             }
             
             .hero-ctas {
@@ -4055,7 +3818,6 @@
                 --section-pad-x: calc(var(--scale) * 5);
                 --section-pad-y: calc(var(--scale) * 4);
                 --section-pad-y-tight: calc(var(--scale) * 3);
-                --demo-video-h: min(calc(var(--scale) * 24), 62vh);
             }
             
             /* Hero section */
@@ -4094,6 +3856,11 @@
                 max-height: calc(var(--scale) * 25.5);
                 max-width: calc(var(--scale) * 53);
                 margin-bottom: calc(var(--scale) * 1);
+            }
+            
+            .demo-video {
+                max-height: calc(var(--scale) * 24);
+                width: 100%;
             }
             
             .hero-ctas {
@@ -4513,14 +4280,13 @@
                 margin-left: -4px;
             }
             
-            :root {
-                /* Hero padding drops to 1rem a side here, so the video
-                   can use more of the width than it does on desktop. */
-                --demo-video-h: min(calc((100vw - 2rem) * 0.4755), 62vh);
-            }
-            
             .hero-visual {
                 margin: 0 0 14px 0;
+                max-height: 220px;
+            }
+            
+            .demo-video {
+                max-height: 200px;
             }
             
             .hero-subtitle {
@@ -4558,6 +4324,13 @@
                 font-size: 0.95rem;
                 height: 50px;
                 padding: 0 24px;
+            }
+            
+            .video-sound-toggle {
+                width: 44px;
+                height: 28px;
+                bottom: 10px;
+                right: 10px;
             }
             
             .waveform-demo {
@@ -4721,7 +4494,12 @@
             }
             
             .hero-visual {
+                max-height: 180px;
                 margin: 0 0 12px 0;
+            }
+            
+            .demo-video {
+                max-height: 160px;
             }
             
             .hero-subtitle {
@@ -4817,6 +4595,14 @@
                 height: 17px;
             }
             
+            .hero-visual {
+                max-height: 150px;
+            }
+            
+            .demo-video {
+                max-height: 140px;
+            }
+            
             .hero-subtitle {
                 font-size: 0.8rem;
             }
@@ -4886,11 +4672,8 @@
         .cookie-banner {
             position: fixed;
             bottom: 16px;
-            /* Centred with auto margins rather than translateX: the show/hide
-               animation already owns `transform`. */
             left: 16px;
-            right: 16px;
-            margin: 0 auto;
+            right: auto;
             z-index: 10000;
             max-width: 320px;
             
@@ -5474,17 +5257,6 @@
             opacity: 0.75;
         }
 
-        @media (max-width: 768px) {
-            .btn:has(.cta-download-icon) {
-                width: auto;
-                max-width: calc(100vw - 2rem);
-                height: auto;
-                min-height: 46px;
-                padding: 0 18px;
-                font-size: 0.95rem;
-            }
-        }
-
         /* Tablet / phone: stack the two panels vertically. Each panel
            keeps its native 16:9 — composed aspect becomes 16:18. */
         @media (max-width: 720px) {
@@ -5548,7 +5320,7 @@
         aria-describedby="cookieConsentText"
     >
         <p id="cookieConsentText" class="cookie-banner__text">
-            We use cookies for analytics and advertising. <a href="/privacy.html" class="cookie-banner__link">Privacy</a>
+            We use cookies for analytics. <a href="/privacy.html" class="cookie-banner__link">Privacy</a>
         </p>
         <div class="cookie-banner__actions">
             <button class="cookie-banner__btn--accept" onclick="CookieConsent.accept()">OK</button>
@@ -5570,13 +5342,6 @@
                     <div class="cookie-banner__pref-desc">Usage stats</div>
                 </div>
                 <div id="analyticsToggle" class="cookie-banner__toggle cookie-banner__toggle--on" onclick="CookieConsent.toggleAnalytics()"></div>
-            </div>
-            <div class="cookie-banner__pref-row">
-                <div>
-                    <div class="cookie-banner__pref-label">Advertising</div>
-                    <div class="cookie-banner__pref-desc">Ad measurement</div>
-                </div>
-                <div id="adsToggle" class="cookie-banner__toggle cookie-banner__toggle--on" onclick="CookieConsent.toggleAds()"></div>
             </div>
             <div class="cookie-banner__pref-actions">
                 <button class="cookie-banner__btn--save" onclick="CookieConsent.savePreferences()">Save</button>
@@ -5610,30 +5375,29 @@
             <div class="grid-pattern"></div>
         </div>
         <div class="hero-content">
-            <h1 class="hero-tagline">Shape <span class="blue">any music</span> to <span class="orange">your story.</span></h1>
+            <span class="hero-badge"><svg class="laurel laurel-left" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c-4-3-7-7-7-12C5 6 8 2 12 2"/><path d="M9 7c-2 1-3.5 3-3.5 5.5"/><path d="M10 12c-1.5 1-2.5 2.5-2.5 4.5"/></svg> Made for video editors <svg class="laurel laurel-right" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4-3 7-7 7-12 0-4-3-8-7-8"/><path d="M15 7c2 1 3.5 3 3.5 5.5"/><path d="M14 12c1.5 1 2.5 2.5 2.5 4.5"/></svg></span>
+            <p class="hero-tagline">Perfect <span class="blue">music.</span> Wrong <span class="orange">timings?</span></p>
             <p class="hero-subtitle">
-                The <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin that retimes your music to your will.<br> Drag the moment. The track reshapes.
+                Move the drop. BeatCue rebuilds the rest.
             </p>
             
             <div class="hero-ctas" style="justify-content: center;">
                 <a href="/download.html" class="btn btn-primary btn-download-hero" id="heroDownloadBtn">
-                    <span id="heroDownloadIcon" class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                    <span id="heroDownloadIcon"></span>
                     <span id="heroDownloadLabel">Try BeatCue for Free</span>
                 </a>
             </div>
-            <p class="hero-install-note" id="heroInstallNote">Free to try · No account needed · macOS & Windows</p>
+            <p class="hero-install-note" id="heroInstallNote">Free to try · <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</p>
             <div class="hero-visual">
                 <div class="app-screenshot">
                     <div class="waveform-demo">
                         <video class="demo-video" id="heroVideo" loop muted playsinline>
-                            <source src="/demo-video-v4.mp4?v=20260904" type="video/mp4">
+                            <source src="/demo-video.mp4" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>
-                        <button class="ba-overlay" id="heroSoundOverlay" type="button" aria-label="Play with sound">
-                            <span class="ba-overlay-icon" aria-hidden="true">
-                                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                            </span>
-                            <span class="ba-overlay-label">Play with sound</span>
+                        <button class="video-sound-toggle" id="soundToggle" data-video="heroVideo" aria-label="Unmute demo video" aria-pressed="false">
+                            <span class="sound-bars"><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+                            <span class="mute-line"></span>
                         </button>
                     </div>
                 </div>
@@ -5737,7 +5501,7 @@
             </div>
 
             <div class="ba-cta">
-                <a href="/download.html" class="btn btn-primary ba-cta-btn" id="beforeAfterDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try it on your own edit</span></a>
+                <a href="/download.html" class="btn btn-primary ba-cta-btn" id="beforeAfterDownloadBtn">Try it on your own edit</a>
                 <p class="ba-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
             </div>
         </div>
@@ -5757,10 +5521,6 @@
                     <li><span class="point-marker">✓</span>Changes appear in your sequence instantly</li>
                     <li><span class="point-marker">✓</span>Keep cutting while the music reshapes itself</li>
                 </ul>
-                <div class="section-cta">
-                    <a href="/download.html" class="btn btn-primary" id="premiereDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try it in Premiere Pro</span></a>
-                    <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
-                </div>
             </div>
             <div class="pr-integration-visual">
                 <div class="pr-video-frame">
@@ -5773,51 +5533,51 @@
         </div>
     </section>
 
-    <!-- Hands-on by design -->
-    <section class="manifesto-section">
-        <div class="manifesto-container">
-            <p class="section-label">Hands-on by design</p>
-            <h2>Your hands, back on the music.</h2>
-            <p class="manifesto-text">
-                The track is no longer a given - It's clay in your hands.
-            </p>
-            <p class="manifesto-text">
-                Bring your track. Drag it. It reshapes.
-                <!-- <br> No prompts. No regenerating. No waiting to find out. -->
-            </p>
-            <p class="manifesto-text">
-                Precise enough for client work, <br> Fun enough to remind you why you started editing.
-            </p>
-            <div class="section-cta">
-                <a href="/download.html" class="btn btn-primary" id="manifestoDownloadBtn"><span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="cta-download-label">Try BeatCue for Free</span></a>
-                <p class="section-cta-sub">Free to try &middot; Premiere Pro plugin &middot; macOS &amp; Windows</p>
+    <!-- Why Editors Use BeatCue -->
+    <section class="features" id="how-it-works">
+        <div class="features-container">
+            <div class="section-header">
+                <p class="section-label">Why Premiere Pro editors use Cue</p>
+                <h2>Cue. Shape. Land.</h2>
+                <p class="section-subtitle">
+                    BeatCue is a music retiming plugin for <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Adobe Premiere Pro. Drop in a track, move the moments that matter, and BeatCue rebuilds the music around your edits in real time — right alongside your Premiere timeline.
+                </p>
             </div>
-        </div>
-    </section>
-
-    <!-- Social Proof -->
-    <section class="quotes-section" id="how-it-works">
-        <p class="section-label">BeatCue is built for</p>
-        <div class="audience-tags">
-            <span class="audience-tag">Film Editors</span>
-            <span class="audience-tag">Commercial Editors</span>
-            <span class="audience-tag">Trailer Editors</span>
-            <span class="audience-tag">Content Creators</span>
-            <span class="audience-tag">Podcasters</span>
-        </div>
-
-        <div class="use-cases">
-            <div class="use-case">
-                <p class="scenario">"It's the first thing I do now. Track in, moments marked, then I just cut."</p>
-                <p class="context">Weekly episode workflow</p>
-            </div>
-            <div class="use-case">
-                <p class="scenario">"A 2-minute track for a 47-second scene. The drop landed exactly where I needed it."</p>
-                <p class="context">Short-form commercial</p>
-            </div>
-            <div class="use-case">
-                <p class="scenario">"The director wanted the swell as the door opens. I moved it there. Done."</p>
-                <p class="context">Narrative film</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">⏱️</div>
+                    <h3>Make the music fit</h3>
+                    <p>No more cutting, looping, or fighting the track. BeatCue reshapes it to match your Premiere timeline.</p>
+                    <div class="feature-video-container">
+                        <video class="feature-video" loop muted playsinline autoplay>
+                            <source src="/how-it-works-1.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📍</div>
+                    <h3>Place the Cue</h3>
+                    <p>Move the drop, build, or impact exactly where it should hit.</p>
+                    <div class="feature-video-container">
+                        <video class="feature-video" loop muted playsinline autoplay>
+                            <source src="/how-it-works-2.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>See what sounds right</h3>
+                    <p>Hear changes instantly as you adjust. Colors indicate how clean each transition is.</p>
+                    <div class="feature-video-container">
+                        <video class="feature-video" loop muted playsinline autoplay>
+                            <source src="/how-it-works-3.mp4" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
@@ -5843,6 +5603,33 @@
         </div>
     </section>
 
+    <!-- Social Proof -->
+    <section class="quotes-section">
+        <p class="section-label">BeatCue is built for</p>
+        <div class="audience-tags">
+            <span class="audience-tag">Film Editors</span>
+            <span class="audience-tag">Commercial Editors</span>
+            <span class="audience-tag">Trailer Editors</span>
+            <span class="audience-tag">Content Creators</span>
+            <span class="audience-tag">Podcasters</span>
+        </div>
+
+        <div class="use-cases">
+            <div class="use-case">
+                <p class="scenario">"The client moved the reveal up by 8 seconds. I dragged one handle in BeatCue and the build landed perfectly — no re-editing the whole track."</p>
+                <p class="context">Product launch video</p>
+            </div>
+            <div class="use-case">
+                <p class="scenario">"I had a 2-minute track for a 47-second scene. BeatCue shortened it and kept the drop exactly where I needed it."</p>
+                <p class="context">Short-form commercial</p>
+            </div>
+            <div class="use-case">
+                <p class="scenario">"The director wanted the emotional swell to hit right as the door opens. I just moved it there. Done."</p>
+                <p class="context">Narrative film</p>
+            </div>
+        </div>
+    </section>
+
     <!-- Get BeatCue Section -->
     <section class="cta-section" id="pricing">
         <div class="cta-container">
@@ -5850,7 +5637,7 @@
             <span class="cta-label">Stop editing music, start moving moments</span>
             <div id="ctaDesktop">
                 <div class="pricing-cards">
-                    <div class="pricing-card pricing-card--primary pricing-card--free" data-plan-card="free">
+                    <div class="pricing-card pricing-card--primary pricing-card--free">
                         <div class="plan-badge">Free</div>
                         <div class="plan-price">
                             <span class="price">$0</span>
@@ -5864,8 +5651,7 @@
                             <li><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin · macOS & Windows</li>
                         </ul>
                         <a href="/download.html" class="btn btn-primary btn-download-free" id="pricingDownloadBtn">
-                            <span class="cta-download-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-                            <span class="cta-download-label">Download BeatCue</span>
+                            Download BeatCue
                         </a>
                         <p class="plan-note" id="pricingInstallNote">Recommended: macOS 14+</p>
                     </div>
@@ -5940,20 +5726,21 @@
         </div>
     </footer>
 
+    <script src="/js/microsoft-store.js"></script>
     <script>
 
         function trackLandingInteraction(eventName, extraProps) {
             if (typeof posthog === 'undefined' || !posthog.capture) return;
             posthog.capture(eventName, {
                 ...(typeof posthogFullyInitialized !== 'undefined' && posthogFullyInitialized ? getBaseEventProps() : {}),
-                page: 'landing_v2',
+                page: 'landing',
                 ...(extraProps || {})
             });
         }
         
         // Video sound toggle
         const heroVideo = document.getElementById('heroVideo');
-        const heroSoundOverlay = document.getElementById('heroSoundOverlay');
+        const soundToggle = document.getElementById('soundToggle');
         
         // Play video when it comes into view
         const videoObserverOptions = {
@@ -6415,7 +6202,7 @@
 
                 const props = {
                     ...baseProps,
-                    page: 'landing_v2',
+                    page: 'landing',
                     section_name: sectionName,
                     section_id: section.id || null,
                     section_class: (section.className || '').trim() || null,
@@ -6460,19 +6247,43 @@
             sections.forEach(section => sectionObserver.observe(section));
         })();
 
-        if (heroVideo) {
-            const setHeroSound = (unmuted) => {
-                heroVideo.muted = !unmuted;
-                if (heroSoundOverlay) heroSoundOverlay.classList.toggle('is-hidden', unmuted);
-                trackLandingInteraction(unmuted ? 'hero_demo_unmuted' : 'hero_demo_muted');
-            };
-
-            if (heroSoundOverlay) {
-                heroSoundOverlay.addEventListener('click', () => setHeroSound(true));
-            }
-
-            heroVideo.addEventListener('click', () => setHeroSound(heroVideo.muted));
+        function muteVideo(video, toggle) {
+            video.muted = true;
+            toggle.classList.remove('unmuted', 'faded');
+            toggle.setAttribute('aria-label', 'Unmute video');
+            toggle.setAttribute('aria-pressed', 'false');
         }
+        
+        function unmuteVideo(video, toggle) {
+            video.muted = false;
+            toggle.classList.add('unmuted');
+            toggle.setAttribute('aria-label', 'Mute video');
+            toggle.setAttribute('aria-pressed', 'true');
+            
+            // Fade out after 2.5 seconds
+            setTimeout(() => {
+                if (!video.muted) {
+                    toggle.classList.add('faded');
+                }
+            }, 2500);
+        }
+        
+        soundToggle.addEventListener('click', () => {
+            if (heroVideo.muted) {
+                unmuteVideo(heroVideo, soundToggle);
+                trackLandingInteraction('hero_demo_unmuted');
+            } else {
+                muteVideo(heroVideo, soundToggle);
+            }
+        });
+        
+        // Keyboard support
+        soundToggle.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                soundToggle.click();
+            }
+        });
         
         // Navbar scroll effect
         const navbar = document.getElementById('navbar');
@@ -6619,8 +6430,7 @@
             // Build event properties (only include non-null values)
             const eventProps = {
                 url: window.location.href,
-                page: 'landing_v2',
-                page_version: CUE_PAGE_VERSION
+                page: 'landing'
             };
             
             if (utms.utm_source) eventProps.utm_source = utms.utm_source;
@@ -6635,11 +6445,11 @@
                 // Set person properties via $set_once (first-touch attribution;
                 // also set on load via identifyFirstTouchPerson — keep in sync with /go)
                 const personProps = {
-                    first_seen_flow: 'landing_v2',
+                    first_seen_flow: 'landing',
                     first_seen_at: new Date().toISOString(),
-                    first_landing_page: 'landing_v2',
+                    first_landing_page: 'landing',
                     first_landing_page_version: window.CUE_PAGE_VERSION,
-                    first_seen_page: 'landing_v2',
+                    first_seen_page: 'landing',
                     first_seen_url: window.location.href,
                     user_type: 'standard'
                 };
@@ -6665,8 +6475,7 @@
             } else {
                 // Pre-consent mode: track event with UTMs but no person properties
                 var anonProps = {
-                    page: 'landing_v2',
-                    page_version: CUE_PAGE_VERSION,
+                    page: 'landing',
                     url: window.__cue_initial_url || window.location.href,
                     referrer: document.referrer || 'direct',
                     screen_width: window.screen.width,
@@ -6682,7 +6491,84 @@
             }
         }
         
+        function getMicrosoftStoreUrl() {
+            if (window.CueMicrosoftStore) {
+                // Embed the bcid in the Store cid so the desktop app can
+                // claim attribution via WinRT GetAppPurchaseCampaignIdAsync
+                // on first launch without depending on the IP-pairing
+                // loopback (which gets unreliable behind Store install
+                // queues, deferred installs, and cross-device installs).
+                return window.CueMicrosoftStore.buildMicrosoftStoreUrl(getUtmProps, window.__cue_bcid);
+            }
+            return 'https://apps.microsoft.com/detail/9nrc99fw338g';
+        }
+
         const PAIRINGS_BASE = 'https://peachsounds-webhook.sareldu.workers.dev';
+
+        function postWindowsStorePairing(bcid) {
+            try {
+                // Re-read at click time as a safety net. By now fbevents.js has
+                // typically had seconds to initialize and write _fbp, and our
+                // own pre-created cookie is also persisted. The cached globals
+                // remain a fallback for environments that disallow cookie reads.
+                var freshFbp = getCookie('_fbp') || window.__cue_fbp || null;
+                var freshFbc = getCookie('_fbc') || window.__cue_fbc || null;
+                fetch(PAIRINGS_BASE + '/pairings', {
+                    method: 'POST',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    keepalive: true,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bcid: bcid,
+                        fbp: freshFbp,
+                        fbc: freshFbc,
+                        fbclid: window.__cue_fbclid || null,
+                        utms: (typeof getUtmProps === 'function') ? getUtmProps() : {},
+                        platform: 'windows'
+                    })
+                }).catch(function() {});
+            } catch (e) { /* never block the click on a pairing hiccup */ }
+        }
+
+        function fireWindowsDownloadStarted() {
+            if (typeof fbq === 'function') {
+                fbq('track', 'StartTrial', {
+                    value: '0.00',
+                    currency: 'USD',
+                    content_name: 'BeatCue',
+                    platform: 'windows'
+                });
+            }
+            // Google Ads: fire on the landing-page Windows CTA (these users
+            // never hit download.html — they go straight to the Store).
+            if (typeof gtag === 'function' && !window.__cue_gads_download_fired) {
+                window.__cue_gads_download_fired = true;
+                gtag('event', 'trial_download_started', {
+                    platform: 'windows',
+                    source: 'landing_v2_to_store'
+                });
+            }
+            if (typeof posthog !== 'undefined' && posthog.capture) {
+                var props = {
+                    ...(typeof getBaseEventProps === 'function' ? getBaseEventProps() : {}),
+                    page: window.CUE_PAGE || 'landing',
+                    page_version: window.CUE_PAGE_VERSION,
+                    platform: 'windows',
+                    url: window.location.href,
+                    source: 'landing_to_store',
+                    ms_store_url: getMicrosoftStoreUrl()
+                };
+                if (window.CuePage && CuePage.cta()) props.cta = CuePage.cta();
+                if (window.CueMicrosoftStore) {
+                    var cid = window.CueMicrosoftStore.getMetaCampaignCid(getUtmProps, window.__cue_bcid);
+                    if (cid) props.ms_store_cid = cid;
+                }
+                if (window.__cue_fbclid) props.fbclid = window.__cue_fbclid;
+                posthog.capture('trial_download_started', props);
+            }
+            postWindowsStorePairing(window.__cue_bcid);
+        }
 
         // Same naming as section_viewed (id > first class > tag).
         function getSectionNameFromElement(el) {
@@ -6696,20 +6582,29 @@
             return firstClass || section.tagName.toLowerCase();
         }
 
-        // Track trial download click. Both platforms go to download.html
-        // carrying the PostHog id; that page owns the download conversions.
+        // Track trial download click. macOS → download.html with identity;
+        // Windows → Microsoft Store (href set in platform detection below).
         function trackTrialDownloadClick(event) {
             const ua = navigator.userAgent || navigator.platform || '';
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
             const sectionName = getSectionNameFromElement(event.currentTarget);
-            
+            if (window.CuePage) window.CuePage.rememberCta(sectionName);
+            if (typeof posthog !== 'undefined' && posthog.register) posthog.register({ cta: sectionName });
+
             if (typeof posthog !== 'undefined' && posthog.capture) {
                 posthog.capture('download_cta_clicked', {
-                    ...(posthogFullyInitialized ? getBaseEventProps() : {}),
-                    page: 'landing_v2',
+                    ...(posthogFullyInitialized ? getBaseEventProps() : { page_version: window.CUE_PAGE_VERSION }),
+                    page: window.CUE_PAGE || 'landing',
+                    page_version: window.CUE_PAGE_VERSION,
                     platform: platform,
+                    cta: sectionName,
                     section_name: sectionName
                 });
+            }
+
+            if (platform === 'windows') {
+                fireWindowsDownloadStarted();
+                return;
             }
 
             // Pass anonymous ID to download page so PostHog can preserve identity
@@ -6719,6 +6614,7 @@
                 if (link && link.href) {
                     const url = new URL(link.href, window.location.origin);
                     url.searchParams.set('ph_id', posthog.get_distinct_id());
+                    if (window.CuePage) CuePage.stamp(url);
                     link.href = url.toString();
                 }
             }
@@ -7056,11 +6952,6 @@
             const heroDownloadBtn = document.getElementById('heroDownloadBtn');
             const pricingDownloadBtn = document.getElementById('pricingDownloadBtn');
             const beforeAfterDownloadBtn = document.getElementById('beforeAfterDownloadBtn');
-            const sectionDownloadBtns = [
-                beforeAfterDownloadBtn,
-                document.getElementById('manifestoDownloadBtn'),
-                document.getElementById('premiereDownloadBtn')
-            ].filter(Boolean);
             const heroLabel = document.getElementById('heroDownloadLabel');
 
             // Check if we should block Windows downloads (force_mac=true and user is on Windows)
@@ -7076,11 +6967,10 @@
             if (!blockWindowsDownload && !useMobileHandoff) {
                 if (heroDownloadBtn) heroDownloadBtn.addEventListener('click', trackTrialDownloadClick);
                 if (pricingDownloadBtn) pricingDownloadBtn.addEventListener('click', trackTrialDownloadClick);
-                sectionDownloadBtns.forEach(function (btn) {
-                    btn.addEventListener('click', trackTrialDownloadClick);
-                });
+                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.addEventListener('click', trackTrialDownloadClick);
             }
 
+            var heroIcon = document.getElementById('heroDownloadIcon');
             var appleIconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block;position:relative;top:-1px"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>';
             var windowsIconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:block;position:relative;top:-1px"><path d="M3 12V6.75l8-1.25V12H3zm0 .5h8v6.5l-8-1.25V12.5zM11.5 5.39l9.5-1.64V12h-9.5V5.39zM11.5 12.5H21v7.75l-9.5-1.64V12.5z"/></svg>';
 
@@ -7091,6 +6981,7 @@
             // MOBILE -> DESKTOP HAND-OFF (share download link)
             // Same 1-hop flow as the main landing page.
             // =====================================================
+            var GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO = 'AW-18317916073/1x2-COL5tNQcEKnv1J5E';
             var SHARE_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>';
 
             function getGoogleClickIds() {
@@ -7132,41 +7023,25 @@
                 Object.keys(g).forEach(function (k) { u.searchParams.set(k, g[k]); });
                 var utms = getUtmProps();
                 Object.keys(utms).forEach(function (k) { if (utms[k]) u.searchParams.set(k, utms[k]); });
+                if (window.CuePage) CuePage.stamp(u);
                 return u.toString();
             }
 
-            function makeCueTransactionId() {
-                return (crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : String(Date.now()) + Math.random().toString(36).slice(2));
-            }
-
-            // method = 'native_share' | 'copy' | 'email'. For 'email' the
-            // worker already sent the server-side halves (with the email hash)
-            // under ids.leadEventId / ids.gadsTxId, so the browser reuses
-            // those ids for dedupe.
-            function trackSendToComputer(method, ids) {
-                if (window.CueFunnelValue) CueFunnelValue.send('send_to_computer');
-                var isEmail = method === 'email' && ids;
+            function trackSendToComputer(method) {
                 if (typeof fbq === 'function') {
                     fbq('trackCustom', 'send_to_desktop_clicked', { content_name: 'BeatCue Send to Desktop', content_category: method });
                     fbq('trackCustom', 'send_to_computer', { content_name: 'BeatCue Send to Computer', content_category: method });
-                    if (isEmail) fbq('track', 'Lead', { content_name: 'BeatCue Download Link Email' }, { eventID: ids.leadEventId });
                 }
                 if (typeof gtag === 'function') {
                     gtag('event', 'send_to_desktop', { method: method, platform: detectedDevice, source: 'landing_page_v2' });
-                }
-                // The email hand-off is uploaded by the worker, which has the
-                // address to attach; the other methods are uploaded here.
-                if (!isEmail && !window.__cue_gads_send_to_desktop_fired) {
-                    window.__cue_gads_send_to_desktop_fired = true;
-                    CueGoogleAds.conversion({
-                        event_name: 'send_to_desktop',
-                        transaction_id: makeCueTransactionId(),
-                        value: CueFunnelValue.valueFor('send_to_computer'),
-                        currency: 'USD',
-                        internal_name: 'landing_send_to_desktop'
-                    });
+                    if (GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO && !window.__cue_gads_send_to_desktop_fired) {
+                        window.__cue_gads_send_to_desktop_fired = true;
+                        gtag('event', 'conversion', {
+                            send_to: GOOGLE_ADS_SEND_TO_DESKTOP_SEND_TO,
+                            value: 1.0,
+                            currency: 'ILS'
+                        });
+                    }
                 }
                 if (typeof posthog !== 'undefined' && posthog.capture) {
                     posthog.capture('send_to_computer', { ...getBaseEventProps(), method: method, device: detectedDevice, source: 'landing_page_v2' });
@@ -7182,422 +7057,75 @@
                 }).catch(function () {});
             }
 
-            // Native share sheet, falling back to the clipboard. Secondary path
-            // under the email form for visitors who won't type an address.
-            function shareHandoffLink(btn) {
-                var defaultText = btn.textContent;
-                var url = buildDesktopHandoffUrl();
-                if (navigator.share) {
-                    navigator.share({ title: 'BeatCue', url: url })
-                        .then(function () { trackSendToComputer('native_share'); })
-                        .catch(function (err) {
-                            if (err && err.name === 'AbortError') return;
-                            copyHandoffLink(url, btn, defaultText);
-                        });
+            function wireShareCta(btn, labelEl, iconEl) {
+                if (!btn) return;
+                var defaultText = 'Continue on Desktop';
+
+                if (!labelEl || labelEl === btn) {
+                    btn.innerHTML = '<span class="share-cta-icon" aria-hidden="true">' + SHARE_ICON_SVG + '</span><span class="share-cta-label">' + defaultText + '</span>';
+                    labelEl = btn.querySelector('.share-cta-label');
                 } else {
-                    copyHandoffLink(url, btn, defaultText);
-                }
-            }
-
-            // ---- Email hand-off: "email me the download link" -------------
-            var HANDOFF_SENT_KEY = 'cue_handoff_email_sent';
-            var HANDOFF_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-            var HANDOFF_CTA_LABEL = 'Email me the download link';
-            var COMMON_EMAIL_DOMAINS = [
-                'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
-                'live.com', 'aol.com', 'me.com', 'msn.com', 'protonmail.com', 'proton.me', 'gmx.com'
-            ];
-            var CHECK_SVG = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-            var MAIL_SVG = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
-            var handoffForms = [];
-            var handoffSheet = null;
-
-            function trackHandoff(event, props) {
-                if (typeof posthog === 'undefined' || !posthog.capture) return;
-                posthog.capture(event, Object.assign(
-                    {}, getBaseEventProps(), { device: detectedDevice, source: 'landing_page_v2' }, props || {}));
-            }
-
-            function getSentEmail() {
-                try { return localStorage.getItem(HANDOFF_SENT_KEY); } catch (e) { return null; }
-            }
-
-            function editDistance(a, b) {
-                var prev = [], i, j;
-                for (j = 0; j <= b.length; j++) prev[j] = j;
-                for (i = 1; i <= a.length; i++) {
-                    var cur = [i];
-                    for (j = 1; j <= b.length; j++) {
-                        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
-                            prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+                    if (iconEl) iconEl.innerHTML = SHARE_ICON_SVG;
+                    else {
+                        var iconSpan = document.createElement('span');
+                        iconSpan.className = 'share-cta-icon';
+                        iconSpan.setAttribute('aria-hidden', 'true');
+                        iconSpan.innerHTML = SHARE_ICON_SVG;
+                        btn.insertBefore(iconSpan, labelEl);
                     }
-                    prev = cur;
-                }
-                return prev[b.length];
-            }
-
-            // "name@gmial.con" -> "name@gmail.com". Only offered, never applied.
-            function suggestEmail(email) {
-                var at = email.lastIndexOf('@');
-                if (at < 1) return null;
-                var domain = email.slice(at + 1);
-                if (COMMON_EMAIL_DOMAINS.indexOf(domain) !== -1) return null;
-                var best = null, bestDist = 3;
-                COMMON_EMAIL_DOMAINS.forEach(function (d) {
-                    var dist = editDistance(domain, d);
-                    if (dist < bestDist) { best = d; bestDist = dist; }
-                });
-                return best ? email.slice(0, at + 1) + best : null;
-            }
-
-            function postHandoffEmail(email, placement, ids) {
-                var g = getGoogleClickIds();
-                var bcid = window.__cue_bcid
-                    || (typeof getOrCreateBcid === 'function' ? getOrCreateBcid() : null);
-                return fetch(PAIRINGS_BASE + '/handoff/email', {
-                    method: 'POST',
-                    mode: 'cors',
-                    credentials: 'omit',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: email,
-                        bcid: bcid,
-                        fbclid: window.__cue_fbclid || null,
-                        gclid: g.gclid || null,
-                        gbraid: g.gbraid || null,
-                        wbraid: g.wbraid || null,
-                        utms: getUtmProps(),
-                        device: detectedDevice,
-                        placement: placement,
-                        page_version: window.CUE_PAGE_VERSION || null,
-                        fbp: getCookie('_fbp') || window.__cue_fbp || null,
-                        fbc: getCookie('_fbc') || window.__cue_fbc || null,
-                        ad_consent: window.CueGoogleAds ? CueGoogleAds.consent() : null,
-                        event_source_url: window.location.href,
-                        lead_event_id: ids.leadEventId,
-                        gads_transaction_id: ids.gadsTxId
-                    })
-                }).then(function (res) {
-                    return res.json().catch(function () { return {}; }).then(function (data) {
-                        if (!res.ok || !data.ok) throw new Error(data.error || ('http_' + res.status));
-                        return data;
-                    });
-                });
-            }
-
-            function renderHandoffSuccess(form) {
-                var email = getSentEmail() || '';
-                form.root.innerHTML =
-                    '<div class="handoff-success" role="status">' +
-                        '<div class="handoff-success-icon">' + CHECK_SVG + '</div>' +
-                        '<p class="handoff-success-title">Check your inbox</p>' +
-                        '<p class="handoff-success-sub">We sent the download link to <strong></strong>.<br>Open it on your Mac or PC to install BeatCue.</p>' +
-                        '<p class="handoff-msg">Not there? Check spam or Promotions.</p>' +
-                        '<button type="button" class="handoff-alt">Wrong email? Change it</button>' +
-                    '</div>';
-                form.root.querySelector('strong').textContent = email;
-                form.root.querySelector('.handoff-alt').addEventListener('click', function () {
-                    trackHandoff('handoff_email_change_clicked', { placement: form.placement });
-                    renderHandoffForm(form, email);
-                    form.root.querySelector('.handoff-input').focus();
-                });
-            }
-
-            function onHandoffSent(email, placement, data, ids) {
-                try { localStorage.setItem(HANDOFF_SENT_KEY, email); } catch (e) {}
-                handoffForms.forEach(renderHandoffSuccess);
-                updateHandoffSticky();
-                registerHandoffEmail(email).then(function () {
-                    // The worker counts one conversion per address; repeat sends
-                    // skip the ad-platform halves so the Pixel / gtag don't add
-                    // conversions the server deliberately withheld.
-                    if (data.conversion) {
-                        trackSendToComputer('email', ids);
-                    }
-                    trackHandoff('handoff_email_sent', {
-                        placement: placement,
-                        email_domain: email.split('@')[1],
-                        ad_conversion: !!data.conversion
-                    });
-                });
-            }
-
-            // Every event from here on carries the email hash (the identity
-            // graph's, so PostHog joins to checkout and the app). Only with
-            // analytics consent, like application_submitted's.
-            function registerHandoffEmail(email) {
-                if (!posthogFullyInitialized || typeof posthog === 'undefined' || !posthog.register) {
-                    return Promise.resolve();
-                }
-                return hashEmail(email).then(function (hash) {
-                    posthog.register({ hashed_email: hash });
-                }).catch(function () {});
-            }
-
-            function renderHandoffForm(form, prefill) {
-                var appleSmall = appleIconSvg.replace('width="18"', 'width="13"').replace('height="18"', 'height="13"');
-                var windowsSmall = windowsIconSvg.replace('width="18"', 'width="13"').replace('height="18"', 'height="13"');
-                form.root.innerHTML =
-                    (form.lead ? '<p class="handoff-lead">' + form.lead + '</p>' : '') +
-                    '<form novalidate>' +
-                        '<input class="handoff-input" type="email" name="email" inputmode="email" autocomplete="email" ' +
-                            'autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" ' +
-                            'placeholder="Your email address" aria-label="Your email address" required>' +
-                        '<button class="handoff-submit" type="submit">' + MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span></button>' +
-                        '<p class="handoff-msg" role="status" aria-live="polite"></p>' +
-                    '</form>' +
-                    '<p class="handoff-micro"><span>Free</span><span>\u00b7</span>' +
-                        '<span style="display:inline-flex;align-items:center;gap:0.25rem">' + appleSmall + ' macOS</span>' +
-                        '<span style="display:inline-flex;align-items:center;gap:0.25rem">' + windowsSmall + ' Windows</span>' +
-                        '<span>\u00b7</span><span>No spam</span></p>' +
-                    '<button type="button" class="handoff-alt">Or share the link another way</button>';
-
-                var formEl = form.root.querySelector('form');
-                var input = form.root.querySelector('.handoff-input');
-                var submit = form.root.querySelector('.handoff-submit');
-                var msg = form.root.querySelector('.handoff-msg');
-                var suggested = null;
-                var warnedFor = null;
-                if (prefill) input.value = prefill;
-
-                function setMessage(text, isError) {
-                    msg.className = 'handoff-msg' + (isError ? ' error' : '');
-                    msg.textContent = text || '';
+                    labelEl.textContent = defaultText;
                 }
 
-                function offerSuggestion(value) {
-                    suggested = suggestEmail(value);
-                    if (!suggested) return false;
-                    msg.className = 'handoff-msg';
-                    msg.textContent = 'Did you mean ';
-                    var fix = document.createElement('button');
-                    fix.type = 'button';
-                    fix.className = 'handoff-suggest';
-                    fix.textContent = suggested;
-                    fix.addEventListener('click', function () {
-                        input.value = suggested;
-                        setMessage('');
-                        trackHandoff('handoff_email_typo_fixed', { placement: form.placement });
-                        input.focus();
-                    });
-                    msg.appendChild(fix);
-                    msg.appendChild(document.createTextNode('?'));
-                    return true;
-                }
-
-                input.addEventListener('focus', function () {
-                    if (form.started) return;
-                    form.started = true;
-                    trackHandoff('handoff_email_started', { placement: form.placement });
-                });
-                input.addEventListener('input', function () {
-                    input.classList.remove('invalid');
-                    if (msg.classList.contains('error')) setMessage('');
-                });
-                input.addEventListener('blur', function () {
-                    var v = input.value.trim().toLowerCase();
-                    if (HANDOFF_EMAIL_RE.test(v)) offerSuggestion(v);
-                });
-
-                formEl.addEventListener('submit', function (e) {
+                btn.removeAttribute('href');
+                btn.removeAttribute('target');
+                btn.style.cursor = 'pointer';
+                btn.style.display = 'inline-flex';
+                btn.style.alignItems = 'center';
+                btn.style.gap = '0.5rem';
+                btn.addEventListener('click', function (e) {
                     e.preventDefault();
-                    if (submit.disabled) return;
-                    var email = input.value.trim().toLowerCase();
-                    if (!HANDOFF_EMAIL_RE.test(email)) {
-                        input.classList.add('invalid');
-                        setMessage(email ? 'That email doesn\u2019t look right. Mind checking it?' : 'Enter your email and we\u2019ll send the link.', true);
-                        trackHandoff('handoff_email_invalid', { placement: form.placement, empty: !email });
-                        input.focus();
-                        return;
+                    var url = buildDesktopHandoffUrl();
+                    if (navigator.share) {
+                        navigator.share({ title: 'BeatCue', url: url })
+                            .then(function () { trackSendToComputer('native_share'); })
+                            .catch(function (err) {
+                                if (err && err.name === 'AbortError') return;
+                                copyHandoffLink(url, labelEl, defaultText);
+                            });
+                    } else {
+                        copyHandoffLink(url, labelEl, defaultText);
                     }
-                    // A likely typo holds the first send so the suggestion can
-                    // be seen; sending again keeps the address as typed.
-                    if (suggestEmail(email) && warnedFor !== email) {
-                        warnedFor = email;
-                        offerSuggestion(email);
-                        msg.appendChild(document.createTextNode(' Or tap send again to keep yours.'));
-                        trackHandoff('handoff_email_typo_warned', { placement: form.placement });
-                        return;
-                    }
-                    trackHandoff('handoff_email_submitted', {
-                        placement: form.placement,
-                        email_domain: email.split('@')[1],
-                        typo_suggested: !!suggestEmail(email)
-                    });
-                    submit.disabled = true;
-                    submit.innerHTML = '<span class="handoff-spinner" aria-hidden="true"></span><span>Sending\u2026</span>';
-                    input.blur();
-                    var conversionIds = { leadEventId: makeCueTransactionId(), gadsTxId: makeCueTransactionId() };
-                    postHandoffEmail(email, form.placement, conversionIds).then(function (data) {
-                        onHandoffSent(email, form.placement, data, conversionIds);
-                    }).catch(function (err) {
-                        var reason = (err && err.message) || 'network_error';
-                        trackHandoff('handoff_email_failed', { placement: form.placement, error: reason });
-                        submit.disabled = false;
-                        submit.innerHTML = MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span>';
-                        if (reason === 'invalid_email') {
-                            input.classList.add('invalid');
-                            setMessage('That email doesn\u2019t look right. Mind checking it?', true);
-                        } else if (reason === 'rate_limited') {
-                            setMessage('Too many tries. Wait a few minutes, or share the link below.', true);
-                        } else {
-                            setMessage('Couldn\u2019t send right now. Try again, or share the link below.', true);
-                        }
-                    });
                 });
-
-                form.root.querySelector('.handoff-alt').addEventListener('click', function (e) {
-                    trackHandoff('handoff_share_fallback_clicked', { placement: form.placement });
-                    shareHandoffLink(e.currentTarget);
-                });
-            }
-
-            function createHandoffForm(container, placement, lead) {
-                var form = { root: document.createElement('div'), placement: placement, lead: lead, started: false };
-                form.root.className = 'handoff-form';
-                container.appendChild(form.root);
-                handoffForms.push(form);
-                if (getSentEmail()) renderHandoffSuccess(form);
-                else renderHandoffForm(form);
-                return form;
-            }
-
-            function getHandoffSheet() {
-                if (handoffSheet) return handoffSheet;
-                var backdrop = document.createElement('div');
-                backdrop.className = 'handoff-sheet-backdrop';
-                var sheet = document.createElement('div');
-                sheet.className = 'handoff-sheet';
-                sheet.setAttribute('role', 'dialog');
-                sheet.setAttribute('aria-modal', 'true');
-                sheet.setAttribute('aria-label', 'Get BeatCue on your computer');
-                sheet.innerHTML =
-                    '<div class="handoff-sheet-handle"></div>' +
-                    '<button type="button" class="handoff-sheet-close" aria-label="Close">\u00d7</button>' +
-                    '<p class="handoff-sheet-title">Get BeatCue on your computer</p>' +
-                    '<p class="handoff-sheet-sub">BeatCue is a desktop app. We\u2019ll email you the free download link so you can install it on your Mac or PC.</p>';
-                document.body.appendChild(backdrop);
-                document.body.appendChild(sheet);
-                var form = createHandoffForm(sheet, 'sheet');
-
-                // Keep the sheet above the on-screen keyboard (iOS Safari
-                // doesn't shrink the layout viewport for it).
-                if (window.visualViewport) {
-                    var vv = window.visualViewport;
-                    var fit = function () {
-                        sheet.style.bottom = Math.max(0, window.innerHeight - vv.height - vv.offsetTop) + 'px';
-                    };
-                    vv.addEventListener('resize', fit);
-                    vv.addEventListener('scroll', fit);
-                }
-
-                function close() {
-                    sheet.classList.remove('open');
-                    backdrop.classList.remove('open');
-                    var input = sheet.querySelector('.handoff-input');
-                    if (input) input.blur();
-                    updateHandoffSticky();
-                }
-                backdrop.addEventListener('click', close);
-                sheet.querySelector('.handoff-sheet-close').addEventListener('click', close);
-
-                handoffSheet = { el: sheet, backdrop: backdrop, form: form, close: close };
-                return handoffSheet;
-            }
-
-            function openHandoffSheet(trigger) {
-                var s = getHandoffSheet();
-                s.form.placement = 'sheet_' + trigger;
-                s.el.classList.add('open');
-                s.backdrop.classList.add('open');
-                updateHandoffSticky();
-                trackHandoff('handoff_email_sheet_opened', { trigger: trigger });
-                // Focus inside the tap handler: iOS only raises the keyboard
-                // for focus() calls made during a user gesture.
-                var input = s.el.querySelector('.handoff-input');
-                if (input) input.focus({ preventScroll: true });
-            }
-
-            var heroHandoffForm = null;
-            var handoffStickyEl = null;
-
-            function updateHandoffSticky() {
-                if (!handoffStickyEl || !heroHandoffForm) return;
-                var heroRect = heroHandoffForm.root.getBoundingClientRect();
-                var banner = document.getElementById('cookieConsentBanner');
-                var bannerVisible = banner && !banner.classList.contains('cookie-banner--hidden');
-                var sheetOpen = handoffSheet && handoffSheet.el.classList.contains('open');
-                var show = heroRect.bottom < 0 && !getSentEmail() && !bannerVisible && !sheetOpen;
-                handoffStickyEl.classList.toggle('show', show);
             }
 
             function setupMobileHandoffCtas() {
-                // Hero: the email field itself is the CTA, no extra tap.
-                var heroCtas = heroDownloadBtn && heroDownloadBtn.parentElement;
-                if (heroCtas) {
-                    heroCtas.innerHTML = '';
-                    heroCtas.style.display = 'block';
-                    heroCtas.style.width = '100%';
-                    var onDevice = /phone/.test(detectedDevice) ? 'On your phone? '
-                        : /ipad|tablet/.test(detectedDevice) ? 'On a tablet? ' : '';
-                    heroHandoffForm = createHandoffForm(heroCtas, 'hero',
-                        onDevice + 'We\u2019ll email you the link for your Mac or PC.');
-                    if (heroNote) heroNote.style.display = 'none';
-                    trackHandoff('handoff_email_form_viewed', { placement: 'hero', already_sent: !!getSentEmail() });
-                }
-
-                // Other CTAs open the same form in a bottom sheet.
-                [
-                    [pricingDownloadBtn, 'pricing'],
-                    [beforeAfterDownloadBtn, 'before_after'],
-                    [document.getElementById('manifestoDownloadBtn'), 'manifesto'],
-                    [document.getElementById('premiereDownloadBtn'), 'premiere']
-                ].forEach(function (pair) {
-                    var btn = pair[0];
-                    if (!btn) return;
-                    btn.removeAttribute('href');
-                    btn.removeAttribute('target');
-                    btn.style.cursor = 'pointer';
-                    btn.style.display = 'inline-flex';
-                    btn.style.alignItems = 'center';
-                    btn.style.gap = '0.5rem';
-                    btn.innerHTML = MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span>';
-                    btn.addEventListener('click', function (e) {
-                        e.preventDefault();
-                        openHandoffSheet(pair[1]);
-                    });
-                });
-                var handoffNote = 'Free \u00b7 We\u2019ll email you the link for your Mac or PC';
-                if (pricingNote) pricingNote.textContent = handoffNote;
-                document.querySelectorAll('.ba-cta-sub, .section-cta-sub').forEach(function (el) {
-                    el.textContent = handoffNote;
-                });
-
-                // Sticky CTA once the hero form has scrolled away.
-                handoffStickyEl = document.createElement('div');
-                handoffStickyEl.className = 'handoff-sticky';
-                handoffStickyEl.innerHTML = '<button type="button" class="handoff-submit">' + MAIL_SVG + '<span>' + HANDOFF_CTA_LABEL + '</span></button>';
-                handoffStickyEl.querySelector('button').addEventListener('click', function () {
-                    openHandoffSheet('sticky');
-                });
-                document.body.appendChild(handoffStickyEl);
-                var stickyQueued = false;
-                window.addEventListener('scroll', function () {
-                    if (stickyQueued) return;
-                    stickyQueued = true;
-                    requestAnimationFrame(function () { stickyQueued = false; updateHandoffSticky(); });
-                }, { passive: true });
+                var subtitle = 'Send the link to yourself and download it on your editing computer.';
+                var appleSmall = appleIconSvg.replace('width="18"', 'width="14"').replace('height="18"', 'height="14"');
+                var windowsSmall = windowsIconSvg.replace('width="18"', 'width="14"').replace('height="18"', 'height="14"');
+                var supportHtml =
+                    '<span class="mobile-handoff-platform"><img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin</span>' +
+                    '<span class="mobile-handoff-sep">\u00b7</span>' +
+                    '<span class="mobile-handoff-platform">' + appleSmall + ' macOS</span>' +
+                    '<span class="mobile-handoff-sep">\u00b7</span>' +
+                    '<span class="mobile-handoff-platform">' + windowsSmall + ' Windows</span>';
+                var noteHtml =
+                    '<span class="mobile-handoff-sub">' + subtitle + '</span>' +
+                    '<span class="mobile-handoff-platforms">' + supportHtml + '</span>';
+                wireShareCta(
+                    heroDownloadBtn,
+                    document.getElementById('heroDownloadLabel') || heroDownloadBtn,
+                    document.getElementById('heroDownloadIcon')
+                );
+                wireShareCta(pricingDownloadBtn, pricingDownloadBtn);
+                wireShareCta(beforeAfterDownloadBtn, beforeAfterDownloadBtn);
+                if (heroNote) heroNote.innerHTML = noteHtml;
+                if (pricingNote) pricingNote.innerHTML = noteHtml;
+                var baSub = document.querySelector('.ba-cta-sub');
+                if (baSub) baSub.innerHTML = noteHtml;
             }
 
             function formatHeroInstallNote(platformSuffix) {
-                return 'Free to try \u00b7 No account needed \u00b7 ' + platformSuffix;
-            }
-
-            function setCtaLabel(btn, text) {
-                if (!btn) return;
-                var label = btn.querySelector('.cta-download-label');
-                if (label) label.textContent = text;
-                else btn.textContent = text;
+                return 'Free to try \u00b7 <img src="/premiere-pro.png" alt="" class="pr-inline-icon">Premiere Pro plugin \u00b7 ' + platformSuffix;
             }
             
             // Handle force_mac=true on Windows: disable buttons and show "Coming soon"
@@ -7609,35 +7137,40 @@
                     heroDownloadBtn.style.cursor = 'not-allowed';
                 }
                 if (heroLabel) heroLabel.textContent = 'Windows coming soon';
+                if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
                 if (heroNote) heroNote.textContent = 'Currently available for macOS only';
                 if (pricingDownloadBtn) {
                     pricingDownloadBtn.removeAttribute('href');
                     pricingDownloadBtn.style.pointerEvents = 'none';
                     pricingDownloadBtn.style.opacity = '0.6';
                     pricingDownloadBtn.style.cursor = 'not-allowed';
-                    setCtaLabel(pricingDownloadBtn, 'Windows coming soon');
+                    pricingDownloadBtn.textContent = 'Windows coming soon';
                 }
                 if (pricingNote) pricingNote.textContent = 'Currently available for macOS only';
-                sectionDownloadBtns.forEach(function (btn) {
-                    btn.removeAttribute('href');
-                    btn.style.pointerEvents = 'none';
-                    btn.style.opacity = '0.6';
-                    btn.style.cursor = 'not-allowed';
-                    setCtaLabel(btn, 'Windows coming soon');
-                });
+                if (beforeAfterDownloadBtn) {
+                    beforeAfterDownloadBtn.removeAttribute('href');
+                    beforeAfterDownloadBtn.style.pointerEvents = 'none';
+                    beforeAfterDownloadBtn.style.opacity = '0.6';
+                    beforeAfterDownloadBtn.style.cursor = 'not-allowed';
+                    beforeAfterDownloadBtn.textContent = 'Windows coming soon';
+                }
             } else if (useMobileHandoff) {
                 setupMobileHandoffCtas();
             } else if (isWindows || forcePlatform === 'windows') {
-                // Windows CTAs keep their /download href. That page fires the
-                // same StartTrial / funnel_value / trial_download set as the
-                // macOS flow and registers the pairing before forwarding to
-                // the Microsoft Store, so a Store install is measured like a
-                // .pkg download instead of leaving the site untracked.
-                if (pricingDownloadBtn) setCtaLabel(pricingDownloadBtn, 'Download for Windows');
+                // All download CTAs go straight to the Microsoft Store on Windows.
+                var storeUrl = getMicrosoftStoreUrl();
+                if (heroDownloadBtn) heroDownloadBtn.setAttribute('href', storeUrl);
+                if (pricingDownloadBtn) {
+                    pricingDownloadBtn.setAttribute('href', storeUrl);
+                    pricingDownloadBtn.textContent = 'Download for Windows';
+                }
+                if (beforeAfterDownloadBtn) beforeAfterDownloadBtn.setAttribute('href', storeUrl);
+                if (heroIcon) heroIcon.innerHTML = windowsIconSvg;
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('Windows 10+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: Windows 10+';
             } else if (isMac || forcePlatform === 'mac') {
-                setCtaLabel(pricingDownloadBtn, 'Download for macOS');
+                if (pricingDownloadBtn) pricingDownloadBtn.textContent = 'Download for macOS';
+                if (heroIcon) heroIcon.innerHTML = appleIconSvg;
                 if (heroNote) heroNote.innerHTML = formatHeroInstallNote('macOS 14+');
                 if (pricingNote) pricingNote.textContent = 'Recommended: macOS 14+';
             }
@@ -7727,25 +7260,6 @@
                         meta_event_id: eventID
                     });
                 }
-
-                // Google side — gtag event (+ optional Google Ads conversion)
-                // + /gads server upload (worker soft-skips if unmapped).
-                if (typeof gtag === 'function') {
-                    gtag('event', 'checkout_clicked', {
-                        plan: planId,
-                        source: 'pricing_section',
-                        value: planInfo.value,
-                        currency: 'USD',
-                        transaction_id: eventID
-                    });
-                }
-                CueGoogleAds.conversion({
-                    event_name: 'checkout_clicked',
-                    transaction_id: eventID,
-                    value: planInfo.value,
-                    currency: 'USD',
-                    internal_name: 'lemonsqueezy_buy_click'
-                });
             };
 
         })();
@@ -7759,9 +7273,6 @@
     // whole checkout URL. Lifetime is one payment and ignores the toggle.
     (function () {
         window.CUE_BILLING_PLANS = {
-            free: {
-                content_name: 'BeatCue Free'
-            },
             pro: {
                 content_name: 'BeatCue Pro',
                 yearly: {
@@ -7817,7 +7328,7 @@
                 var plan = window.CUE_BILLING_PLANS[card.getAttribute('data-plan-card')];
                 if (!plan) return;
                 var tier   = (plan.monthly || plan.yearly) ? plan[billing] : plan;
-                if (!tier || tier.price == null) return;
+                if (!tier) return;
                 var price  = card.querySelector('.price');
                 var period = card.querySelector('.period');
                 var note   = card.querySelector('.plan-note');
@@ -7858,7 +7369,7 @@
             }
             document.querySelectorAll('[data-plan-card]').forEach(function (card) {
                 var plan = card.getAttribute('data-plan-card');
-                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"], a.btn-download-free');
+                var btn = card.querySelector('a[href*="lemonsqueezy.com/checkout"]');
                 var cardTimer = null;
                 var buttonTimer = null;
                 function clearTimers() {

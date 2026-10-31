@@ -81,7 +81,7 @@
         var g = window.CueGoogleAds ? window.CueGoogleAds.clickIds() : {};
 
         if (window.posthog && typeof window.posthog.capture === 'function') {
-            window.posthog.capture('funnel_value_sent', {
+            var funnelProps = {
                 funnel_step: step,
                 value: value,
                 currency: 'USD',
@@ -93,10 +93,14 @@
                 gclid: g.gclid || null,
                 gbraid: g.gbraid || null,
                 wbraid: g.wbraid || null
+            };
+            if (window.CUE_PAGE) funnelProps.page = window.CUE_PAGE;
+            if (window.CUE_PAGE_VERSION) funnelProps.page_version = window.CUE_PAGE_VERSION;
+            if (window.CuePage && CuePage.cta()) funnelProps.cta = CuePage.cta();
             // One event per person per step, so batching buys nothing and
             // costs the event when the page navigates straight after (the
             // Store redirect on /download).
-            }, { send_instantly: true });
+            window.posthog.capture('funnel_value_sent', funnelProps, { send_instantly: true });
         }
 
         if (typeof fbq === 'function') {

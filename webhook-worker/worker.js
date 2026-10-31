@@ -3157,7 +3157,8 @@ async function attachSigned(body, env, payload) {
  *   POST /quota/claim  — ask for a slot for one song. The only call that can
  *                        consume quota, and the only gate on new work.
  *   POST /quota/grant  — support/admin: set an override, re-anchor a period,
- *                        or hand over songs. Requires QUOTA_ADMIN_TOKEN.
+ *                        forget owned songs, or hand over songs.
+ *                        Requires QUOTA_ADMIN_TOKEN.
  */
 async function handleQuota(request, env, url, ctx) {
     const origin = request.headers.get('origin') || '';
@@ -3517,6 +3518,15 @@ async function handleQuotaGrant(body, env, db, cors) {
               WHERE device_id = ?1`
         ).bind(deviceId, nowMs, defaultLimit, notes).run();
         applied.push('reset_period');
+    }
+
+    // Drop every song this device owns, so the same tracks can be claimed
+    // again. Used by the Windows uninstall script together with reset_period.
+    if (body.clear_owned === true) {
+        await db.prepare(
+            `DELETE FROM quota_songs WHERE device_id = ?1`
+        ).bind(deviceId).run();
+        applied.push('clear_owned');
     }
 
     if (Array.isArray(body.grant_hashes) && body.grant_hashes.length) {
@@ -4187,12 +4197,16 @@ function escapeHtml(s) {
 /** The /download link the email carries. Keeps the visitor's original UTMs so
  *  the eventual install is still credited to the ad that brought them, and
  *  adds handoff=email so the desktop visit can be told apart from a direct one. */
-function buildHandoffDownloadUrl(bcid, clickIds, utms, accountId) {
+function buildHandoffDownloadUrl(bcid, clickIds, utms, accountId, extra) {
     const u = new URL(HANDOFF_DOWNLOAD_URL);
     u.searchParams.set('bcid', bcid);
     if (accountId) u.searchParams.set('aid', accountId);
     for (const [k, v] of Object.entries(clickIds)) if (v) u.searchParams.set(k, v);
     for (const [k, v] of Object.entries(utms || {})) if (v) u.searchParams.set(k, v);
+    const pv = extra && clampString(extra.pv, 32);
+    if (pv && /^[0-9]+\.[0-9]+(\.[0-9]+)?$/.test(pv)) u.searchParams.set('pv', pv);
+    const cta = extra && clampString(extra.cta, 64);
+    if (cta && /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(cta)) u.searchParams.set('cta', cta);
     u.searchParams.set('handoff', 'email');
     return u.toString();
 }
@@ -4447,7 +4461,10 @@ async function handleHandoffEmail(request, env, ctx) {
     const accountId = await identityLink(env, ctx,
         [{ kind: 'bcid', value: bcid }, ...await emailNodes(email, emailHash)],
         'email_handoff', { nowMs });
-    const downloadUrl = buildHandoffDownloadUrl(bcid, clickIds, utms, accountId);
+    const downloadUrl = buildHandoffDownloadUrl(bcid, clickIds, utms, accountId, {
+        pv: clampString(body.page_version, 32),
+        cta: placement,
+    });
 
     const result = await sendHandoffEmail(env, email, handoffEmailContent(downloadUrl));
 
