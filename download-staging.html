@@ -428,7 +428,7 @@
 
         posthog.init('phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG', initConfig);
         if (window.CueIdentity) window.CueIdentity.attach(posthog, cueBcid);
-        posthog.register({ page_version: CUE_PAGE_VERSION });
+        posthog.register((window.CuePage && CuePage.superProps()) || { page_version: CUE_PAGE_VERSION, page: window.CUE_PAGE });
         
         if (isInternalTester) {
             posthog.register({ is_internal: true });

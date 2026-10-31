@@ -498,7 +498,7 @@
             });
             
             posthogPreConsentInitialized = true;
-            posthog.register({ page_version: CUE_PAGE_VERSION });
+            posthog.register((window.CuePage && CuePage.superProps()) || { page_version: CUE_PAGE_VERSION, page: window.CUE_PAGE });
 
             if (isInternalTester) {
                 posthog.register({ is_internal: true });
@@ -572,7 +572,7 @@
             }
             
             posthogFullyInitialized = true;
-            posthog.register({ page_version: CUE_PAGE_VERSION });
+            posthog.register((window.CuePage && CuePage.superProps()) || { page_version: CUE_PAGE_VERSION, page: window.CUE_PAGE });
 
             // Set person properties for internal tester (only needs to be done once)
             if (isInternalTester) {

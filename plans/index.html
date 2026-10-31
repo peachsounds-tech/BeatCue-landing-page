@@ -586,6 +586,8 @@
             // from — the in-app button, /get, an ad — is entry_source.
             var props = {
                 source: 'plans_page',
+                page: window.CUE_PAGE || 'plans',
+                page_version: window.CUE_PAGE_VERSION,
                 entry_source: srcParam,
                 billing_period: currentBilling,
                 had_bcid: hadBcid,
@@ -594,6 +596,7 @@
                 has_fbc: !!fbc,
                 has_email: !!emailParam
             };
+            if (window.CuePage && CuePage.cta()) props.cta = CuePage.cta();
             CLICK_IDS.concat(UTMS).forEach(function (k) {
                 var v = params.get(k);
                 if (v) props[k] = v;
@@ -688,7 +691,7 @@
                 bootstrap: { distinctID: bcid }
             });
             if (window.CueIdentity) window.CueIdentity.attach(posthog, bcid);
-            posthog.register({ page_version: (window.CUE_PAGE_VERSION || 'plans'), page: 'plans' });
+            posthog.register((window.CuePage && CuePage.superProps()) || { page_version: window.CUE_PAGE_VERSION, page: 'plans' });
             if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: false });
 
             var loadProps = attributionProps();

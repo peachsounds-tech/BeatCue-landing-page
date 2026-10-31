@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <script src="/js/page-version.js"></script>
-    <script>window.CUE_PAGE_VERSION = '6.0.0';</script>
     <!-- Google tag (gtag.js) -->
     <script src="/js/google-ads.js"></script>
     <script src="/js/funnel-value.js"></script>
@@ -476,7 +475,7 @@
         // PostHog configuration
         const POSTHOG_API_KEY = 'phc_glfQoJ0XvIyNUy1Q6baVxMLolADg69F9H262U0TiRuG';
         const POSTHOG_API_HOST = 'https://t.beatcue.app';
-        const CUE_PAGE_VERSION = '6.0.0';
+        const CUE_PAGE_VERSION = window.CUE_PAGE_VERSION || '6.0.0';
         
         // Track initialization states
         let posthogPreConsentInitialized = false;
@@ -505,7 +504,7 @@
         }
 
         function getBaseEventProps() {
-            const props = { ...getUtmProps(), page_version: CUE_PAGE_VERSION };
+            const props = { ...getUtmProps(), page: window.CUE_PAGE || 'landing', page_version: CUE_PAGE_VERSION };
             if (isInternalTester) {
                 props.is_internal = true;
             }
@@ -562,9 +561,9 @@
             const nowIso = new Date().toISOString();
             const referrer = document.referrer || '';
             const personProps = {
-                first_seen_flow: 'landing_v2',
+                first_seen_flow: 'landing',
                 first_seen_at: nowIso,
-                first_landing_page: 'landing_v2',
+                first_landing_page: 'landing',
                 first_landing_page_version: CUE_PAGE_VERSION
             };
             if (utms.utm_source)   personProps.first_utm_source   = utms.utm_source;
@@ -583,8 +582,8 @@
                     $set_once: personProps,
                     $lib: 'web-landing',
                     $lib_version: CUE_PAGE_VERSION,
-                    page: 'landing_v2',
-                    flow: 'landing_v2'
+                    page: 'landing',
+                    flow: 'landing'
                 }
             });
             console.log('📊 PostHog: first-touch identity ($set_once)', personProps);
@@ -640,7 +639,7 @@
             });
             
             posthogPreConsentInitialized = true;
-            posthog.register({ page_version: CUE_PAGE_VERSION });
+            posthog.register((window.CuePage && CuePage.superProps()) || { page_version: CUE_PAGE_VERSION, page: window.CUE_PAGE });
             if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: false });
 
             if (isInternalTester) {
@@ -661,7 +660,7 @@
         function trackConsentDecision(decision) {
             if (typeof posthog !== 'undefined' && posthog.capture) {
                 posthog.capture('consent_' + decision, {
-                    page: 'landing_v2',
+                    page: 'landing',
                     url: window.location.href
                 });
                 console.log('📊 PostHog: consent_' + decision + ' tracked');
@@ -716,7 +715,7 @@
             }
             
             posthogFullyInitialized = true;
-            posthog.register({ page_version: CUE_PAGE_VERSION });
+            posthog.register((window.CuePage && CuePage.superProps()) || { page_version: CUE_PAGE_VERSION, page: window.CUE_PAGE });
             if (window.CueAttribution) window.CueAttribution.attach(posthog, { personProfiles: true });
 
             // Set person properties for internal tester (only needs to be done once)
@@ -5955,7 +5954,7 @@
             if (typeof posthog === 'undefined' || !posthog.capture) return;
             posthog.capture(eventName, {
                 ...(typeof posthogFullyInitialized !== 'undefined' && posthogFullyInitialized ? getBaseEventProps() : {}),
-                page: 'landing_v2',
+                page: 'landing',
                 ...(extraProps || {})
             });
         }
@@ -6424,7 +6423,7 @@
 
                 const props = {
                     ...baseProps,
-                    page: 'landing_v2',
+                    page: 'landing',
                     section_name: sectionName,
                     section_id: section.id || null,
                     section_class: (section.className || '').trim() || null,
@@ -6544,7 +6543,7 @@
                 if (typeof posthog !== 'undefined' && posthog.capture) {
                     posthog.capture('hero_video_watched', {
                         ...(typeof posthogFullyInitialized !== 'undefined' && posthogFullyInitialized ? getBaseEventProps() : {}),
-                        page: 'landing_v2',
+                        page: 'landing',
                         video_id: VIDEO_ID,
                         bucket_sec: BUCKET_SEC,
                         heard: encode(heard),
@@ -6706,7 +6705,7 @@
             // Build event properties (only include non-null values)
             const eventProps = {
                 url: window.location.href,
-                page: 'landing_v2',
+                page: 'landing',
                 page_version: CUE_PAGE_VERSION
             };
             
@@ -6722,11 +6721,11 @@
                 // Set person properties via $set_once (first-touch attribution;
                 // also set on load via identifyFirstTouchPerson — keep in sync with /go)
                 const personProps = {
-                    first_seen_flow: 'landing_v2',
+                    first_seen_flow: 'landing',
                     first_seen_at: new Date().toISOString(),
-                    first_landing_page: 'landing_v2',
+                    first_landing_page: 'landing',
                     first_landing_page_version: window.CUE_PAGE_VERSION,
-                    first_seen_page: 'landing_v2',
+                    first_seen_page: 'landing',
                     first_seen_url: window.location.href,
                     user_type: 'standard'
                 };
@@ -6752,7 +6751,7 @@
             } else {
                 // Pre-consent mode: track event with UTMs but no person properties
                 var anonProps = {
-                    page: 'landing_v2',
+                    page: 'landing',
                     page_version: CUE_PAGE_VERSION,
                     url: window.__cue_initial_url || window.location.href,
                     referrer: document.referrer || 'direct',
@@ -6789,12 +6788,16 @@
             const ua = navigator.userAgent || navigator.platform || '';
             const platform = /Win/i.test(ua) ? 'windows' : 'mac';
             const sectionName = getSectionNameFromElement(event.currentTarget);
-            
+            if (window.CuePage) window.CuePage.rememberCta(sectionName);
+            if (typeof posthog !== 'undefined' && posthog.register) posthog.register({ cta: sectionName });
+
             if (typeof posthog !== 'undefined' && posthog.capture) {
                 posthog.capture('download_cta_clicked', {
-                    ...(posthogFullyInitialized ? getBaseEventProps() : {}),
-                    page: 'landing_v2',
+                    ...(posthogFullyInitialized ? getBaseEventProps() : { page_version: window.CUE_PAGE_VERSION }),
+                    page: window.CUE_PAGE || 'landing',
+                    page_version: window.CUE_PAGE_VERSION,
                     platform: platform,
+                    cta: sectionName,
                     section_name: sectionName
                 });
             }
@@ -6806,6 +6809,7 @@
                 if (link && link.href) {
                     const url = new URL(link.href, window.location.origin);
                     url.searchParams.set('ph_id', posthog.get_distinct_id());
+                    if (window.CuePage) CuePage.stamp(url);
                     link.href = url.toString();
                 }
             }
@@ -7219,6 +7223,7 @@
                 Object.keys(g).forEach(function (k) { u.searchParams.set(k, g[k]); });
                 var utms = getUtmProps();
                 Object.keys(utms).forEach(function (k) { if (utms[k]) u.searchParams.set(k, utms[k]); });
+                if (window.CuePage) CuePage.stamp(u);
                 return u.toString();
             }
 
@@ -7295,9 +7300,11 @@
             var handoffSheet = null;
 
             function trackHandoff(event, props) {
+                if (props && props.placement && window.CuePage) CuePage.rememberCta(props.placement);
                 if (typeof posthog === 'undefined' || !posthog.capture) return;
+                var extra = (props && props.placement) ? { cta: props.placement } : {};
                 posthog.capture(event, Object.assign(
-                    {}, getBaseEventProps(), { device: detectedDevice, source: 'landing_page' }, props || {}));
+                    {}, getBaseEventProps(), { device: detectedDevice, source: 'landing_page' }, props || {}, extra));
             }
 
             function getSentEmail() {
@@ -7814,7 +7821,29 @@
                         plan: planId,
                         billing_period: reportedBilling,
                         source: 'pricing_section',
+                        cta: 'pricing',
                         meta_event_id: eventID
+                    });
+                }
+
+                // Google side — gtag event (+ optional Google Ads conversion)
+                // + /gads server upload (worker soft-skips if unmapped).
+                if (typeof gtag === 'function') {
+                    gtag('event', 'checkout_clicked', {
+                        plan: planId,
+                        source: 'pricing_section',
+                        value: planInfo.value,
+                        currency: 'USD',
+                        transaction_id: eventID
+                    });
+                }
+                if (window.CueGoogleAds) {
+                    CueGoogleAds.conversion({
+                        event_name: 'checkout_clicked',
+                        transaction_id: eventID,
+                        value: planInfo.value,
+                        currency: 'USD',
+                        internal_name: 'lemonsqueezy_buy_click'
                     });
                 }
             };
