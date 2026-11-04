@@ -15,32 +15,12 @@
 (function () {
     var VERSION_KEY = 'cue_page_version';
     var CTA_KEY = 'cue_cta';
-    var V2_CREATOR_KEY = 'cue_v2_creator_version';
 
     function storageGet(store, key) {
         try { return store.getItem(key) || ''; } catch (e) { return ''; }
     }
     function storageSet(store, key, value) {
         try { store.setItem(key, value); } catch (e) {}
-    }
-    function cookieGet(name) {
-        try {
-            var parts = (document.cookie || '').split('; ');
-            for (var i = 0; i < parts.length; i++) {
-                var idx = parts[i].indexOf('=');
-                if (idx === -1) continue;
-                if (decodeURIComponent(parts[i].slice(0, idx)) === name) {
-                    return decodeURIComponent(parts[i].slice(idx + 1));
-                }
-            }
-        } catch (e) {}
-        return '';
-    }
-    function cookieSet(name, value) {
-        try {
-            document.cookie = encodeURIComponent(name) + '=' + encodeURIComponent(value)
-                + '; Max-Age=31536000; Path=/; SameSite=Lax';
-        } catch (e) {}
     }
 
     function normalizePath(p) {
@@ -50,33 +30,13 @@
         return p || '/';
     }
 
-    // The /v2 creator test is assigned once per browser. 2.0.7 shows the
-    // section; 2.0.8 hides it. localStorage and a one-year cookie both hold
-    // the choice, so a new tab or a later visit cannot roll again.
-    var v2Version = '';
-    function rememberV2Version(value) {
-        storageSet(localStorage, V2_CREATOR_KEY, value);
-        cookieSet(V2_CREATOR_KEY, value);
-    }
-    function v2CreatorVersion() {
-        if (v2Version) return v2Version;
-        var saved = storageGet(localStorage, V2_CREATOR_KEY) || cookieGet(V2_CREATOR_KEY);
-        if (saved === '2.0.7' || saved === '2.0.8') {
-            v2Version = saved;
-            rememberV2Version(v2Version);
-            return v2Version;
-        }
-        v2Version = Math.random() < 0.5 ? '2.0.7' : '2.0.8';
-        rememberV2Version(v2Version);
-        return v2Version;
-    }
-
     // null means this URL is a sublink and must reuse the landing version.
+    // /v2 is the no-creator page (the former 2.0.8 side of the creator test).
     function versionForLanding(p) {
         if (p === '/v6') return '6.0.0';
         if (p === '/v5') return '5.1.0';
         if (p === '/v4') return '4.0.1';
-        if (p === '/v2') return v2CreatorVersion();
+        if (p === '/v2') return '2.0.8';
         if (p === '/v3') return '3.0.0';
         if (p === '/') return '1.3.0';
         return null;
@@ -146,10 +106,6 @@
 
     window.CUE_PAGE_VERSION = version;
     window.CUE_PAGE = pageName(path);
-
-    if (path === '/v2' && version === '2.0.8' && document.documentElement) {
-        document.documentElement.classList.add('cue-hide-creator');
-    }
 
     window.CuePage = {
         rememberCta: function (name) {
