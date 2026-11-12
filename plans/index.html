@@ -16,7 +16,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Choose your plan — BeatCue</title>
-    <meta name="description" content="BeatCue Pro, billed monthly or yearly, or a one-time $999 lifetime license.">
+    <meta name="description" content="BeatCue Pro, billed monthly or yearly, or a one-time $249 lifetime license.">
     <link rel="icon" type="image/png" href="/favicon.png">
 
     <!-- Fonts -->
@@ -279,6 +279,29 @@
             transform: translateY(-2px);
         }
 
+        .plan-discount {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.35rem;
+        }
+        .plan-discount .price-original {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: var(--text-on-card-secondary);
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+        .plan-sale {
+            padding: 0.2rem 0.6rem;
+            border-radius: 50px;
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--early-access-green);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
         .plan-price { margin-bottom: 0.75rem; }
         .plan-price .price {
             font-size: 2.5rem;
@@ -386,8 +409,9 @@
                     <span class="billing-save">Save 17%</span>
                 </button>
             </div>
+            <div class="plan-discount"><span class="price-original">$16.50</span><span class="plan-sale">75% OFF</span></div>
             <div class="plan-price">
-                <span class="price">$16.50</span>
+                <span class="price">$4</span>
                 <span class="period">/ month (billed yearly)</span>
             </div>
             <p class="plan-description">Unlimited projects. Cancel anytime.</p>
@@ -399,7 +423,7 @@
                 <li>Unlimited exports</li>
                 <li>Premiere Pro plugin · macOS &amp; Windows</li>
             </ul>
-            <a href="https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810?embed=1&media=0&discount=0"
+            <a href="https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810?embed=1&media=0&discount=0&checkout[discount_code]=A2MTC2NA"
                class="btn btn-primary lemonsqueezy-button" id="checkoutPro" data-plan="pro">
                 Get BeatCue Pro
             </a>
@@ -411,8 +435,9 @@
         <div class="pricing-card pricing-card--lifetime" data-plan-card="lifetime">
             <div class="plan-badge">Lifetime</div>
             <div class="pay-once-pill">Pay once</div>
+            <div class="plan-discount"><span class="price-original">$999</span><span class="plan-sale">75% OFF</span></div>
             <div class="plan-price">
-                <span class="price">$999</span>
+                <span class="price">$249</span>
                 <span class="period">one-time</span>
             </div>
             <p class="plan-description">Every future update included. No renewal.</p>
@@ -451,25 +476,27 @@
         // Pro has a separate Lemon Squeezy product per billing period — there
         // is no period switch on their side, so the toggle swaps the whole
         // checkout URL. Lifetime is a single one-time product and ignores the
-        // toggle. Paste its checkout URL into lifetime.url when the $999
+        // toggle. Paste its checkout URL into lifetime.url when the lifetime
         // product exists; until then the button does not open checkout.
+        // 75%-off code that must exist in Lemon Squeezy; the prices below assume it.
+        var DISCOUNT_CODE = 'A2MTC2NA';
         var PLANS = {
             pro: {
                 content_name: 'BeatCue Pro',
                 yearly: {
-                    price: '$16.50', period: '/ month (billed yearly)', value: 198.00,
+                    price: '$4', original: '$16.50', period: '/ month (billed yearly)', value: 49.50,
                     note: 'Billed yearly · cancel anytime',
                     url: 'https://beatcue.lemonsqueezy.com/checkout/buy/511ca778-4c1e-4ae2-aa30-576761447810'
                 },
                 monthly: {
-                    price: '$20', period: '/ month', value: 20.00,
+                    price: '$5', original: '$20', period: '/ month', value: 5.00,
                     note: 'Billed monthly · cancel anytime',
                     url: 'https://beatcue.lemonsqueezy.com/checkout/buy/3a61a400-7a58-404c-a0a2-1e8266b46e12'
                 }
             },
             lifetime: {
                 content_name: 'BeatCue Lifetime',
-                price: '$999', period: 'one-time', value: 999.00,
+                price: '$249', original: '$999', period: 'one-time', value: 249.75,
                 note: 'Equal to ~5 years of Pro',
                 url: ''
             }
@@ -614,6 +641,7 @@
                 u.searchParams.set('embed', '1');
                 u.searchParams.set('media', '0');
                 u.searchParams.set('discount', '0');
+                u.searchParams.set('checkout[discount_code]', DISCOUNT_CODE);
                 if (emailParam) u.searchParams.set('checkout[email]', emailParam);
                 if (bcid)       u.searchParams.set('checkout[custom][bcid]', bcid);
                 if (appDeviceId) u.searchParams.set('checkout[custom][posthog_id]', appDeviceId);
@@ -651,6 +679,7 @@
                 var tier = tierFor(plan);
                 if (!tier) return;
                 card.querySelector('.price').textContent = tier.price;
+                card.querySelector('.price-original').textContent = tier.original;
                 card.querySelector('.period').textContent = tier.period;
                 card.querySelector('.plan-note').textContent = tier.note;
                 var link = card.querySelector('a[data-plan]');
